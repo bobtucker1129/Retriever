@@ -25,13 +25,25 @@ The VM has no public open ports. Traffic enters only through the Cloudflare Tunn
 
 ### Step 1.1 — Install cloudflared
 
-On `bggol-retriever01` as root:
+On `bggol-vesko01` (Windows Server), run as Administrator:
 
-```bash
-# Ubuntu/Debian
-curl -L --output cloudflared.deb \
-  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-dpkg -i cloudflared.deb
+```powershell
+# Download the Windows binary
+New-Item -ItemType Directory -Path "C:\cloudflared" -Force
+Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" `
+    -OutFile "C:\cloudflared\cloudflared.exe"
+
+# Add to system PATH permanently
+[System.Environment]::SetEnvironmentVariable(
+    "PATH",
+    [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";C:\cloudflared",
+    "Machine"
+)
+
+# Reload PATH in current session
+$env:PATH += ";C:\cloudflared"
+
+# Verify
 cloudflared --version
 ```
 
@@ -60,14 +72,16 @@ cloudflared tunnel list
 
 Create `/etc/cloudflared/config.yml`:
 
-```bash
-mkdir -p /etc/cloudflared
+```powershell
+notepad C:\cloudflared\config.yml
 ```
 
+Paste:
+
 ```yaml
-# /etc/cloudflared/config.yml
+# C:\cloudflared\config.yml
 tunnel: <tunnel-uuid>
-credentials-file: /etc/cloudflared/<tunnel-uuid>.json
+credentials-file: C:\cloudflared\<tunnel-uuid>.json
 
 ingress:
   - hostname: retriever.boonegraphics.net
@@ -75,19 +89,18 @@ ingress:
   - service: http_status:404
 ```
 
-Replace `<tunnel-uuid>` with the actual UUID from Step 1.3.
+Replace `<tunnel-uuid>` with the UUID from Step 1.3.
 
-Move the credentials file to `/etc/cloudflared/`:
+Move the credentials file (created automatically by `cloudflared tunnel create`):
 
-```bash
-cp ~/.cloudflared/<tunnel-uuid>.json /etc/cloudflared/
-chmod 600 /etc/cloudflared/<tunnel-uuid>.json
-chown cloudflared:cloudflared /etc/cloudflared/<tunnel-uuid>.json 2>/dev/null || true
+```powershell
+Copy-Item "$env:USERPROFILE\.cloudflared\<tunnel-uuid>.json" "C:\cloudflared\"
+icacls "C:\cloudflared\<tunnel-uuid>.json" /inheritance:r /grant:r "BUILTIN\Administrators:F" /grant:r "NT AUTHORITY\SYSTEM:F"
 ```
 
 ### Step 1.5 — Create the DNS record
 
-```bash
+```powershell
 cloudflared tunnel route dns retriever retriever.boonegraphics.net
 ```
 
@@ -95,23 +108,30 @@ This creates a `CNAME` in the Boone Cloudflare DNS pointing `retriever.boonegrap
 
 Verify in the Cloudflare dashboard: DNS > Records > look for `retriever` as a CNAME to `<uuid>.cfargotunnel.com`.
 
-### Step 1.6 — Install and start as a system service
+### Step 1.6 — Install and start as a Windows Service
 
-```bash
+```powershell
+# Install as a Windows Service (run as Administrator)
 cloudflared service install
-systemctl enable cloudflared
-systemctl start cloudflared
-systemctl status cloudflared
+
+# Start the service
+Start-Service cloudflared
+
+# Check status
+Get-Service cloudflared
+
+# View logs
+Get-EventLog -LogName Application -Source "cloudflared" -Newest 20
 ```
 
 ### Step 1.7 — Verify tunnel connectivity
 
-```bash
-# From bggol-retriever01 (after the Retriever app is running)
-curl -fsS http://localhost:8810/health/live
+```powershell
+# From bggol-vesko01 (after the Retriever app is running on 8810)
+Invoke-WebRequest -Uri "http://localhost:8810/health/live" -UseBasicParsing
 
 # From outside (before Access policy is active — should return tunnel response)
-curl -I https://retriever.boonegraphics.net/health/live
+Invoke-WebRequest -Uri "https://retriever.boonegraphics.net/health/live" -UseBasicParsing
 ```
 
 ---
