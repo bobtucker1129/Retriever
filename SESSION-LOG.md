@@ -4,6 +4,31 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-07 — Fetch UI polish, Boone brand colors, collapsible sidebar, and first GitHub push
+
+**Goal:** Decide between Impeccable document pass, old Retriever visual inspection, or first Fetch skeleton. Run Impeccable critique and polish. Push to GitHub.
+
+**What happened:**
+
+- Inspected old Fetch UI directly and captured the visual continuity target in `FETCH_UI_CONTINUITY.md`.
+- Built the disabled/stubbed Fetch skeleton: current-Fetch-style left conversation rail, rename UI, Thread Reports strip, centered Retriever logo empty state, composer, suggestion chips, and status footer showing model and context level for all users.
+- Applied Boone brand palette from the 2024 brand guide: sidebar Boone Blue, active nav Boone Red, user messages blue, Ask Fetch button red.
+- Added collapsible outer module sidebar with compact initials when collapsed, real Retriever logo in the main header, and light/dark theme toggle persisted via localStorage.
+- Ran Impeccable critique (score 26/40). Applied distill/clarify/polish pass: simplified disabled screen to old-Fetch empty state plus Thread Reports strip, moved trust-state examples behind progressive disclosure, clarified disabled controls with inline copy, removed side-stripe list anti-patterns.
+- Resolved deployment hostname: `retriever.boonegraphics.net` is the live hostname from first deploy. Old Retriever is LAN-only and has no Cloudflare presence so there is no DNS conflict.
+- Created a new standalone git repo for `projects/retriever-rebuild/`, configured SSH remote, and pushed initial commit (`965a75c`) to `https://github.com/bobtucker1129/Retriever`.
+- 48 tests passed throughout.
+
+**Plain-English result:**
+
+The rebuild now has a real app that looks and feels like old Retriever made sharper, uses Boone brand colors, and is on GitHub. The Fetch skeleton is a credible disabled preview, not a developer scaffold. The next session is the first production deployment.
+
+**Next recommended session:**
+
+`kickoff projects/retriever-rebuild`, then provision `bggol-retriever01`, harden the production `.env`, run the MySQL migration, configure Cloudflare Tunnel to `retriever.boonegraphics.net`, and smoke-test the live site.
+
+---
+
 ## 2026-05-06 — Auth shell scaffold, shared layout, and local smoke
 
 **Goal:** Continue the Retriever rebuild from runtime/token planning into a working auth-shell scaffold, then shape and polish the shared layout.

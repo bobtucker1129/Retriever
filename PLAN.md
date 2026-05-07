@@ -60,6 +60,11 @@ Completed:
 - Inspected old Fetch's UI structure and captured the new visual/layout target in `FETCH_UI_CONTINUITY.md`.
 - Replaced the plain disabled Fetch notice with a disabled/stubbed Fetch skeleton behind the shared shell, including current-Fetch-style conversation rail, rename UI shape, thread preview, composer, suggestions, status footer, delayed-report preview, sources, and failure state cards.
 - Added route coverage for the disabled Fetch skeleton and reran the full local test suite: 48 tests passed.
+- Ran Impeccable critique and applied distill/clarify/polish pass: simplified disabled Fetch screen to old-Fetch empty state plus Thread Reports strip; moved trust-state examples behind progressive disclosure; clarified disabled controls with inline copy; cleaned up Impeccable anti-patterns.
+- Applied Boone brand colors from brand guide page 13: sidebar Boone Blue `#5eaee0`, active nav Boone Red `#a1252b`, user message bubbles blue, Ask Fetch button red.
+- Added collapsible outer module sidebar with compact initials when collapsed; added Retriever logo to main header/center pane; added light/dark theme toggle persisted to localStorage.
+- Resolved deployment hostname: `retriever.boonegraphics.net` is the live hostname from first deploy. No staging subdomain needed; old Retriever is LAN-only with no Cloudflare presence.
+- Created new standalone git repo for `projects/retriever-rebuild/`, added SSH remote, and pushed initial commit (`965a75c`) to `https://github.com/bobtucker1129/Retriever`.
 
 ## Active Architecture Artifacts
 
@@ -137,17 +142,18 @@ Open:
 
 ## Next Recommended Session
 
-Review and tighten the disabled Fetch skeleton visually.
+Provision `bggol-retriever01` and deploy the auth shell to `retriever.boonegraphics.net`.
 
-Plain English goal: the first disabled/stubbed Fetch skeleton now exists behind the shared shell. The next useful move is to run it locally in the browser, compare it against current Fetch, and tighten visual continuity before adding real conversation persistence or live Fetch routing.
+Plain English goal: the auth shell is polished, the Fetch skeleton looks like old Fetch with Boone brand colors, and the code is on GitHub. The next move is the first real deployment: provision `bggol-retriever01`, harden the production `.env`, run the MySQL migration, stand up Cloudflare Tunnel/Access, and smoke-test the live `retriever.boonegraphics.net` hostname.
 
 Recommended scope:
 
-1. Start the local server and inspect `/fetch` in the browser.
-2. Compare the skeleton against old Fetch for layout, size, left conversation behavior, logo/header feel, and visual density.
-3. Tighten CSS and template details only where they improve continuity or trust states.
-4. Decide whether `DESIGN.md` should be generated/captured now, or whether the next pass should add harmless local conversation persistence.
-5. Keep live model routing, PrintSmith token authority, BooneOps broker calls, and production hostname changes disabled until the next gate.
+1. Confirm VM name with Boone IT and provision `bggol-retriever01` per `VM_SETUP_PLAN.md`.
+2. Set up `retriever-web.service`, production `.env` (cookie secret, no dev identity, JWT validation on), and MySQL `retriever_cloudflare` schema.
+3. Configure Cloudflare Tunnel from the VM to `retriever.boonegraphics.net`.
+4. Pull from `https://github.com/bobtucker1129/Retriever`, run `deploy/smoke.sh`, verify auth gate and health routes.
+5. Confirm `bggol-vesko01` stays on its LAN IP as PrintSmith token authority.
+6. Keep live Fetch model routing disabled until the next gate.
 
 ## Later Work
 
