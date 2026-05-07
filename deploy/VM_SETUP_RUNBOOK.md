@@ -1,23 +1,71 @@
-# VM Setup Runbook: bggol-retriever01
+# VM Setup Runbook: bggol-vesko01 (coexistence deployment)
 
-**Target:** first new Retriever production host  
-**Hostname:** `bggol-retriever01`  
+**Target:** `bggol-vesko01` — the existing Boone LAN server already running old Retriever  
 **Public entry:** `retriever.boonegraphics.net` via Cloudflare Access + Cloudflare Tunnel  
-**Old Retriever:** stays live on `bggol-vesko01` — do not touch it
+**Old Retriever:** stays live and untouched on its current port — new Retriever runs on port 8810
+
+> **Coexistence note:** VM provisioning was skipped. New Retriever runs beside old Retriever on the same
+> box. Old Retriever keeps its current port, its process, and the PrintSmith token authority.
+> New Retriever binds to `127.0.0.1:8810` only. The Cloudflare Tunnel is new and targets only port 8810.
 
 Complete each section in order. Check each item before moving on.
 
 ---
 
-## Section 1 — Boone IT Prerequisites
+## Section 0 — Coexistence Preflight (run these before doing anything else)
 
-Boone IT must complete these before the app deployment steps begin.
+SSH into `bggol-vesko01` and confirm the following before proceeding.
 
-- [ ] VM created with name `bggol-retriever01` (or approved Boone naming equivalent)
-- [ ] OS: current Ubuntu LTS (22.04 or 24.04) or Debian 12 stable
-- [ ] Static Boone LAN IP assigned and DNS entry created
-- [ ] Outbound HTTPS (port 443) permitted to: `github.com`, `pypi.org`, `files.pythonhosted.org`
-- [ ] Outbound HTTPS permitted to model providers (Anthropic) when Fetch is enabled
+**Check Python version:**
+```bash
+python3 --version
+# Need 3.10 or newer. If only python3 is available, check: python3.10 --version or python3.11 --version
+```
+
+**Check that port 8810 is free (new Retriever's port):**
+```bash
+ss -tlnp | grep 8810
+# Should return nothing. If something is already on 8810, resolve the conflict first.
+```
+
+**Check what port old Retriever is on (so you know not to touch it):**
+```bash
+ss -tlnp | grep node
+# or: ss -tlnp | grep python
+# Note the port and process — do not stop or change that process.
+```
+
+**Check if cloudflared is already installed:**
+```bash
+cloudflared --version
+# If command not found, you will install it in Section 10.
+```
+
+**Check if the retriever OS user already exists:**
+```bash
+id retriever
+# If it exists, note the UID/GID and skip the useradd step in Section 2.
+```
+
+**Check available disk space:**
+```bash
+df -h /opt
+# Should have at least 2GB free for releases, venvs, and shared storage.
+```
+
+Do not proceed until port 8810 is confirmed free and you know old Retriever's port.
+
+---
+
+## Section 1 — Server Prerequisites
+
+Old Retriever is already running on this box, so most prerequisites are met. Confirm:
+
+- [ ] You have SSH access and sudo rights on `bggol-vesko01`
+- [ ] OS: Ubuntu LTS or Debian (already installed)
+- [ ] Outbound HTTPS (port 443) already works (old Retriever uses it)
+- [ ] Port 8810 is confirmed free (from Section 0 check above)
+- [ ] Old Retriever process and port are noted — will not be touched
 - [ ] Inbound LAN access restricted to approved operators only (no public inbound)
 - [ ] Time sync configured (chrony or systemd-timesyncd)
 - [ ] Log rotation configured (`logrotate` or equivalent)
@@ -197,7 +245,7 @@ AUDIT_LOG_FILE=/var/log/retriever-rebuild/audit.jsonl
 # Host identity (populated automatically by deploy.sh, but set manually on first deploy)
 GIT_SHA=
 GIT_REF=
-HOST_NAME=bggol-retriever01
+HOST_NAME=bggol-vesko01
 ```
 
 Verify file is readable by the retriever group and not world-readable:
@@ -349,11 +397,11 @@ RETRIEVER_SMOKE_CF_URL=https://retriever.boonegraphics.net \
 
 The deployment is ready when every item below passes.
 
-**VM:**
-- [ ] `bggol-retriever01` hostname resolves on Boone LAN
+**VM (bggol-vesko01):**
 - [ ] `retriever` OS user exists with no login shell
 - [ ] `/opt/retriever-rebuild/`, `/etc/retriever-rebuild/`, `/var/log/retriever-rebuild/` exist with correct ownership
 - [ ] `/etc/retriever-rebuild/retriever.env` is mode 0640, owner root:retriever
+- [ ] Old Retriever process is still running normally on its original port
 
 **Database:**
 - [ ] `retriever_cloudflare` schema exists on Boone MySQL
@@ -385,9 +433,10 @@ The deployment is ready when every item below passes.
 - [ ] `/fetch` route returns 404 or disabled response (not a working chat interface)
 - [ ] App shell shows pending-user page for a new Cloudflare-authenticated user who has not been approved
 
-**Old Retriever:**
-- [ ] `bggol-vesko01` is still running old Retriever normally
-- [ ] PrintSmith token authority is untouched on `bggol-vesko01`
+**Old Retriever (coexistence):**
+- [ ] Old Retriever is still running normally on its original port
+- [ ] PrintSmith token authority is untouched
+- [ ] No old Retriever routes, processes, or config files were modified
 
 ---
 

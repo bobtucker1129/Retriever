@@ -104,7 +104,7 @@ Resolved:
 - PrePress stays on old Retriever until the new action model is proven.
 - Cursor is part of the build/review chain, not the production Retriever runtime, production secret store, or direct production action path.
 - New Retriever uses `retriever.boonegraphics.net` directly from first deploy. No staging subdomain needed: old Retriever runs on a LAN IP only and has no Cloudflare presence, so there is no DNS conflict.
-- First new Retriever runtime should be a sibling Boone LAN Linux app VM, not `bggol-vesko01`, unless VM provisioning becomes impractical.
+- VM provisioning was impractical. New Retriever will run on `bggol-vesko01` alongside old Retriever. Old Retriever keeps its current port and PrintSmith token authority. New Retriever binds to `127.0.0.1:8810` only.
 - `bggol-vesko01` stays on its LAN IP running old Retriever and PrintSmith token authority until new Retriever PrePress is ready to take over that token.
 - New Retriever must not generate its own `LordTate` PrintSmith REST token while old Retriever is still the authority.
 - `retriever.boonegraphics.net` is the live hostname from first deploy. No staging subdomain is needed because old Retriever is LAN-only with no Cloudflare presence.
