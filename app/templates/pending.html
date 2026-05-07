@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Access{% endblock %}
+{% block title %}Retriever access pending{% endblock %}
+
+{% block content %}
+<section class="notice-panel">
+  <p>You reached Retriever through Cloudflare, but your Retriever profile has not been approved yet.</p>
+  <p class="muted">{{ user.email }}</p>
+</section>
+{% endblock %}
+

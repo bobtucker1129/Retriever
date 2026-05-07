@@ -1,0 +1,40 @@
+[project]
+name = "retriever-rebuild"
+version = "0.1.0"
+description = "New Retriever auth shell and Fetch foundation"
+requires-python = ">=3.9"
+dependencies = [
+  "cryptography",
+  "fastapi",
+  "httpx",
+  "jinja2",
+  "mysql-connector-python",
+  "pydantic-settings",
+  "PyJWT[crypto]",
+  "python-multipart",
+  "uvicorn[standard]",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["deploy*", "migrations*", "tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+

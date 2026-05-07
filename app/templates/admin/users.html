@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Admin{% endblock %}
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<section class="page-intro">
+  <p>Approve pending users and assign access before Fetch is enabled.</p>
+</section>
+
+{% if pending_users %}
+<section class="panel">
+  <div class="section-header">
+    <h2>Pending users</h2>
+    <span class="count-pill">{{ pending_users|length }}</span>
+  </div>
+  <ul class="user-list">
+    {% for pending_user in pending_users %}
+    <li>
+      <div class="user-row">
+        <div class="user-main">
+          <strong>{{ pending_user.display_name }}</strong>
+          <span class="muted">&lt;{{ pending_user.email }}&gt;</span>
+        </div>
+        <div class="actions">
+          <form method="post" action="/admin/users/{{ pending_user.id }}/activate">
+            <button type="submit">Approve</button>
+          </form>
+          <form method="post" action="/admin/users/{{ pending_user.id }}/block">
+            <button type="submit" class="danger">Block</button>
+          </form>
+        </div>
+      </div>
+      <details class="access-details">
+        <summary>Assign access</summary>
+        <div class="form-grid">
+          <form method="post" action="/admin/users/{{ pending_user.id }}/role">
+            <label for="role-{{ pending_user.id }}">Role</label>
+            <select id="role-{{ pending_user.id }}" name="role_key">
+              <option value="viewer">Viewer</option>
+              <option value="project_manager">Project Manager</option>
+              <option value="sales">Sales</option>
+              <option value="production">Production</option>
+              <option value="prepress">PrePress</option>
+              <option value="dsf_operator">DSF Operator</option>
+            </select>
+            <button type="submit" class="secondary">Save role</button>
+          </form>
+          <form method="post" action="/admin/users/{{ pending_user.id }}/booneops-level">
+            <label for="booneops-{{ pending_user.id }}">BooneOps level</label>
+            <select id="booneops-{{ pending_user.id }}" name="booneops_level">
+              <option value="none">None</option>
+              <option value="light">Light</option>
+              <option value="medium">Medium</option>
+            </select>
+            <button type="submit" class="secondary">Save BooneOps level</button>
+          </form>
+          <form method="post" action="/admin/users/{{ pending_user.id }}/module-access">
+            <input type="hidden" name="module_key" value="fetch">
+            <input type="hidden" name="enabled" value="true">
+            <button type="submit" class="secondary">Grant Fetch module</button>
+          </form>
+          <form method="post" action="/admin/users/{{ pending_user.id }}/capabilities/grant">
+            <input type="hidden" name="capability_key" value="fetch.access">
+            <button type="submit" class="secondary">Grant Fetch access</button>
+          </form>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<section class="notice-panel">
+  <h2>No pending users</h2>
+  <p class="muted">New users who pass Cloudflare Access will appear here for approval.</p>
+</section>
+{% endif %}
+{% endblock %}
+

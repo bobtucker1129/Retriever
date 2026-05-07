@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}App Shell{% endblock %}
+{% block title %}Retriever auth shell{% endblock %}
+
+{% block content %}
+<section class="page-intro">
+  <p>The new app shell is running. Fetch stays disabled until auth is proven.</p>
+</section>
+
+<section class="status-grid" aria-label="Current shell status">
+  <div class="status-row">
+    <span>Identity</span>
+    <strong>{{ user.email }}</strong>
+  </div>
+  <div class="status-row">
+    <span>Access</span>
+    <strong>{{ user.status }}</strong>
+  </div>
+  <div class="status-row">
+    <span>Fetch</span>
+    <strong>Disabled</strong>
+  </div>
+</section>
+{% endblock %}
+

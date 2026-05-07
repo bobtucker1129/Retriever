@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Fetch{% endblock %}
+{% block title %}Fetch{% endblock %}
+
+{% block content %}
+<section class="fetch-shell" aria-label="Fetch disabled skeleton">
+  <aside class="fetch-conversation-sidebar" aria-label="Fetch conversations">
+    <div class="fetch-conversation-header">
+      <button type="button" class="fetch-new-chat" disabled>+ New Chat</button>
+      <button type="button" class="fetch-collapse" aria-label="Hide conversations" disabled>‹</button>
+    </div>
+
+    <div class="fetch-conversation-list">
+      <article class="fetch-conversation-item active">
+        <div class="fetch-conversation-main">
+          <input id="fetch-conversation-title-preview" name="conversation_title" class="fetch-conversation-rename-input" value="Fetch skeleton review" aria-label="Rename conversation" disabled>
+          <div class="fetch-conversation-meta">3 messages</div>
+        </div>
+        <button type="button" class="fetch-row-action" aria-label="Rename conversation" disabled>✎</button>
+        <button type="button" class="fetch-row-action danger" aria-label="Delete conversation" disabled>×</button>
+      </article>
+
+      <article class="fetch-conversation-item">
+        <div class="fetch-conversation-main">
+          <div class="fetch-conversation-title">Customer email cleanup</div>
+          <div class="fetch-conversation-meta">1 message</div>
+        </div>
+        <button type="button" class="fetch-row-action" aria-label="Rename conversation" disabled>✎</button>
+        <button type="button" class="fetch-row-action danger" aria-label="Delete conversation" disabled>×</button>
+      </article>
+
+      <article class="fetch-conversation-item">
+        <div class="fetch-conversation-main">
+          <div class="fetch-conversation-title">DSF delayed report example</div>
+          <div class="fetch-conversation-meta">5 messages</div>
+        </div>
+        <button type="button" class="fetch-row-action" aria-label="Rename conversation" disabled>✎</button>
+        <button type="button" class="fetch-row-action danger" aria-label="Delete conversation" disabled>×</button>
+      </article>
+    </div>
+  </aside>
+
+  <div class="fetch-chat-panel">
+    <div class="fetch-disabled-banner" role="status">
+      <strong>Fetch is not enabled yet.</strong>
+      <span>This is a layout preview. No model, PrintSmith, docs, or BooneOps call will run here.</span>
+    </div>
+
+    <div class="fetch-thread" aria-label="Fetch conversation preview">
+      <section class="fetch-thread-reports-preview" aria-label="Thread reports preview">
+        <div>
+          <div class="fetch-thread-reports-title">Thread Reports</div>
+          <div class="fetch-thread-reports-subtitle">Latest Fetch report files will appear here.</div>
+          <div class="fetch-thread-reports-empty">No report files loaded yet.</div>
+        </div>
+        <button type="button" class="secondary" disabled>Refresh reports</button>
+      </section>
+
+      <div class="fetch-empty-state">
+        <img class="fetch-empty-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
+        <div class="fetch-empty-title">Ask me about Boone or anything else.</div>
+        <p class="fetch-empty-copy">Fetch will answer here after the auth shell is approved.</p>
+      </div>
+    </div>
+
+    <form class="fetch-composer" aria-label="Fetch composer preview">
+      <textarea id="fetch-question-preview" name="question" rows="2" placeholder="Ask a question, or paste an email draft to clean up..." disabled></textarea>
+      <p class="fetch-disabled-note">Controls are disabled for now. This preview is only checking layout, theme, and Fetch navigation.</p>
+      <div class="fetch-composer-actions">
+        <label class="fetch-upload-toggle" for="fetch-save-uploads-preview">
+          <input id="fetch-save-uploads-preview" name="save_uploads" type="checkbox" disabled>
+          Save uploads to my private library
+        </label>
+        <div class="fetch-composer-buttons">
+          <button type="button" class="secondary" disabled>Attach</button>
+          <button type="button" class="secondary" disabled>Clean Up Email</button>
+          <button type="button" disabled>Ask Fetch</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="fetch-suggestions" aria-label="Fetch suggestions preview">
+      <button type="button" disabled>/help</button>
+      <button type="button" disabled>/sources</button>
+      <button type="button" disabled>Draft a short customer email</button>
+      <button type="button" disabled>Show a delayed report example</button>
+    </div>
+
+    <details class="fetch-preview-details">
+      <summary>Preview trust states</summary>
+      <div class="fetch-preview-grid">
+        <article class="fetch-preview-card">
+          <strong>Delayed report</strong>
+          <span>Large PrintSmith or DSF requests will show progress before the chat feels stuck.</span>
+        </article>
+        <article class="fetch-preview-card">
+          <strong>Sources</strong>
+          <span>Answers will show whether they used live PrintSmith, docs, uploads, or local Fetch context.</span>
+        </article>
+        <article class="fetch-preview-card">
+          <strong>Unavailable route</strong>
+          <span>If a dependency is down, Fetch will say what failed and what is safe to try next.</span>
+        </article>
+      </div>
+    </details>
+
+    <footer class="fetch-status-footer" aria-label="Fetch status">
+      <span>Model: {{ fetch_model_label|replace("model ", "") }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Context: {{ fetch_context_percent }}% {{ fetch_context_state }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Path: disabled</span>
+      <span aria-hidden="true">|</span>
+      <span>Mode: layout preview</span>
+    </footer>
+  </div>
+</section>
+{% endblock %}
+

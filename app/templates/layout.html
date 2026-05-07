@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title or "Retriever" }}</title>
+    <link rel="icon" href="data:,">
+    <script>
+      (function () {
+        var theme = localStorage.getItem("retrieverTheme") || "light";
+        var collapsed = localStorage.getItem("retrieverSidebarCollapsed") === "true";
+        document.documentElement.setAttribute("data-theme", theme);
+        if (collapsed) document.documentElement.classList.add("sidebar-collapsed");
+      })();
+    </script>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Retriever modules">
+        <button type="button" class="sidebar-toggle" aria-label="Toggle module sidebar" aria-expanded="true">‹</button>
+        <div class="brand-block">
+          <div>
+            <div class="brand-name">Retriever</div>
+            <div class="brand-subtitle">{{ settings.retriever_env.value }}</div>
+          </div>
+        </div>
+        <nav class="module-nav">
+          <a class="nav-item{% if active_nav == 'home' %} active{% endif %}" href="/" title="Home">
+            <span class="nav-abbrev">H</span>
+            <span class="nav-label">Home</span>
+          </a>
+          {% if user and user.has_module("admin") %}
+          <a class="nav-item{% if active_nav == 'admin' %} active{% endif %}" href="/admin/users" title="Admin">
+            <span class="nav-abbrev">A</span>
+            <span class="nav-label">Admin</span>
+          </a>
+          {% endif %}
+          {% if settings.fetch_enabled %}
+          <a class="nav-item{% if active_nav == 'fetch' %} active{% endif %}" href="/fetch" title="Fetch">
+            <span class="nav-abbrev">F</span>
+            <span class="nav-label">Fetch</span>
+          </a>
+          {% else %}
+          <a class="nav-item disabled{% if active_nav == 'fetch' %} active{% endif %}" href="/fetch" aria-disabled="true" title="Fetch disabled">
+            <span class="nav-abbrev">F</span>
+            <span class="nav-label">Fetch disabled</span>
+          </a>
+          {% endif %}
+        </nav>
+        <div class="sidebar-footer">
+          <a href="/health/ready" title="Health">
+            <span class="nav-abbrev">?</span>
+            <span class="nav-label">Health</span>
+          </a>
+          <a href="/version" title="Version">
+            <span class="nav-abbrev">V</span>
+            <span class="nav-label">Version</span>
+          </a>
+        </div>
+      </aside>
+
+      <div class="main-column">
+        <header class="topbar">
+          <div class="topbar-title">
+            <img class="topbar-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
+            <div>
+              <div class="eyebrow">{% block eyebrow %}Retriever{% endblock %}</div>
+              <h1>{% block title %}{{ page_title or "Retriever" }}{% endblock %}</h1>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <div class="theme-toggle" aria-label="Theme">
+              <span class="theme-label">Theme:</span>
+              <button type="button" class="theme-button" data-theme-choice="light" aria-label="Use light theme">Light</button>
+              <button type="button" class="theme-button" data-theme-choice="dark" aria-label="Use dark theme">Dark</button>
+            </div>
+          {% if user %}
+            <form method="post" action="/logout" class="user-chip">
+              <span>{{ user.display_name }}</span>
+              <button type="submit" class="ghost-button">Logout</button>
+            </form>
+          {% endif %}
+          </div>
+        </header>
+
+        <main id="main-content" class="content" tabindex="-1">
+          {% block content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var sidebarToggle = document.querySelector(".sidebar-toggle");
+        var themeButtons = document.querySelectorAll("[data-theme-choice]");
+
+        function syncSidebarButton() {
+          if (!sidebarToggle) return;
+          var collapsed = root.classList.contains("sidebar-collapsed");
+          sidebarToggle.textContent = collapsed ? ">" : "<";
+          sidebarToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        }
+
+        function syncThemeButtons() {
+          var currentTheme = root.getAttribute("data-theme") || "light";
+          themeButtons.forEach(function (button) {
+            button.classList.toggle("active", button.getAttribute("data-theme-choice") === currentTheme);
+          });
+        }
+
+        if (sidebarToggle) {
+          sidebarToggle.addEventListener("click", function () {
+            var collapsed = root.classList.toggle("sidebar-collapsed");
+            localStorage.setItem("retrieverSidebarCollapsed", collapsed ? "true" : "false");
+            syncSidebarButton();
+          });
+        }
+
+        themeButtons.forEach(function (button) {
+          button.addEventListener("click", function () {
+            var theme = button.getAttribute("data-theme-choice") || "light";
+            root.setAttribute("data-theme", theme);
+            localStorage.setItem("retrieverTheme", theme);
+            syncThemeButtons();
+          });
+        });
+
+        syncSidebarButton();
+        syncThemeButtons();
+      })();
+    </script>
+  </body>
+</html>
