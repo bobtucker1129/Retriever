@@ -84,6 +84,22 @@ function Run-PythonScript {
     }
 }
 
+function Clear-StaleEnvVars {
+    # Old Retriever sets system-level FETCH_*, MODEL_*, ANTHROPIC_*, BOONEOPS_*,
+    # PRINTSMITH_* env vars that pollute new Retriever's pydantic-settings.
+    # Clear them at process scope so they don't shadow values from retriever.env.
+    # System/user-level settings are not modified.
+    $prefixPatterns = '^FETCH_|^MODEL_|^ANTHROPIC_|^BOONEOPS_|^PRINTSMITH_'
+    $cleared = @()
+    Get-ChildItem Env: | Where-Object { $_.Name -match $prefixPatterns } | ForEach-Object {
+        [System.Environment]::SetEnvironmentVariable($_.Name, $null, 'Process')
+        $cleared += $_.Name
+    }
+    if ($cleared.Count -gt 0) {
+        Write-Log "Cleared $($cleared.Count) inherited env vars: $($cleared -join ', ')"
+    }
+}
+
 # ---------------------------------------------------------------------------
 # Lock
 # ---------------------------------------------------------------------------
@@ -110,6 +126,23 @@ foreach ($dir in @($AppBase, $AppReleases)) {
 }
 if (-not (Test-Path $EnvFile)) { throw "Env file not found: $EnvFile" }
 if (-not (Test-Path $LogDir))  { New-Item -ItemType Directory -Path $LogDir | Out-Null }
+
+# ---------------------------------------------------------------------------
+# Clean inherited env, then load production env from retriever.env
+# This must happen BEFORE any Python invocation (import check, tests,
+# config validation, migrations) so all of them see the same env state.
+# ---------------------------------------------------------------------------
+Clear-StaleEnvVars
+
+Write-Log "Loading env from $EnvFile ..."
+Get-Content $EnvFile |
+    Where-Object { $_ -notmatch '^\s*#' -and $_ -match '=' } |
+    ForEach-Object {
+        $parts = $_ -split '=', 2
+        if ($parts.Count -eq 2) {
+            [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), 'Process')
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Current release for rollback reference
@@ -253,19 +286,9 @@ if (-not (Test-Path $releaseDir)) {
 }
 
 # ---------------------------------------------------------------------------
-# Config validation
+# Config validation (env was loaded earlier, before build steps)
 # ---------------------------------------------------------------------------
 Write-Log "Validating production config ..."
-
-# Load env file into process environment
-Get-Content $EnvFile |
-    Where-Object { $_ -notmatch '^\s*#' -and $_ -match '=' } |
-    ForEach-Object {
-        $parts = $_ -split '=', 2
-        if ($parts.Count -eq 2) {
-            [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), 'Process')
-        }
-    }
 
 $configScript = @'
 from app.config import get_settings, format_config_error

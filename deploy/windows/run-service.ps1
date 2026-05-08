@@ -32,6 +32,22 @@ function Write-Boot {
 Write-Boot "RetrieverRebuild bootstrap starting."
 
 # ---------------------------------------------------------------------------
+# Clear inherited env vars from old Retriever before loading our own.
+# Old Retriever sets system-level FETCH_*, MODEL_*, ANTHROPIC_*, BOONEOPS_*,
+# PRINTSMITH_* env vars that would shadow new Retriever's values otherwise.
+# System/user-level settings are not modified.
+# ---------------------------------------------------------------------------
+$prefixPatterns = '^FETCH_|^MODEL_|^ANTHROPIC_|^BOONEOPS_|^PRINTSMITH_'
+$cleared = @()
+Get-ChildItem Env: | Where-Object { $_.Name -match $prefixPatterns } | ForEach-Object {
+    [System.Environment]::SetEnvironmentVariable($_.Name, $null, 'Process')
+    $cleared += $_.Name
+}
+if ($cleared.Count -gt 0) {
+    Write-Boot "Cleared $($cleared.Count) inherited env vars: $($cleared -join ', ')"
+}
+
+# ---------------------------------------------------------------------------
 # Load production env file into process environment
 # ---------------------------------------------------------------------------
 if (-not (Test-Path $EnvFile)) {
