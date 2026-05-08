@@ -75,9 +75,15 @@ function Run-PythonScript {
     $Script | Out-File -FilePath $tmpFile -Encoding utf8
     try {
         Push-Location $WorkDir
-        & $PythonExe $tmpFile
+        # Capture stdout AND stderr so we can log what Python actually said
+        $output = & $PythonExe $tmpFile 2>&1 | Out-String
         $code = $LASTEXITCODE
         Pop-Location
+        if ($output.Trim()) {
+            foreach ($line in ($output -split "`r?`n")) {
+                if ($line.Trim()) { Write-Log "py: $line" }
+            }
+        }
         return $code
     } finally {
         Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
