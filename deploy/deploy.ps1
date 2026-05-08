@@ -148,18 +148,41 @@ if (-not (Test-Path $releaseDir)) {
     # Checkout into immutable release directory
     # ---------------------------------------------------------------------------
     Write-Log "Creating release directory $releaseDir ..."
-    # Clone-and-checkout approach: bulletproof on Windows, no archive/tar weirdness
-    & git clone --quiet $AppRepo $releaseDir
-    if ($LASTEXITCODE -ne 0) { throw "git clone to release dir failed (exit $LASTEXITCODE)." }
+    New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
-    & git -C $releaseDir checkout -f --quiet $fullSha
-    if ($LASTEXITCODE -ne 0) { throw "git checkout in release dir failed (exit $LASTEXITCODE)." }
+    # Use GIT_DIR + GIT_WORK_TREE env vars to populate the release dir
+    # from the cached repo without touching the source repo's HEAD.
+    Write-Log "Source repo: $AppRepo"
+    Write-Log "GIT_DIR=$AppRepo\.git GIT_WORK_TREE=$releaseDir"
+    Write-Log "Running: git checkout -f $fullSha -- ."
 
-    # Remove .git from the release - it's an immutable source snapshot, not a working repo
-    Remove-Item -Recurse -Force "$releaseDir\.git" -ErrorAction SilentlyContinue
+    $env:GIT_DIR = "$AppRepo\.git"
+    $env:GIT_WORK_TREE = $releaseDir
+    try {
+        # Capture all output (stdout + stderr) for diagnostics
+        $checkoutOutput = & git checkout -f $fullSha -- . 2>&1 | Out-String
+        $checkoutExit = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:\GIT_DIR -ErrorAction SilentlyContinue
+        Remove-Item Env:\GIT_WORK_TREE -ErrorAction SilentlyContinue
+    }
+
+    if ($checkoutOutput.Trim()) { Write-Log "git output: $($checkoutOutput.Trim())" }
+    Write-Log "git checkout exit code: $checkoutExit"
+
+    if ($checkoutExit -ne 0) {
+        throw "git checkout failed (exit $checkoutExit). Output: $checkoutOutput"
+    }
+
+    # Diagnostic: list what's actually in the release dir
+    $releasedItems = Get-ChildItem -Path $releaseDir -Force -ErrorAction SilentlyContinue
+    Write-Log "Release dir contains $($releasedItems.Count) entries"
+    if ($releasedItems.Count -gt 0) {
+        Write-Log "Top-level entries: $($releasedItems.Name -join ', ')"
+    }
 
     if (-not (Test-Path "$releaseDir\requirements.txt")) {
-        throw "Source extraction did not produce requirements.txt at $releaseDir"
+        throw "Source extraction did not produce requirements.txt at $releaseDir. Release dir has $($releasedItems.Count) entries: $($releasedItems.Name -join ', ')"
     }
     Write-Log "Source extracted to release directory."
 
