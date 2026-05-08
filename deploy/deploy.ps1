@@ -181,8 +181,8 @@ if (-not (Test-Path $releaseDir)) {
         Write-Log "Top-level entries: $($releasedItems.Name -join ', ')"
     }
 
-    if (-not (Test-Path "$releaseDir\requirements.txt")) {
-        throw "Source extraction did not produce requirements.txt at $releaseDir. Release dir has $($releasedItems.Count) entries: $($releasedItems.Name -join ', ')"
+    if (-not (Test-Path "$releaseDir\pyproject.toml")) {
+        throw "Source extraction did not produce pyproject.toml at $releaseDir. Release dir has $($releasedItems.Count) entries: $($releasedItems.Name -join ', ')"
     }
     Write-Log "Source extracted to release directory."
 
@@ -214,8 +214,17 @@ if (-not (Test-Path $releaseDir)) {
 
     $venvPython = "$releaseDir\.venv\Scripts\python.exe"
     & $venvPython -m pip install --quiet --upgrade pip
-    & $venvPython -m pip install --quiet -r "$releaseDir\requirements.txt"
-    if ($LASTEXITCODE -ne 0) { throw "pip install failed." }
+
+    # Install the app and dev dependencies from pyproject.toml.
+    # pip must run from the release dir so it can find pyproject.toml.
+    Push-Location $releaseDir
+    try {
+        & $venvPython -m pip install --quiet ".[dev]"
+        $pipExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($pipExit -ne 0) { throw "pip install failed (exit $pipExit)." }
     Write-Log "Dependencies installed."
 
     # ---------------------------------------------------------------------------
