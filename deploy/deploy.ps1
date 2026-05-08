@@ -11,7 +11,10 @@ param(
     [string]$GitRef
 )
 
-$ErrorActionPreference = "Stop"
+# Use 'Continue', not 'Stop': in PowerShell 5.1, 'Stop' treats any native
+# command stderr output as a terminating error (e.g. git's "Cloning into..."
+# message). All real errors below are handled with explicit if/throw blocks.
+$ErrorActionPreference = "Continue"
 
 # ---------------------------------------------------------------------------
 # Config
@@ -263,8 +266,16 @@ if (-not (Test-Path $releaseDir)) {
     # ---------------------------------------------------------------------------
     Write-Log "Running import check ..."
     $env:PYTHONPATH = $releaseDir
-    & $venvPython -c "from app.main import app"
-    if ($LASTEXITCODE -ne 0) { throw "Import check failed. Release is broken." }
+    Push-Location $releaseDir
+    try {
+        # Python imports use relative paths (e.g. "app/static") that resolve
+        # against cwd, so cwd must be the release dir.
+        & $venvPython -c "from app.main import app"
+        $importExit = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($importExit -ne 0) { throw "Import check failed. Release is broken." }
     Write-Log "Import check passed."
 
     # ---------------------------------------------------------------------------
