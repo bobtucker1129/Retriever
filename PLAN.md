@@ -70,6 +70,7 @@ Completed:
 - Configured Cloudflare Zero Trust for `retriever.boonegraphics.net`: team domain `boonegraphics.cloudflareaccess.com`, Access application/policy for Boone employees, tunnel `bf859516-9782-4c53-9098-1923709b4028`, and `cloudflared` Windows service running on `bggol-vesko01`.
 - Created MySQL schema/user for `retriever_cloudflare` on Boone MySQL and successfully applied `0001_retriever_cloudflare.sql` plus `0001_seed_auth_shell.sql` during first deploy.
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c` at `D:\retriever-rebuild\current`; next step is installing and starting the `RetrieverRebuild` Windows service.
+- Installed `RetrieverRebuild` as an NSSM Windows service on `bggol-vesko01`; service started successfully and `/health/live` returned 200 on port `8810`.
 
 ## Active Architecture Artifacts
 
@@ -150,18 +151,17 @@ Open:
 
 ## Next Recommended Session
 
-Install and smoke-test the `RetrieverRebuild` Windows service on `bggol-vesko01`.
+Smoke-test `RetrieverRebuild` locally and through Cloudflare.
 
-Plain English goal: the code, database schema, Cloudflare Access, and Cloudflare Tunnel are now staged. The next move is to install `RetrieverRebuild` as a Windows service with NSSM, start it on `127.0.0.1:8810`, verify localhost health/version routes, then verify `retriever.boonegraphics.net` through Cloudflare Access.
+Plain English goal: the service is installed and running. The next move is to run local smoke checks, verify old Retriever is untouched, then verify `retriever.boonegraphics.net` through Cloudflare Access.
 
 Recommended scope:
 
-1. Run `powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\install-service.ps1` on `bggol-vesko01`.
-2. Confirm `Get-Service RetrieverRebuild` shows `Running`.
-3. Run local checks: `/health/live`, `/health/ready`, `/version`, and `D:\retriever-rebuild\bin\smoke.ps1`.
-4. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
-5. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
-6. Keep Fetch/model routing disabled until the next gate.
+1. Confirm `Get-Service RetrieverRebuild` shows `Running`.
+2. Run local checks: `/health/live`, `/health/ready`, `/version`, and `D:\retriever-rebuild\bin\smoke.ps1`.
+3. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
+4. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
+5. Keep Fetch/model routing disabled until the next gate.
 
 ## Later Work
 
