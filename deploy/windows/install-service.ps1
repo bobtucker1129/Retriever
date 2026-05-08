@@ -32,10 +32,10 @@ function Resolve-NssmPath {
 }
 
 function Invoke-Nssm {
-    param([string]$NssmPath, [string[]]$Args)
-    & $NssmPath @Args
+    param([string]$NssmPath, [string[]]$NssmArgs)
+    & $NssmPath @NssmArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "NSSM command failed (exit $LASTEXITCODE): $($Args -join ' ')"
+        throw "NSSM command failed (exit $LASTEXITCODE): $($NssmArgs -join ' ')"
     }
 }
 
@@ -74,23 +74,23 @@ $appParams     = "-NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -AppBa
 
 if (-not $svcExists) {
     Write-Host "Installing service '$ServiceName'."
-    Invoke-Nssm -NssmPath $nssm -Args @("install", $ServiceName, $powershellExe, $appParams)
+    Invoke-Nssm -NssmPath $nssm -NssmArgs @("install", $ServiceName, $powershellExe, $appParams)
 } else {
     Write-Host "Updating service '$ServiceName' application parameters."
-    Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "Application", $powershellExe)
-    Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppParameters", $appParams)
+    Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "Application", $powershellExe)
+    Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppParameters", $appParams)
 }
 
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppDirectory",  $AppBase)
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "DisplayName",   "Retriever Rebuild Service")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "Description",   "New Retriever app (auth shell + Fetch) on port 8810.")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "Start",         "SERVICE_AUTO_START")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppStdout",     (Join-Path $LogDir "service-stdout.log"))
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppStderr",     (Join-Path $LogDir "service-stderr.log"))
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppRotateFiles",  "1")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppRotateOnline", "1")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppRotateBytes",  "10485760")
-Invoke-Nssm -NssmPath $nssm -Args @("set", $ServiceName, "AppExit", "Default", "Restart")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppDirectory",  $AppBase)
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "DisplayName",   "Retriever Rebuild Service")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "Description",   "New Retriever app (auth shell + Fetch) on port 8810.")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "Start",         "SERVICE_AUTO_START")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppStdout",     (Join-Path $LogDir "service-stdout.log"))
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppStderr",     (Join-Path $LogDir "service-stderr.log"))
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppRotateFiles",  "1")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppRotateOnline", "1")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppRotateBytes",  "10485760")
+Invoke-Nssm -NssmPath $nssm -NssmArgs @("set", $ServiceName, "AppExit", "Default", "Restart")
 
 # Service recovery: restart on failure
 sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/5000/restart/5000 | Out-Null

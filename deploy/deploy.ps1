@@ -56,9 +56,9 @@ status: $Status
 }
 
 function Invoke-Git {
-    param([string[]]$Args)
-    & git @Args
-    if ($LASTEXITCODE -ne 0) { throw "git $($Args -join ' ') failed (exit $LASTEXITCODE)" }
+    param([string[]]$GitArgs)
+    & git @GitArgs
+    if ($LASTEXITCODE -ne 0) { throw "git $($GitArgs -join ' ') failed (exit $LASTEXITCODE)" }
 }
 
 function Set-Junction {
@@ -126,10 +126,10 @@ if (Test-Path $currentLink) {
 # ---------------------------------------------------------------------------
 Write-Log "Fetching from $GithubUrl ..."
 if (Test-Path "$AppRepo\.git") {
-    Invoke-Git -Args @("-C", $AppRepo, "fetch", "--tags", "origin")
+    Invoke-Git -GitArgs @("-C", $AppRepo, "fetch", "--tags", "origin")
 } else {
     Write-Log "Cloning repo to $AppRepo ..."
-    Invoke-Git -Args @("clone", $GithubUrl, $AppRepo)
+    Invoke-Git -GitArgs @("clone", $GithubUrl, $AppRepo)
 }
 
 # Resolve ref to full SHA (PS 5.1 compatible)
@@ -149,7 +149,7 @@ if (-not (Test-Path $releaseDir)) {
     # ---------------------------------------------------------------------------
     Write-Log "Creating release directory $releaseDir ..."
     New-Item -ItemType Directory -Path $releaseDir | Out-Null
-    Invoke-Git -Args @("-C", $AppRepo, "--work-tree=$releaseDir", "checkout", $fullSha, "--", ".")
+    Invoke-Git -GitArgs @("-C", $AppRepo, "--work-tree=$releaseDir", "checkout", $fullSha, "--", ".")
     Write-Log "Source checked out."
 
     # Stamp metadata
