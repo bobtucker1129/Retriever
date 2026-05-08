@@ -12,7 +12,10 @@ param(
     [int]$Port           = 8810
 )
 
-$ErrorActionPreference = "Stop"
+# Use Continue because Windows PowerShell 5.1 can turn native-command stderr
+# into parser-looking failures when ErrorActionPreference is Stop. Explicit
+# exit-code checks below handle real failures.
+$ErrorActionPreference = "Continue"
 
 # ---------------------------------------------------------------------------
 # Locate NSSM (same search order as old Retriever)
@@ -61,7 +64,7 @@ if (-not (Test-Path $runScript)) {
 # ---------------------------------------------------------------------------
 $svcExists = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svcExists) {
-    Write-Host "Service '$ServiceName' exists — stopping before update."
+    Write-Host "Service '$ServiceName' exists - stopping before update."
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 3
 }
