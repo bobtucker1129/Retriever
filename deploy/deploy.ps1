@@ -279,15 +279,12 @@ if (-not (Test-Path $releaseDir)) {
     Write-Log "Import check passed."
 
     # ---------------------------------------------------------------------------
-    # Tests
+    # NOTE: Tests are NOT run during deploy. They are designed to run with
+    # local mode env (RETRIEVER_ENV=local, no real MySQL), not against
+    # production config loaded by this script. Run pytest on your dev machine
+    # before pushing. Deploy validates: imports work, config is valid,
+    # health checks pass after restart, smoke checks pass through Cloudflare.
     # ---------------------------------------------------------------------------
-    Write-Log "Running test suite ..."
-    Push-Location $releaseDir
-    & $venvPython -m pytest tests/ -q --tb=short
-    $testResult = $LASTEXITCODE
-    Pop-Location
-    if ($testResult -ne 0) { throw "Tests failed. Aborting deploy." }
-    Write-Log "Tests passed."
 
 } else {
     Write-Log "Release $releaseDir already exists. Skipping build."
