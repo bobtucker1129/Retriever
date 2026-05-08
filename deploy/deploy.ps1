@@ -316,14 +316,10 @@ Write-Log "Config validation passed."
 if ($env:RETRIEVER_RUN_MIGRATIONS -eq "true") {
     Write-Log "Running database migrations ..."
     $migScript = @'
-from app.db.connection import get_db_connection
-from app.db.migrations import run_migrations_and_seeds
-import asyncio
-async def main():
-    conn = await get_db_connection()
-    await run_migrations_and_seeds(conn)
-    await conn.close()
-asyncio.run(main())
+from app.db.migrations import run_migrations
+
+for name, count in run_migrations(include_seeds=True):
+    print(f"applied {name}: {count} statements")
 '@
     $migResult = Run-PythonScript -PythonExe $venvPython -Script $migScript -WorkDir $releaseDir
     if ($migResult -ne 0) { throw "Migrations failed." }
