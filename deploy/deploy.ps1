@@ -184,37 +184,23 @@ $releaseDir = "$AppReleases\$fullSha"
 
 if (-not (Test-Path $releaseDir)) {
     # ---------------------------------------------------------------------------
-    # Checkout into immutable release directory
+    # Populate release dir via clone-and-strip-git.
+    # Avoids GIT_DIR/GIT_WORK_TREE + pathspec quirks on Windows PowerShell.
     # ---------------------------------------------------------------------------
-    Write-Log "Creating release directory $releaseDir ..."
-    New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+    Write-Log "Cloning $AppRepo to $releaseDir ..."
+    $cloneOutput = & git clone $AppRepo $releaseDir 2>&1 | Out-String
+    $cloneExit = $LASTEXITCODE
+    if ($cloneOutput.Trim()) { Write-Log "git clone: $($cloneOutput.Trim())" }
+    if ($cloneExit -ne 0) { throw "git clone failed (exit $cloneExit)." }
 
-    # Use GIT_DIR + GIT_WORK_TREE env vars to populate the release dir
-    # from the cached repo without touching the source repo's HEAD.
-    Write-Log "Source repo: $AppRepo"
-    Write-Log "GIT_DIR=$AppRepo\.git GIT_WORK_TREE=$releaseDir"
-    Write-Log "Running: git checkout -f $fullSha -- ."
+    Write-Log "Checking out $fullSha ..."
+    $coOutput = & git -C $releaseDir checkout -f $fullSha 2>&1 | Out-String
+    $coExit = $LASTEXITCODE
+    if ($coOutput.Trim()) { Write-Log "git checkout: $($coOutput.Trim())" }
+    if ($coExit -ne 0) { throw "git checkout failed (exit $coExit)." }
 
-    $env:GIT_DIR = "$AppRepo\.git"
-    $env:GIT_WORK_TREE = $releaseDir
-    Push-Location $releaseDir
-    try {
-        # cwd must equal the work tree so the `.` pathspec resolves correctly.
-        # Capture all output (stdout + stderr) for diagnostics.
-        $checkoutOutput = & git checkout -f $fullSha -- . 2>&1 | Out-String
-        $checkoutExit = $LASTEXITCODE
-    } finally {
-        Pop-Location
-        Remove-Item Env:\GIT_DIR -ErrorAction SilentlyContinue
-        Remove-Item Env:\GIT_WORK_TREE -ErrorAction SilentlyContinue
-    }
-
-    if ($checkoutOutput.Trim()) { Write-Log "git output: $($checkoutOutput.Trim())" }
-    Write-Log "git checkout exit code: $checkoutExit"
-
-    if ($checkoutExit -ne 0) {
-        throw "git checkout failed (exit $checkoutExit). Output: $checkoutOutput"
-    }
+    # Strip .git so the release is an immutable source snapshot
+    Remove-Item -Recurse -Force "$releaseDir\.git" -ErrorAction SilentlyContinue
 
     # Diagnostic: list what's actually in the release dir
     $releasedItems = Get-ChildItem -Path $releaseDir -Force -ErrorAction SilentlyContinue
@@ -223,8 +209,11 @@ if (-not (Test-Path $releaseDir)) {
         Write-Log "Top-level entries: $($releasedItems.Name -join ', ')"
     }
 
-    if (-not (Test-Path "$releaseDir\pyproject.toml")) {
-        throw "Source extraction did not produce pyproject.toml at $releaseDir. Release dir has $($releasedItems.Count) entries: $($releasedItems.Name -join ', ')"
+    # Verify required subdirectories made it
+    foreach ($must in @('pyproject.toml', 'app\main.py', 'app\static', 'app\templates')) {
+        if (-not (Test-Path "$releaseDir\$must")) {
+            throw "Source extraction did not produce $must at $releaseDir."
+        }
     }
     Write-Log "Source extracted to release directory."
 
