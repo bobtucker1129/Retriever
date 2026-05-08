@@ -13,6 +13,58 @@ Run all PowerShell commands as Administrator unless noted otherwise.
 
 ---
 
+## Deployment Guardrails — Do Not Regress
+
+These are lessons from the first live deploy attempt and should be treated as
+fixed facts for future agents:
+
+- This host is **Windows Server**, not Linux. Do not create bash, systemd,
+  `/opt`, `/etc`, or `/var/log` deployment instructions for first launch.
+- Old Retriever already runs on `bggol-vesko01` as the `Retriever` Windows
+  service on port `8000`. New Retriever runs beside it as `RetrieverRebuild`
+  on port `8810`.
+- New Retriever uses the old server's Python runtime to create its own release
+  virtual environments. On the first deploy, the server used Python 3.14 from
+  `C:\Program Files\Python314\python.exe`; old Retriever's venv Python is a
+  fallback at `D:\Repository\pm-review-dashboard-ContexEng\venv\Scripts\python.exe`.
+- PowerShell on this server is Windows PowerShell 5.1. Do not use PowerShell 7+
+  syntax such as `?.`; do not use `$Args` as a function parameter name because
+  it shadows a PowerShell automatic variable.
+- Old Retriever leaves system/user environment variables such as `FETCH_*`,
+  `MODEL_*`, `ANTHROPIC_*`, `BOONEOPS_*`, and `PRINTSMITH_*`. `deploy.ps1` and
+  `run-service.ps1` intentionally clear those at process scope before loading
+  `D:\retriever-rebuild\env\retriever.env`.
+- The project uses `pyproject.toml`, not `requirements.txt`. Deploy installs
+  with `pip install ".[dev]"` from the release directory.
+- Tests are pre-push/local verification, not deploy-time verification. The tests
+  expect local config and will fail under production env. Deploy-time checks are
+  import check, config validation, optional migrations, service health, and smoke.
+- The migration API is `app.db.migrations.run_migrations(include_seeds=True)`.
+  Do not call non-existent helpers such as `get_db_connection` or
+  `run_migrations_and_seeds`.
+- `git clone` and `git checkout` may write normal progress messages to stderr.
+  The deploy script uses explicit exit-code checks instead of relying on
+  `$ErrorActionPreference = "Stop"` for native commands.
+
+First proven release:
+
+```text
+ed41f94261910256edc71d104adcabf7dd00324c
+```
+
+That release successfully:
+
+- loaded production env from `D:\retriever-rebuild\env\retriever.env`
+- cleared inherited old-Fetch env vars
+- installed dependencies from `pyproject.toml`
+- passed the import check
+- validated production config
+- applied `0001_retriever_cloudflare.sql`
+- applied `0001_seed_auth_shell.sql`
+- pointed `D:\retriever-rebuild\current` at the staged release
+
+---
+
 ## Section 0 — Preflight Checks
 
 Open a Command Prompt or PowerShell as Administrator and run these first.
@@ -204,16 +256,17 @@ git clone https://github.com/bobtucker1129/Retriever.git D:\retriever-rebuild\re
 
 # Copy scripts to bin\ (see Section 4 above)
 
-# Run first deploy with migrations
-$env:RETRIEVER_RUN_MIGRATIONS = "true"
+# Run first deploy with migrations.
+# Use .NET process env so the child PowerShell process receives it.
+[System.Environment]::SetEnvironmentVariable("RETRIEVER_RUN_MIGRATIONS", "true", "Process")
 powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\deploy.ps1 main
 ```
 
 The deploy script will:
 1. Clone/fetch from GitHub
 2. Create a release directory at `D:\retriever-rebuild\releases\<sha>\`
-3. Create a `.venv` and install requirements
-4. Run import check and tests
+3. Create a `.venv` and install from `pyproject.toml`
+4. Run the import check
 5. Validate config against the env file
 6. Run migrations (because `RETRIEVER_RUN_MIGRATIONS=true`)
 7. Set `D:\retriever-rebuild\current` junction to the new release

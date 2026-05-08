@@ -4,6 +4,29 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-08 — Windows deploy path corrected and first release staged
+
+**Goal:** Deploy the auth shell to `retriever.boonegraphics.net` from the Boone runtime.
+
+**What happened:**
+
+- Corrected a major deployment assumption: `bggol-vesko01` is Windows Server, not Linux. Old Retriever runs there as the `Retriever` NSSM service on port `8000`.
+- Replaced the failed Linux/systemd/bash deployment path with Windows PowerShell/NSSM scripts.
+- Configured Cloudflare Zero Trust for `retriever.boonegraphics.net`: team domain `boonegraphics.cloudflareaccess.com`, Boone Employees Access policy, tunnel `bf859516-9782-4c53-9098-1923709b4028`, DNS route, and `cloudflared` service running.
+- Created MySQL `retriever_cloudflare` schema/user access from `192.168.33.12`.
+- Fixed first-deploy blockers in the Windows deploy script: PowerShell 5.1 compatibility, reserved `$Args` variable shadowing, `pyproject.toml` install, old Retriever env-var pollution, Python cwd for static/templates, and the real migration API.
+- Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c`; migrations applied `0001_retriever_cloudflare.sql` and `0001_seed_auth_shell.sql`; `D:\retriever-rebuild\current` points at the staged release.
+
+**Plain-English result:**
+
+The hard first-deploy infrastructure is now mostly behind us. New Retriever is not running as a service yet, but the server has the code, production env, Cloudflare gate, Cloudflare Tunnel, MySQL schema, seed rows, and a staged current release.
+
+**Next recommended session:**
+
+Install and start `RetrieverRebuild` with `D:\retriever-rebuild\bin\install-service.ps1`, then run localhost and Cloudflare smoke checks. Do not recreate Linux deploy artifacts.
+
+---
+
 ## 2026-05-07 — Fetch UI polish, Boone brand colors, collapsible sidebar, and first GitHub push
 
 **Goal:** Decide between Impeccable document pass, old Retriever visual inspection, or first Fetch skeleton. Run Impeccable critique and polish. Push to GitHub.

@@ -65,6 +65,11 @@ Completed:
 - Added collapsible outer module sidebar with compact initials when collapsed; added Retriever logo to main header/center pane; added light/dark theme toggle persisted to localStorage.
 - Resolved deployment hostname: `retriever.boonegraphics.net` is the live hostname from first deploy. No staging subdomain needed; old Retriever is LAN-only with no Cloudflare presence.
 - Created new standalone git repo for `projects/retriever-rebuild/`, added SSH remote, and pushed initial commit (`965a75c`) to `https://github.com/bobtucker1129/Retriever`.
+- Corrected deployment target after inspecting the old Retriever runtime: `bggol-vesko01` is Windows Server, old Retriever runs as the `Retriever` NSSM service on port `8000`, and new Retriever deploys beside it as `RetrieverRebuild` on port `8810`.
+- Replaced the discarded Linux deploy artifacts with Windows-native PowerShell/NSSM deploy scripts and pushed the proven deploy fixes through commit `ed41f94`.
+- Configured Cloudflare Zero Trust for `retriever.boonegraphics.net`: team domain `boonegraphics.cloudflareaccess.com`, Access application/policy for Boone employees, tunnel `bf859516-9782-4c53-9098-1923709b4028`, and `cloudflared` Windows service running on `bggol-vesko01`.
+- Created MySQL schema/user for `retriever_cloudflare` on Boone MySQL and successfully applied `0001_retriever_cloudflare.sql` plus `0001_seed_auth_shell.sql` during first deploy.
+- Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c` at `D:\retriever-rebuild\current`; next step is installing and starting the `RetrieverRebuild` Windows service.
 
 ## Active Architecture Artifacts
 
@@ -106,6 +111,9 @@ Resolved:
 - New Retriever uses `retriever.boonegraphics.net` directly from first deploy. No staging subdomain needed: old Retriever runs on a LAN IP only and has no Cloudflare presence, so there is no DNS conflict.
 - VM provisioning was impractical. New Retriever will run on `bggol-vesko01` alongside old Retriever. Old Retriever keeps its current port and PrintSmith token authority. New Retriever binds to `127.0.0.1:8810` only.
 - `bggol-vesko01` stays on its LAN IP running old Retriever and PrintSmith token authority until new Retriever PrePress is ready to take over that token.
+- New Retriever first deploy uses Windows Server/NSSM/PowerShell on `bggol-vesko01`, not Linux/systemd. Do not recreate `/opt`, `/etc`, bash, or systemd deploy paths for this launch.
+- Deploy-time checks are import check, production config validation, optional migration, service health, and smoke. Tests remain a local/pre-push check because they are written for local config, not production env.
+- Deploy scripts must clear inherited old Retriever env vars (`FETCH_*`, `MODEL_*`, `ANTHROPIC_*`, `BOONEOPS_*`, `PRINTSMITH_*`) before loading `D:\retriever-rebuild\env\retriever.env`.
 - New Retriever must not generate its own `LordTate` PrintSmith REST token while old Retriever is still the authority.
 - `retriever.boonegraphics.net` is the live hostname from first deploy. No staging subdomain is needed because old Retriever is LAN-only with no Cloudflare presence.
 - New Retriever app state should live in MySQL, using a new `retriever_cloudflare` schema separate from current Retriever's `retriever_core`.
@@ -142,18 +150,18 @@ Open:
 
 ## Next Recommended Session
 
-Provision `bggol-retriever01` and deploy the auth shell to `retriever.boonegraphics.net`.
+Install and smoke-test the `RetrieverRebuild` Windows service on `bggol-vesko01`.
 
-Plain English goal: the auth shell is polished, the Fetch skeleton looks like old Fetch with Boone brand colors, and the code is on GitHub. The next move is the first real deployment: provision `bggol-retriever01`, harden the production `.env`, run the MySQL migration, stand up Cloudflare Tunnel/Access, and smoke-test the live `retriever.boonegraphics.net` hostname.
+Plain English goal: the code, database schema, Cloudflare Access, and Cloudflare Tunnel are now staged. The next move is to install `RetrieverRebuild` as a Windows service with NSSM, start it on `127.0.0.1:8810`, verify localhost health/version routes, then verify `retriever.boonegraphics.net` through Cloudflare Access.
 
 Recommended scope:
 
-1. Confirm VM name with Boone IT and provision `bggol-retriever01` per `VM_SETUP_PLAN.md`.
-2. Set up `retriever-web.service`, production `.env` (cookie secret, no dev identity, JWT validation on), and MySQL `retriever_cloudflare` schema.
-3. Configure Cloudflare Tunnel from the VM to `retriever.boonegraphics.net`.
-4. Pull from `https://github.com/bobtucker1129/Retriever`, run `deploy/smoke.sh`, verify auth gate and health routes.
-5. Confirm `bggol-vesko01` stays on its LAN IP as PrintSmith token authority.
-6. Keep live Fetch model routing disabled until the next gate.
+1. Run `powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\install-service.ps1` on `bggol-vesko01`.
+2. Confirm `Get-Service RetrieverRebuild` shows `Running`.
+3. Run local checks: `/health/live`, `/health/ready`, `/version`, and `D:\retriever-rebuild\bin\smoke.ps1`.
+4. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
+5. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
+6. Keep Fetch/model routing disabled until the next gate.
 
 ## Later Work
 
