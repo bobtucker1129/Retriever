@@ -148,22 +148,15 @@ if (-not (Test-Path $releaseDir)) {
     # Checkout into immutable release directory
     # ---------------------------------------------------------------------------
     Write-Log "Creating release directory $releaseDir ..."
-    New-Item -ItemType Directory -Path $releaseDir | Out-Null
+    # Clone-and-checkout approach: bulletproof on Windows, no archive/tar weirdness
+    & git clone --quiet $AppRepo $releaseDir
+    if ($LASTEXITCODE -ne 0) { throw "git clone to release dir failed (exit $LASTEXITCODE)." }
 
-    # Extract the commit's tree via git archive | tar (reliable on Windows)
-    $tarPath = Join-Path $env:TEMP "retriever-deploy-$([guid]::NewGuid()).tar"
-    try {
-        Push-Location $AppRepo
-        & git archive --format=tar -o $tarPath $fullSha
-        $archiveResult = $LASTEXITCODE
-        Pop-Location
-        if ($archiveResult -ne 0) { throw "git archive failed (exit $archiveResult)." }
+    & git -C $releaseDir checkout -f --quiet $fullSha
+    if ($LASTEXITCODE -ne 0) { throw "git checkout in release dir failed (exit $LASTEXITCODE)." }
 
-        & tar -xf $tarPath -C $releaseDir
-        if ($LASTEXITCODE -ne 0) { throw "tar extraction failed (exit $LASTEXITCODE)." }
-    } finally {
-        Remove-Item $tarPath -Force -ErrorAction SilentlyContinue
-    }
+    # Remove .git from the release - it's an immutable source snapshot, not a working repo
+    Remove-Item -Recurse -Force "$releaseDir\.git" -ErrorAction SilentlyContinue
 
     if (-not (Test-Path "$releaseDir\requirements.txt")) {
         throw "Source extraction did not produce requirements.txt at $releaseDir"
