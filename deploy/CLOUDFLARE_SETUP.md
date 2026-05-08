@@ -2,7 +2,7 @@
 
 **Purpose:** Route `retriever.boonegraphics.net` through Cloudflare Access (identity gate) and Cloudflare Tunnel (connection to the VM) so only authenticated Boone employees can reach the app.
 
-**VM:** `bggol-retriever01`  
+**Server:** `bggol-vesko01` (Windows Server)  
 **App bind:** `127.0.0.1:8810`  
 **Cloudflare account:** the existing Boone boonegraphics.net zone
 
@@ -13,7 +13,7 @@
 ```text
 Employee browser
   -> Cloudflare Access (identity check, blocks unapproved requests)
-  -> Cloudflare Tunnel (encrypted connection to bggol-retriever01)
+  -> Cloudflare Tunnel (encrypted connection to bggol-vesko01)
   -> localhost:8810 (Retriever app)
 ```
 
@@ -111,17 +111,35 @@ Verify in the Cloudflare dashboard: DNS > Records > look for `retriever` as a CN
 ### Step 1.6 — Install and start as a Windows Service
 
 ```powershell
-# Install as a Windows Service (run as Administrator)
-cloudflared service install
+# Install as a Windows Service (run as Administrator), then force the service
+# command to use this config file. cloudflared service install may otherwise
+# install only C:\cloudflared\cloudflared.exe with no tunnel/config arguments.
+cloudflared --config C:\cloudflared\config.yml service install
+
+sc.exe config cloudflared binPath= '"C:\cloudflared\cloudflared.exe" --config "C:\cloudflared\config.yml" tunnel run retriever'
 
 # Start the service
 Start-Service cloudflared
 
 # Check status
 Get-Service cloudflared
+sc.exe qc cloudflared
 
 # View logs
 Get-EventLog -LogName Application -Source "cloudflared" -Newest 20
+```
+
+The working `BINARY_PATH_NAME` is:
+
+```text
+C:\cloudflared\cloudflared.exe --config C:\cloudflared\config.yml tunnel run retriever
+```
+
+If `Stop-Service cloudflared` hangs in `STOP_PENDING`, use:
+
+```powershell
+sc.exe queryex cloudflared
+taskkill /PID <PID_FROM_QUERYEX> /F
 ```
 
 ### Step 1.7 — Verify tunnel connectivity
@@ -130,7 +148,7 @@ Get-EventLog -LogName Application -Source "cloudflared" -Newest 20
 # From bggol-vesko01 (after the Retriever app is running on 8810)
 Invoke-WebRequest -Uri "http://localhost:8810/health/live" -UseBasicParsing
 
-# From outside (before Access policy is active — should return tunnel response)
+# From outside (before Access policy is active - should return tunnel response)
 Invoke-WebRequest -Uri "https://retriever.boonegraphics.net/health/live" -UseBasicParsing
 ```
 

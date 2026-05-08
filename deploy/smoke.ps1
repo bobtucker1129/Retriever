@@ -102,13 +102,22 @@ if ($CfUrl) {
         Write-Result -Ok ($null -ne $r -and $r.StatusCode -lt 400) -Label "CF $path"
     }
 
-    # Root: with service token should succeed; without should give Access challenge
+    # Root: with service token should succeed; without should give Access challenge.
+    # Cloudflare Access may return a login page as HTTP 200 (not only 302/401/403),
+    # so treat a 200 response containing Access/login markers as a protected route.
     $r = Invoke-Check -Url "$CfUrl/" -Headers $cfHeaders
     if ($CfServiceToken) {
         Write-Result -Ok ($null -ne $r -and $r.StatusCode -lt 400) -Label "CF root (service token)"
     } else {
         $code = if ($r) { $r.StatusCode } else { 0 }
-        $challengeOk = $code -in @(302, 303, 307, 401, 403)
+        $body = if ($r) { [string]$r.Content } else { "" }
+        $accessLoginOk = ($code -eq 200) -and (
+            $body -match "cloudflareaccess" -or
+            $body -match "Cloudflare Access" -or
+            $body -match "Access" -or
+            $body -match "Sign in"
+        )
+        $challengeOk = ($code -in @(302, 303, 307, 401, 403)) -or $accessLoginOk
         Write-Result -Ok $challengeOk -Label "CF root gives Access challenge [$code]"
     }
 } else {

@@ -72,6 +72,7 @@ Completed:
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c` at `D:\retriever-rebuild\current`; next step is installing and starting the `RetrieverRebuild` Windows service.
 - Installed `RetrieverRebuild` as an NSSM Windows service on `bggol-vesko01`; service started successfully and `/health/live` returned 200 on port `8810`.
 - Local smoke passed on `bggol-vesko01`: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
+- Fixed the `cloudflared` Windows service command so it runs `C:\cloudflared\cloudflared.exe --config C:\cloudflared\config.yml tunnel run retriever`; browser test now shows Cloudflare Access first, then reaches Retriever successfully.
 
 ## Active Architecture Artifacts
 
@@ -152,15 +153,15 @@ Open:
 
 ## Next Recommended Session
 
-Smoke-test `RetrieverRebuild` through Cloudflare.
+Close first deploy and prepare Fetch build.
 
-Plain English goal: the service is installed, running, and locally healthy. The next move is to verify `retriever.boonegraphics.net` through Cloudflare Access and confirm old Retriever remains untouched.
+Plain English goal: the auth shell is now running on `bggol-vesko01`, protected by Cloudflare Access at `retriever.boonegraphics.net`, and old Retriever remains untouched. The next move is to verify old Retriever one more time, then begin the first Fetch build behind the working auth shell.
 
 Recommended scope:
 
-1. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
-2. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
-3. Keep Fetch/model routing disabled until the next gate.
+1. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
+2. Run the updated Cloudflare smoke script once after pulling the latest `smoke.ps1` fix.
+3. Start the next gate: first real Fetch implementation behind the deployed auth shell, with Fetch/model routing still disabled until explicitly turned on.
 
 ## Later Work
 

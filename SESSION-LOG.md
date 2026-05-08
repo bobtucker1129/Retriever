@@ -18,14 +18,15 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c`; migrations applied `0001_retriever_cloudflare.sql` and `0001_seed_auth_shell.sql`; `D:\retriever-rebuild\current` points at the staged release.
 - Installed `RetrieverRebuild` via NSSM after making `install-service.ps1` PowerShell 5.1 safe; service started and returned `Health check OK: 200`.
 - Local smoke passed: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
+- Corrected the `cloudflared` Windows service command to run the configured tunnel (`--config C:\cloudflared\config.yml tunnel run retriever`); browser verification now shows Cloudflare Access first, then reaches Retriever successfully.
 
 **Plain-English result:**
 
-The hard first-deploy infrastructure is now mostly behind us. New Retriever is installed as a Windows service and passed local smoke. The remaining launch check is Cloudflare-path verification.
+The first deploy is effectively live: new Retriever is installed as a Windows service, passed local smoke, and is reachable through Cloudflare Access at `retriever.boonegraphics.net`.
 
 **Next recommended session:**
 
-Run Cloudflare-path smoke checks. Do not recreate Linux deploy artifacts.
+Confirm old Retriever on port `8000` remains untouched, run the updated Cloudflare smoke script once, then begin the first real Fetch build. Do not recreate Linux deploy artifacts.
 
 ---
 
