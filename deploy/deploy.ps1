@@ -197,11 +197,14 @@ if (-not (Test-Path $releaseDir)) {
 
     $env:GIT_DIR = "$AppRepo\.git"
     $env:GIT_WORK_TREE = $releaseDir
+    Push-Location $releaseDir
     try {
-        # Capture all output (stdout + stderr) for diagnostics
+        # cwd must equal the work tree so the `.` pathspec resolves correctly.
+        # Capture all output (stdout + stderr) for diagnostics.
         $checkoutOutput = & git checkout -f $fullSha -- . 2>&1 | Out-String
         $checkoutExit = $LASTEXITCODE
     } finally {
+        Pop-Location
         Remove-Item Env:\GIT_DIR -ErrorAction SilentlyContinue
         Remove-Item Env:\GIT_WORK_TREE -ErrorAction SilentlyContinue
     }
