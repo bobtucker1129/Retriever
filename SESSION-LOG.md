@@ -17,14 +17,15 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 - Fixed first-deploy blockers in the Windows deploy script: PowerShell 5.1 compatibility, reserved `$Args` variable shadowing, `pyproject.toml` install, old Retriever env-var pollution, Python cwd for static/templates, and the real migration API.
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c`; migrations applied `0001_retriever_cloudflare.sql` and `0001_seed_auth_shell.sql`; `D:\retriever-rebuild\current` points at the staged release.
 - Installed `RetrieverRebuild` via NSSM after making `install-service.ps1` PowerShell 5.1 safe; service started and returned `Health check OK: 200`.
+- Local smoke passed: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
 
 **Plain-English result:**
 
-The hard first-deploy infrastructure is now mostly behind us. New Retriever is installed as a Windows service and answering localhost health checks. The remaining launch check is local/full smoke plus Cloudflare-path verification.
+The hard first-deploy infrastructure is now mostly behind us. New Retriever is installed as a Windows service and passed local smoke. The remaining launch check is Cloudflare-path verification.
 
 **Next recommended session:**
 
-Run localhost and Cloudflare smoke checks. Do not recreate Linux deploy artifacts.
+Run Cloudflare-path smoke checks. Do not recreate Linux deploy artifacts.
 
 ---
 

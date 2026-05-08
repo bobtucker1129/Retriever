@@ -71,6 +71,7 @@ Completed:
 - Created MySQL schema/user for `retriever_cloudflare` on Boone MySQL and successfully applied `0001_retriever_cloudflare.sql` plus `0001_seed_auth_shell.sql` during first deploy.
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c` at `D:\retriever-rebuild\current`; next step is installing and starting the `RetrieverRebuild` Windows service.
 - Installed `RetrieverRebuild` as an NSSM Windows service on `bggol-vesko01`; service started successfully and `/health/live` returned 200 on port `8810`.
+- Local smoke passed on `bggol-vesko01`: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
 
 ## Active Architecture Artifacts
 
@@ -151,17 +152,15 @@ Open:
 
 ## Next Recommended Session
 
-Smoke-test `RetrieverRebuild` locally and through Cloudflare.
+Smoke-test `RetrieverRebuild` through Cloudflare.
 
-Plain English goal: the service is installed and running. The next move is to run local smoke checks, verify old Retriever is untouched, then verify `retriever.boonegraphics.net` through Cloudflare Access.
+Plain English goal: the service is installed, running, and locally healthy. The next move is to verify `retriever.boonegraphics.net` through Cloudflare Access and confirm old Retriever remains untouched.
 
 Recommended scope:
 
-1. Confirm `Get-Service RetrieverRebuild` shows `Running`.
-2. Run local checks: `/health/live`, `/health/ready`, `/version`, and `D:\retriever-rebuild\bin\smoke.ps1`.
-3. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
-4. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
-5. Keep Fetch/model routing disabled until the next gate.
+1. Run Cloudflare-path smoke through `https://retriever.boonegraphics.net`.
+2. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
+3. Keep Fetch/model routing disabled until the next gate.
 
 ## Later Work
 
