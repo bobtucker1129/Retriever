@@ -41,7 +41,7 @@ function Write-Log {
 function Write-DeployRecord {
     param([string]$Status, [string]$Sha = "unknown", [string]$Prev = "unknown")
     $ts = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
-    @"
+    $record = @"
 ---
 deployedAt: $ts
 operator: $env:USERNAME
@@ -51,7 +51,8 @@ previousSha: $Prev
 host: $env:COMPUTERNAME
 service: $ServiceName
 status: $Status
-"@ | Out-File -FilePath $DeployLog -Append -Encoding utf8
+"@
+    $record | Out-File -FilePath $DeployLog -Append -Encoding utf8
 }
 
 function Invoke-Git {
@@ -63,10 +64,24 @@ function Invoke-Git {
 function Set-Junction {
     param([string]$Link, [string]$Target)
     if (Test-Path $Link) {
-        # Remove existing junction or directory
         Remove-Item $Link -Force -Recurse -ErrorAction SilentlyContinue
     }
     New-Item -ItemType Junction -Path $Link -Target $Target | Out-Null
+}
+
+function Run-PythonScript {
+    param([string]$PythonExe, [string]$Script, [string]$WorkDir)
+    $tmpFile = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.py'
+    $Script | Out-File -FilePath $tmpFile -Encoding utf8
+    try {
+        Push-Location $WorkDir
+        & $PythonExe $tmpFile
+        $code = $LASTEXITCODE
+        Pop-Location
+        return $code
+    } finally {
+        Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -117,11 +132,13 @@ if (Test-Path "$AppRepo\.git") {
     Invoke-Git -Args @("clone", $GithubUrl, $AppRepo)
 }
 
-# Resolve ref to full SHA
-$fullSha = (& git -C $AppRepo rev-parse --verify "$GitRef^{commit}" 2>$null).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $fullSha) {
-    throw "Could not resolve ref '$GitRef' to a commit in $AppRepo"
+# Resolve ref to full SHA (PS 5.1 compatible)
+$fullSha = ""
+$gitOutput = & git -C $AppRepo rev-parse --verify "$GitRef^{commit}" 2>$null
+if ($LASTEXITCODE -eq 0 -and $gitOutput) {
+    $fullSha = $gitOutput.Trim()
 }
+if (-not $fullSha) { throw "Could not resolve ref '$GitRef' to a commit in $AppRepo" }
 Write-Log "Resolved $GitRef -> $fullSha"
 
 $releaseDir = "$AppReleases\$fullSha"
@@ -136,24 +153,28 @@ if (-not (Test-Path $releaseDir)) {
     Write-Log "Source checked out."
 
     # Stamp metadata
-    @"
-gitSha=$fullSha
-gitRef=$GitRef
-builtAt=$(Get-Date -Format 'o')
-operator=$env:USERNAME
-"@ | Out-File "$releaseDir\.release-meta" -Encoding utf8
+    $meta = "gitSha=$fullSha`ngitRef=$GitRef`nbuiltAt=$(Get-Date -Format 'o')`noperator=$env:USERNAME"
+    $meta | Out-File "$releaseDir\.release-meta" -Encoding utf8
+
+    # ---------------------------------------------------------------------------
+    # Find Python (PS 5.1 compatible - no ?. operator)
+    # ---------------------------------------------------------------------------
+    Write-Log "Locating Python ..."
+    $pythonExe = $null
+    $pythonCmd = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        $pythonExe = $pythonCmd.Source
+    }
+    if (-not $pythonExe -or -not (Test-Path $pythonExe)) {
+        $pythonExe = "D:\Repository\pm-review-dashboard-ContexEng\venv\Scripts\python.exe"
+    }
+    if (-not (Test-Path $pythonExe)) { throw "python.exe not found." }
+    Write-Log "Python: $pythonExe"
 
     # ---------------------------------------------------------------------------
     # Create venv and install dependencies
     # ---------------------------------------------------------------------------
-    Write-Log "Creating Python virtual environment ..."
-    $pythonExe = (Get-Command python.exe -ErrorAction SilentlyContinue)?.Source
-    if (-not $pythonExe) {
-        # Fall back to old Retriever's venv Python (same server, same Python install)
-        $pythonExe = "D:\Repository\pm-review-dashboard-ContexEng\venv\Scripts\python.exe"
-    }
-    if (-not (Test-Path $pythonExe)) { throw "python.exe not found. Install Python 3.10+ first." }
-
+    Write-Log "Creating virtual environment ..."
     & $pythonExe -m venv "$releaseDir\.venv"
     if ($LASTEXITCODE -ne 0) { throw "venv creation failed." }
 
@@ -167,7 +188,6 @@ operator=$env:USERNAME
     # Import check
     # ---------------------------------------------------------------------------
     Write-Log "Running import check ..."
-    Set-Location $releaseDir
     $env:PYTHONPATH = $releaseDir
     & $venvPython -c "from app.main import app"
     if ($LASTEXITCODE -ne 0) { throw "Import check failed. Release is broken." }
@@ -177,30 +197,34 @@ operator=$env:USERNAME
     # Tests
     # ---------------------------------------------------------------------------
     Write-Log "Running test suite ..."
+    Push-Location $releaseDir
     & $venvPython -m pytest tests/ -q --tb=short
-    if ($LASTEXITCODE -ne 0) { throw "Tests failed. Aborting deploy." }
+    $testResult = $LASTEXITCODE
+    Pop-Location
+    if ($testResult -ne 0) { throw "Tests failed. Aborting deploy." }
     Write-Log "Tests passed."
+
 } else {
     Write-Log "Release $releaseDir already exists. Skipping build."
     $venvPython = "$releaseDir\.venv\Scripts\python.exe"
 }
 
 # ---------------------------------------------------------------------------
-# Config validation (no secret printing)
+# Config validation
 # ---------------------------------------------------------------------------
 Write-Log "Validating production config ..."
-Set-Location $releaseDir
-$env:PYTHONPATH = $releaseDir
 
-# Load env into process for validation
+# Load env file into process environment
 Get-Content $EnvFile |
     Where-Object { $_ -notmatch '^\s*#' -and $_ -match '=' } |
     ForEach-Object {
-        $k, $v = $_ -split '=', 2
-        [System.Environment]::SetEnvironmentVariable($k.Trim(), $v.Trim(), 'Process')
+        $parts = $_ -split '=', 2
+        if ($parts.Count -eq 2) {
+            [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), 'Process')
+        }
     }
 
-& $venvPython -c @"
+$configScript = @'
 from app.config import get_settings, format_config_error
 from pydantic import ValidationError
 try:
@@ -209,16 +233,17 @@ try:
 except (ValidationError, ValueError) as e:
     print('Config ERROR: ' + format_config_error(e))
     raise SystemExit(1)
-"@
-if ($LASTEXITCODE -ne 0) { throw "Config validation failed. Fix $EnvFile before deploying." }
+'@
+$configResult = Run-PythonScript -PythonExe $venvPython -Script $configScript -WorkDir $releaseDir
+if ($configResult -ne 0) { throw "Config validation failed. Fix $EnvFile before deploying." }
 Write-Log "Config validation passed."
 
 # ---------------------------------------------------------------------------
-# Migrations (only when explicitly opted in)
+# Migrations
 # ---------------------------------------------------------------------------
 if ($env:RETRIEVER_RUN_MIGRATIONS -eq "true") {
-    Write-Log "Running database migrations (RETRIEVER_RUN_MIGRATIONS=true) ..."
-    & $venvPython -c @"
+    Write-Log "Running database migrations ..."
+    $migScript = @'
 from app.db.connection import get_db_connection
 from app.db.migrations import run_migrations_and_seeds
 import asyncio
@@ -227,8 +252,9 @@ async def main():
     await run_migrations_and_seeds(conn)
     await conn.close()
 asyncio.run(main())
-"@
-    if ($LASTEXITCODE -ne 0) { throw "Migrations failed." }
+'@
+    $migResult = Run-PythonScript -PythonExe $venvPython -Script $migScript -WorkDir $releaseDir
+    if ($migResult -ne 0) { throw "Migrations failed." }
     Write-Log "Migrations complete."
 } else {
     Write-Log "Skipping migrations (set RETRIEVER_RUN_MIGRATIONS=true to run on next deploy)."
@@ -247,7 +273,6 @@ if (Test-Path $currentLink) {
 Set-Junction -Link $currentLink -Target $releaseDir
 Write-Log "current -> $releaseDir"
 
-# Stamp deployed_at
 "deployedAt=$(Get-Date -Format 'o')" | Out-File "$releaseDir\.release-meta" -Append -Encoding utf8
 
 # ---------------------------------------------------------------------------
@@ -265,32 +290,32 @@ if ($svc) {
     }
     Write-Log "Service restarted and running."
 } else {
-    Write-Log "Service '$ServiceName' not installed yet. Run deploy\windows\install-service.ps1 first."
-    Write-Log "Skipping restart — release is staged at $releaseDir"
+    Write-Log "Service '$ServiceName' not installed yet. Run install-service.ps1 first."
+    Write-Log "Release staged at $releaseDir - install the service then run deploy again."
 }
 
 # ---------------------------------------------------------------------------
-# Health check
+# Health and smoke checks (only if service is running)
 # ---------------------------------------------------------------------------
-Write-Log "Running health check ..."
-& "$AppBin\healthcheck.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
-    Write-Log "Health check failed. Attempting auto-rollback ..."
-    & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
-    throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
-}
+$svcCheck = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($svcCheck -and $svcCheck.Status -eq 'Running') {
+    Write-Log "Running health check ..."
+    & "$AppBin\healthcheck.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
+        Write-Log "Health check failed. Attempting auto-rollback ..."
+        & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
+        throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
+    }
 
-# ---------------------------------------------------------------------------
-# Smoke check
-# ---------------------------------------------------------------------------
-Write-Log "Running smoke check ..."
-& "$AppBin\smoke.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
-    Write-Log "Smoke check failed. Attempting auto-rollback ..."
-    & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
-    throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
+    Write-Log "Running smoke check ..."
+    & "$AppBin\smoke.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
+        Write-Log "Smoke check failed. Attempting auto-rollback ..."
+        & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
+        throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -300,6 +325,5 @@ Write-DeployRecord -Status "success" -Sha $fullSha -Prev $prevSha
 Write-Log "=== Deploy complete: $fullSha ==="
 
 } finally {
-    # Always release the lock
     if (Test-Path $LockFile) { Remove-Item $LockFile -Force }
 }
