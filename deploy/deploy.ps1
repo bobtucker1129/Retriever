@@ -149,8 +149,26 @@ if (-not (Test-Path $releaseDir)) {
     # ---------------------------------------------------------------------------
     Write-Log "Creating release directory $releaseDir ..."
     New-Item -ItemType Directory -Path $releaseDir | Out-Null
-    Invoke-Git -GitArgs @("-C", $AppRepo, "--work-tree=$releaseDir", "checkout", $fullSha, "--", ".")
-    Write-Log "Source checked out."
+
+    # Extract the commit's tree via git archive | tar (reliable on Windows)
+    $tarPath = Join-Path $env:TEMP "retriever-deploy-$([guid]::NewGuid()).tar"
+    try {
+        Push-Location $AppRepo
+        & git archive --format=tar -o $tarPath $fullSha
+        $archiveResult = $LASTEXITCODE
+        Pop-Location
+        if ($archiveResult -ne 0) { throw "git archive failed (exit $archiveResult)." }
+
+        & tar -xf $tarPath -C $releaseDir
+        if ($LASTEXITCODE -ne 0) { throw "tar extraction failed (exit $LASTEXITCODE)." }
+    } finally {
+        Remove-Item $tarPath -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-Path "$releaseDir\requirements.txt")) {
+        throw "Source extraction did not produce requirements.txt at $releaseDir"
+    }
+    Write-Log "Source extracted to release directory."
 
     # Stamp metadata
     $meta = "gitSha=$fullSha`ngitRef=$GitRef`nbuiltAt=$(Get-Date -Format 'o')`noperator=$env:USERNAME"
