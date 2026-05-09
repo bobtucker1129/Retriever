@@ -4,6 +4,32 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-09 — Fetch foundation deployed and smoke passed
+
+**Goal:** Build and deploy the first real new-Fetch foundation behind the deployed auth shell while keeping model and tool routing disabled.
+
+**What happened:**
+
+- Confirmed old Fetch is off in the legacy Retriever.
+- Built new Fetch conversation management in `RetrieverRebuild`: conversation list, create, select, rename, soft delete, and message storage backed by MySQL migration `0002_fetch_conversations`.
+- Added gated ask handling: active user, Fetch access, `FETCH_ENABLED`, and `fetch.ask_internal` are required before any ask turn is accepted.
+- Added deterministic local route labels and offline replies for `/help`, `/sources`, `/health`, email cleanup, PrintSmith-like requests, docs-like requests, general questions, blocked writes, local greetings, and unknown prompts.
+- Kept all live model/provider/tool paths off: no Anthropic, PrintSmith, docs API, BooneOps, uploads, delayed reports, or web search calls.
+- Hardened Windows deploy and smoke scripts for `RetrieverRebuild` on port `8810`, including migration `0002` checks and read-only old Retriever port `8000` liveness.
+- Committed and pushed `89ecd60` (`Build safe Fetch foundation.`) to `main`.
+- Deployed `89ecd60` on `bggol-vesko01`; `smoke.ps1` passed.
+- Verified both Windows services are running: `RetrieverRebuild` and legacy `Retriever`.
+
+**Plain-English result:**
+
+New Fetch now has its safe foundation live behind Cloudflare Access. It can manage conversations and show deterministic offline replies when deliberately enabled for stub testing, but production model and tool routing remain off. Old Retriever still handles PrePress, DSF, and PrintSmith token authority.
+
+**Next recommended session:**
+
+Browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Access with an approved admin user, then choose the next Fetch slice: admin settings/capability management, real model-provider enablement, or the first read-only internal/docs route.
+
+---
+
 ## 2026-05-08 — Windows deploy path corrected and first release staged
 
 **Goal:** Deploy the auth shell to `retriever.boonegraphics.net` from the Boone runtime.

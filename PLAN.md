@@ -80,6 +80,7 @@ Completed:
 - Verified the new Fetch slices locally: 65 tests passed, local route smoke passed, and edited files have no linter errors.
 - Added a gated **ask path** (`POST /fetch/conversations/{id}/ask`): requires the same shell access as before, plus `FETCH_ENABLED` (env) and **`fetch.ask_internal`** (capability; admins still pass via existing `has_capability` rules). When Fetch is off, the route redirects without persisting a user message. When Fetch is on but provider routing is not wired, it saves the user turn and appends a fixed stub assistant reply—no outbound model or tool calls.
 - **Fetch local routing (stub):** `classify_fetch_intent` assigns deterministic route labels (`local`, slash `help`/`sources`/`health`, `email_cleanup`, `printsmith_candidate`, `docs_candidate`, `general_candidate`, `blocked_write`, `unknown`). The ask handler persists those labels as `route_key` and returns route-specific offline copy; still no providers, PrintSmith, docs APIs, BooneOps, uploads, or web calls.
+- Deployed commit `89ecd60` to `RetrieverRebuild` on `bggol-vesko01`; `smoke.ps1` passed, `RetrieverRebuild` is running, and legacy `Retriever` is still running.
 
 ## Active Architecture Artifacts
 
@@ -175,14 +176,14 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 Close first deploy and operate the Fetch foundation safely.
 
-Plain English goal: the auth shell runs on **`bggol-vesko01`**, Cloudflare Access protects **`retriever.boonegraphics.net`**, old Fetch is off, and new Fetch provides conversation management with **`FETCH_ENABLED=false`** in production until a deliberate stub or model enablement pass. Operators should treat **`deploy/WINDOWS_FETCH_RELEASE.md`** as the source of truth for Windows deploy, migration **`0002`**, smoke, and coexistence with port **`8000`**.
+Plain English goal: the Fetch foundation is now deployed and healthy on **`RetrieverRebuild`**. Old Fetch is off, legacy **`Retriever`** still serves PrePress/DSF and token authority on **`8000`**, and new Fetch provides conversation management plus deterministic local route stubs while **`FETCH_ENABLED=false`** keeps production model/tool routing off.
 
 Recommended scope:
 
-1. Confirm legacy **Retriever** on port **`8000`** still serves PrePress/DSF and PrintSmith token authority after old Fetch was disabled.
-2. When shipping Fetch foundation code, apply migration **`0002`** once on **`retriever_cloudflare`**, deploy **`RetrieverRebuild`**, and run **`smoke.ps1`** (optionally with Cloudflare URL + service token vars).
-3. Keep **`FETCH_ENABLED=false`** in production env until the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** is satisfied for stub testing or real routing.
-4. After the foundation is stable, start real model-routing work only as a separate, explicitly reviewed enablement step.
+1. Browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Access with an approved admin user and confirm the Fetch shell/conversation UI renders.
+2. Keep **`FETCH_ENABLED=false`** in production env until the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** is satisfied for stub testing or real routing.
+3. Start real model-routing work only as a separate, explicitly reviewed enablement step.
+4. Plan the next user-facing Fetch slice: either admin settings for Fetch capabilities, live model-provider configuration, or the first read-only internal/docs route.
 
 ## Later Work
 
