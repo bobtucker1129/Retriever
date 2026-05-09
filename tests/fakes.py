@@ -125,6 +125,111 @@ class FakeCursor:
             self.db.audit_events.append(params)
             return
 
+        if "INSERT INTO fetch_conversations" in normalized:
+            conversation_id, user_id, title, route_state = params
+            self.db.fetch_conversations[conversation_id] = {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "title": title,
+                "status": "active",
+                "route_state": route_state,
+                "deleted": False,
+            }
+            return
+
+        if "FROM fetch_conversations c" in normalized:
+            user_id = params[0]
+            if len(params) == 2:
+                conversation_id = params[1]
+                conversations = []
+                for conversation in self.db.fetch_conversations.values():
+                    if (
+                        conversation["user_id"] == user_id
+                        and not conversation.get("deleted")
+                        and conversation["conversation_id"] == conversation_id
+                    ):
+                        message_count = len(
+                            [
+                                message
+                                for message in self.db.fetch_messages
+                                if message["conversation_id"] == conversation["conversation_id"]
+                            ]
+                        )
+                        conversations.append({**conversation, "message_count": message_count})
+                self.last_result = conversations[0] if conversations else None
+                return
+            conversations = []
+            for conversation in self.db.fetch_conversations.values():
+                if conversation["user_id"] == user_id and not conversation.get("deleted"):
+                    message_count = len(
+                        [
+                            message
+                            for message in self.db.fetch_messages
+                            if message["conversation_id"] == conversation["conversation_id"]
+                        ]
+                    )
+                    conversations.append({**conversation, "message_count": message_count})
+            self.last_result = conversations
+            return
+
+        if normalized.startswith("UPDATE fetch_conversations SET title"):
+            title, user_id, conversation_id = params
+            conversation = self.db.fetch_conversations[conversation_id]
+            if conversation["user_id"] == user_id and not conversation.get("deleted"):
+                conversation["title"] = title
+            return
+
+        if normalized.startswith("UPDATE fetch_conversations SET deleted_at"):
+            user_id, conversation_id = params
+            conversation = self.db.fetch_conversations[conversation_id]
+            if conversation["user_id"] == user_id:
+                conversation["deleted"] = True
+                conversation["status"] = "deleted"
+            return
+
+        if "INSERT INTO fetch_messages" in normalized:
+            (
+                message_id,
+                conversation_id,
+                user_id,
+                role,
+                content,
+                route_key,
+                model_label,
+                context_percent,
+                context_state,
+            ) = params
+            self.db.fetch_messages.append(
+                {
+                    "message_id": message_id,
+                    "conversation_id": conversation_id,
+                    "user_id": user_id,
+                    "role": role,
+                    "content": content,
+                    "route_key": route_key,
+                    "model_label": model_label,
+                    "context_percent": context_percent,
+                    "context_state": context_state,
+                }
+            )
+            return
+
+        if normalized.startswith("UPDATE fetch_conversations SET last_message_at"):
+            route_key, user_id, conversation_id = params
+            conversation = self.db.fetch_conversations[conversation_id]
+            if conversation["user_id"] == user_id and not conversation.get("deleted"):
+                conversation["route_state"] = route_key
+            return
+
+        if "FROM fetch_messages" in normalized:
+            user_id, conversation_id = params
+            self.last_result = [
+                message
+                for message in self.db.fetch_messages
+                if message["user_id"] == user_id and message["conversation_id"] == conversation_id
+            ]
+            return
+
         if "WHERE u.cloudflare_email = %s" in normalized:
             email = params[0]
             self.last_result = self.db.users.get(email)
@@ -184,6 +289,8 @@ class FakeDb:
         self.revoked_sessions = []
         self.touched_sessions = []
         self.sessions = {}
+        self.fetch_conversations = {}
+        self.fetch_messages = []
 
     def connection(self) -> FakeConnection:
         return FakeConnection(self)

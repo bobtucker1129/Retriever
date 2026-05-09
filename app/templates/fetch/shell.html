@@ -1,0 +1,194 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Fetch{% endblock %}
+{% block title %}Fetch{% endblock %}
+
+{% block content %}
+<section class="fetch-shell" aria-label="Fetch" data-fetch-shell>
+  <aside class="fetch-conversation-sidebar" id="fetch-conversation-sidebar" aria-label="Fetch conversations">
+    <div class="fetch-conversation-header">
+      <form method="post" action="/fetch/conversations/new">
+        <button type="submit" class="fetch-new-chat"{% if warn_no_db %} disabled title="Database not configured"{% endif %}>+ New Chat</button>
+      </form>
+      <button type="button" class="fetch-collapse" aria-label="Hide conversations" aria-controls="fetch-conversation-sidebar" data-fetch-sidebar-toggle>‹</button>
+    </div>
+
+    {% if warn_no_db %}
+    <p class="fetch-db-warning muted" role="status">Connect MySQL to save conversations. Layout only until then.</p>
+    {% endif %}
+
+    <div class="fetch-conversation-list">
+      {% if not conversations %}
+      <p class="muted fetch-conversation-empty">No conversations yet. Start with <strong>New Chat</strong>.</p>
+      {% endif %}
+      {% for conv in conversations %}
+      <article class="fetch-conversation-item{% if conv.conversation_id == active_conversation_id %} active{% endif %}">
+        <div class="fetch-conversation-main">
+          {% if rename_conversation_id == conv.conversation_id %}
+          <form method="post" action="/fetch/conversations/{{ conv.conversation_id }}/rename" class="fetch-rename-form">
+            <input name="title" class="fetch-conversation-rename-input" value="{{ conv.title }}" aria-label="Rename conversation" autofocus>
+            <div class="fetch-rename-actions">
+              <button type="submit" class="secondary">Save</button>
+              <a class="ghost-button" href="/fetch?c={{ conv.conversation_id }}">Cancel</a>
+            </div>
+          </form>
+          {% else %}
+          <a class="fetch-conversation-select" href="/fetch?c={{ conv.conversation_id }}">
+            <span class="fetch-conversation-title">{{ conv.title }}</span>
+            <div class="fetch-conversation-meta">{{ conv.message_count }} message{% if conv.message_count != 1 %}s{% endif %}</div>
+          </a>
+          {% endif %}
+        </div>
+        {% if rename_conversation_id != conv.conversation_id %}
+        <a class="fetch-row-action" href="/fetch?c={{ active_conversation_id or conv.conversation_id }}&rename={{ conv.conversation_id }}" aria-label="Rename conversation">✎</a>
+        <form method="post" action="/fetch/conversations/{{ conv.conversation_id }}/delete" class="fetch-inline-form" onsubmit="return confirm('Delete this conversation?');">
+          <button type="submit" class="fetch-row-action danger" aria-label="Delete conversation">×</button>
+        </form>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <div class="fetch-chat-panel">
+    {% if not settings.fetch_enabled %}
+    <div class="fetch-disabled-banner" role="status">
+      <strong>Fetch is not enabled yet.</strong>
+      <span>No model, PrintSmith, docs, or BooneOps call will run here. You can still manage saved conversations.</span>
+    </div>
+    {% endif %}
+
+    <div class="fetch-thread" aria-label="Fetch conversation">
+      <section class="fetch-thread-reports-preview" aria-label="Thread reports preview">
+        <div>
+          <div class="fetch-thread-reports-title">Thread Reports</div>
+          <div class="fetch-thread-reports-subtitle">Latest Fetch report files will appear here.</div>
+          <div class="fetch-thread-reports-empty">No report files loaded yet.</div>
+        </div>
+        <button type="button" class="secondary" disabled>Refresh reports</button>
+      </section>
+
+      {% if active_conversation_id and messages %}
+      <div class="fetch-message-list" aria-label="Saved messages">
+        {% for m in messages %}
+        <div class="fetch-message-row {{ m.role }}">
+          <div class="fetch-message {{ m.role }}">
+            <div class="fetch-message-role">{{ m.role }}</div>
+            <p>{{ m.content }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% elif active_conversation_id %}
+      <div class="fetch-empty-state">
+        <img class="fetch-empty-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
+        <div class="fetch-empty-title">No messages in this thread yet.</div>
+        <p class="fetch-empty-copy">{% if settings.fetch_enabled %}Ask Fetch when you are ready.{% else %}Messaging stays off until Fetch is enabled for this environment.{% endif %}</p>
+      </div>
+      {% else %}
+      <div class="fetch-empty-state">
+        <img class="fetch-empty-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
+        <div class="fetch-empty-title">Ask me about Boone or anything else.</div>
+        <p class="fetch-empty-copy">{% if warn_no_db %}Connect the database to create conversations.{% elif not conversations %}Create a conversation from the left rail.{% else %}Select a conversation or start a new one.{% endif %}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <form
+      class="fetch-composer"
+      aria-label="Fetch composer"
+      method="post"
+      action="{% if active_conversation_id %}/fetch/conversations/{{ active_conversation_id }}/ask{% else %}#{% endif %}"
+    >
+      <textarea
+        id="fetch-question"
+        name="question"
+        rows="2"
+        placeholder="Ask a question, or paste an email draft to clean up..."
+        {% if not fetch_can_use_composer %}disabled readonly{% endif %}
+      ></textarea>
+      {% if not settings.fetch_enabled %}
+      <p class="fetch-disabled-note">Composer is locked until Fetch is enabled in environment settings.</p>
+      {% elif fetch_can_use_composer %}
+      <p class="fetch-disabled-note muted">Replies are stubbed until provider routing is connected. No live model, PrintSmith, docs, BooneOps, or uploads run.</p>
+      {% else %}
+      <p class="fetch-disabled-note">{{ fetch_composer_disabled_reason }}</p>
+      {% endif %}
+      <div class="fetch-composer-actions">
+        <label class="fetch-upload-toggle" for="fetch-save-uploads">
+          <input id="fetch-save-uploads" name="save_uploads" type="checkbox" disabled>
+          Save uploads to my private library
+        </label>
+        <div class="fetch-composer-buttons">
+          <button type="button" class="secondary" disabled>Attach</button>
+          <button type="button" class="secondary" disabled>Clean Up Email</button>
+          <button type="submit" {% if not fetch_can_use_composer %}disabled{% endif %}>Ask Fetch</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="fetch-suggestions" aria-label="Fetch suggestions preview">
+      <button type="button" disabled>/help</button>
+      <button type="button" disabled>/sources</button>
+      <button type="button" disabled>Draft a short customer email</button>
+      <button type="button" disabled>Show a delayed report example</button>
+    </div>
+
+    <details class="fetch-preview-details">
+      <summary>Preview trust states</summary>
+      <div class="fetch-preview-grid">
+        <article class="fetch-preview-card">
+          <strong>Delayed report</strong>
+          <span>Large PrintSmith or DSF requests will show progress before the chat feels stuck.</span>
+        </article>
+        <article class="fetch-preview-card">
+          <strong>Sources</strong>
+          <span>Answers will show whether they used live PrintSmith, docs, uploads, or local Fetch context.</span>
+        </article>
+        <article class="fetch-preview-card">
+          <strong>Unavailable route</strong>
+          <span>If a dependency is down, Fetch will say what failed and what is safe to try next.</span>
+        </article>
+      </div>
+    </details>
+
+    <footer class="fetch-status-footer" aria-label="Fetch status">
+      <span>Model: {{ fetch_model_label|replace("model ", "") }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Routing: {{ fetch_routing_label }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Context: {{ fetch_context_percent }}% {{ fetch_context_state }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Path: {{ fetch_path_label }}</span>
+      <span aria-hidden="true">|</span>
+      <span>Mode: {{ fetch_mode_label }}</span>
+    </footer>
+  </div>
+</section>
+<script>
+  (function () {
+    var shell = document.querySelector("[data-fetch-shell]");
+    if (!shell) return;
+    var toggle = shell.querySelector("[data-fetch-sidebar-toggle]");
+    var aside = shell.querySelector("#fetch-conversation-sidebar");
+    var storageKey = "fetchConversationSidebarCollapsed";
+    if (localStorage.getItem(storageKey) === "true") {
+      shell.classList.add("fetch-sidebar-collapsed");
+    }
+    function syncToggle() {
+      if (!toggle) return;
+      var collapsed = shell.classList.contains("fetch-sidebar-collapsed");
+      toggle.textContent = collapsed ? ">" : "‹";
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    }
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        shell.classList.toggle("fetch-sidebar-collapsed");
+        localStorage.setItem(storageKey, shell.classList.contains("fetch-sidebar-collapsed") ? "true" : "false");
+        syncToggle();
+      });
+    }
+    syncToggle();
+  })();
+</script>
+{% endblock %}

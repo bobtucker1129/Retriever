@@ -21,3 +21,15 @@ class CurrentUser:
     def has_module(self, module: str) -> bool:
         return self.is_admin or module in self.modules
 
+    def can_open_fetch_shell(self) -> bool:
+        """Fetch UI (conversation rail); separate from FETCH_ENABLED / model routing."""
+        if self.status != "active":
+            return False
+        return self.has_module("fetch") or self.has_capability("fetch.access")
+
+    def can_submit_fetch_ask(self) -> bool:
+        """POST /fetch/.../ask; shell access alone is not enough."""
+        if self.status != "active":
+            return False
+        return self.has_capability("fetch.ask_internal")
+

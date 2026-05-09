@@ -10,6 +10,19 @@ Fetch is the first thing most Boone employees should use in the new Retriever. I
 
 Old Fetch is not a compatibility target. It does not work well enough, and nobody depends on it today. That is exactly why new Fetch should be built first.
 
+## Current rebuild slice (foundation, not full routing)
+
+This section is what **shipping code does today** on **new Retriever** (**`RetrieverRebuild`** on Windows **`bggol-vesko01`**, **`8810`**, Cloudflare **`retriever.boonegraphics.net`**). The rest of this document is still the **target** trust and routing contract.
+
+- **In service:** Fetch **shell** for users with Fetch module or capability access; **conversation CRUD** in **`retriever_cloudflare`** after migration **`0002_fetch_conversations`**.
+- **Ask path:** **`POST /fetch/conversations/{id}/ask`** is **gated** by active user, Fetch shell access, **`FETCH_ENABLED`**, and **`fetch.ask_internal`** (admins follow existing capability rules). When **`FETCH_ENABLED` is off**, the handler **redirects** without saving a user message. When on, it **persists** the user turn and appends a **fixed stub assistant reply**—**no** live **LLM**, **PrintSmith**, **docs**, **BooneOps**, **upload**, or **delayed-report** calls.
+- **`FETCH_ENABLED` caveat:** In code, that flag only unlocks the **stub** behavior, but **startup validation** still **requires** **`MODEL_PROVIDER`**, **`MODEL_DEFAULT`**, and (for Anthropic) **`ANTHROPIC_API_KEY`** whenever **`FETCH_ENABLED=true`**. **Production** should keep **`FETCH_ENABLED=false`** until operators follow **`deploy/WINDOWS_FETCH_RELEASE.md`** for a deliberate enablement or pilot.
+- **Legacy coexistence:** **Old Retriever** on port **`8000`** remains PrintSmith token authority and PrePress/DSF host; **old Fetch** is **off**.
+
+## Real model and tool enablement
+
+Before employees rely on **live** routing, delayed reports, and tool calls, work through the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** plus the failure-state tables and capability matrix later in this document.
+
 The old implementation is still useful as a reference for product ideas: one employee-facing chat should answer Boone questions, use PrintSmith data, look up vendor/tool documentation, clean up emails, accept uploads, show sources, and return report downloads. The rebuild should keep the ideas that are actually valuable, but it does not need to preserve old code paths, old data, old UI quirks, or old routing behavior.
 
 The rebuild must fix the trust problem: slow PrintSmith and DSF list/export requests must not sit in chat until they hit a backend timeout. If Fetch cannot confidently finish a request inside the normal chat window, it should quickly say so, turn the request into a visible report job, and keep the user informed while the work continues.

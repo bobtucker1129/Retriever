@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import httpx
 from fastapi.testclient import TestClient
 
 import app.auth.sessions as session_module
 import app.routes.admin as admin_routes
+import app.routes.fetch as fetch_routes
 from app.config import AppSettings
 from app.dependencies import settings_dependency
+from app.db.repositories.fetch import FetchRepository
 from app.main import create_app
 from tests.fakes import FakeDb
 
@@ -17,6 +20,32 @@ def make_settings(email: str = "state@boonegraphics.net", with_db: bool = False)
         "local_dev_email": email,
         "local_dev_display_name": "Route Tester",
         "retriever_seed_admin_email": "state@boonegraphics.net",
+    }
+    if with_db:
+        kwargs.update(
+            {
+                "mysql_host": "mysql.internal",
+                "mysql_user": "retriever_app",
+                "mysql_password": "redacted",
+            }
+        )
+    return AppSettings(**kwargs)
+
+
+def make_fetch_enabled_settings(
+    email: str = "asker@boonegraphics.net",
+    with_db: bool = True,
+) -> AppSettings:
+    kwargs = {
+        "retriever_env": "local",
+        "local_dev_identity_enabled": True,
+        "local_dev_email": email,
+        "local_dev_display_name": "Ask Tester",
+        "retriever_seed_admin_email": "state@boonegraphics.net",
+        "fetch_enabled": True,
+        "model_provider": "anthropic",
+        "anthropic_api_key": "test-key-not-used",
+        "model_default": "claude-stub",
     }
     if with_db:
         kwargs.update(
@@ -53,16 +82,312 @@ def test_seeded_admin_can_load_app_shell() -> None:
     assert "Retriever auth shell" in response.text
 
 
-def test_fetch_route_renders_disabled_skeleton() -> None:
+def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     client = make_client(make_settings())
 
     response = client.get("/fetch")
 
     assert response.status_code == 200
     assert "Fetch is not enabled yet" in response.text
-    assert "Fetch skeleton review" in response.text
-    assert "Context: 0% ready" in response.text
-    assert "Model: not connected" in response.text
+    assert "Connect MySQL to save conversations" in response.text
+    assert "+ New Chat" in response.text
+    assert "Mode: no database" in response.text
+    assert "Routing: off" in response.text
+
+
+def test_pending_user_forbidden_from_fetch() -> None:
+    client = make_client(make_settings(email="new@boonegraphics.net"))
+
+    response = client.get("/fetch")
+
+    assert response.status_code == 403
+    assert "approved" in response.text.lower() or "active" in response.text.lower()
+
+
+def test_fetch_shell_forbidden_without_fetch_access(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("plain@boonegraphics.net", "Plain User", "active")
+    settings = make_settings(email="plain@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/fetch")
+
+    assert response.status_code == 403
+
+
+def test_fetch_shell_via_fetch_access_capability_only(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("cap@boonegraphics.net", "Capability User", "active")
+    user_id = db.users["cap@boonegraphics.net"]["id"]
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.access")
+    FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cap thread")
+
+    settings = make_settings(email="cap@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert "Cap thread" in response.text
+
+
+def test_fetch_shell_lists_conversations_from_db(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    repo = FetchRepository(db.connection)
+    repo.create_conversation(user_id=user_id, title="DSF nightly check")
+
+    settings = make_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert "DSF nightly check" in response.text
+
+
+def test_fetch_post_new_conversation_requires_access(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("plain@boonegraphics.net", "Plain User", "active")
+    settings = make_settings(email="plain@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/fetch/conversations/new")
+
+    assert response.status_code == 403
+
+
+def test_fetch_post_new_conversation_redirects_when_allowed(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+
+    settings = make_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/fetch/conversations/new", data={"title": "  Priority queue  "})
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/fetch?c=")
+    slug = client.get(response.headers["location"])
+    assert slug.status_code == 200
+    assert "Priority queue" in slug.text
+
+
+def test_fetch_post_ask_redirects_without_message_when_fetch_disabled(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Ask lane")
+
+    settings = make_settings(email="fetcher@boonegraphics.net", with_db=True)
+    assert settings.fetch_enabled is False
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "Hello from disabled gate"},
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}"
+    assert len(db.fetch_messages) == 0
+
+
+def test_fetch_post_ask_forbidden_without_ask_capability(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="No ask cap")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "Should not persist"},
+    )
+
+    assert response.status_code == 403
+    assert len(db.fetch_messages) == 0
+
+
+def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Stub lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("fetch ask must not perform HTTP calls")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    client = make_client(settings)
+
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "  What is DSF?  "},
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}"
+    assert len(db.fetch_messages) == 2
+    assert db.fetch_messages[0]["role"] == "user"
+    assert db.fetch_messages[0]["content"] == "What is DSF?"
+    assert db.fetch_messages[1]["role"] == "assistant"
+    assert "stub" in db.fetch_messages[1]["content"].lower()
+    assert "printsmith" in db.fetch_messages[1]["content"].lower()
+    assert db.fetch_messages[1]["route_key"] == "printsmith_candidate"
+
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert "What is DSF?" in page.text
+    assert "stub" in page.text.lower()
+
+
+def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cmd lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "/help"},
+    )
+
+    assert response.status_code == 303
+    assert db.fetch_messages[1]["route_key"] == "help"
+    assert "/help" in db.fetch_messages[1]["content"]
+    assert "offline stub" in db.fetch_messages[1]["content"].lower()
+    assert "slash" in db.fetch_messages[1]["content"].lower()
+
+
+def test_fetch_post_ask_slash_sources_and_health(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cmd lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    r1 = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "/sources"},
+    )
+    assert r1.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "sources"
+    assert "printsmith" in db.fetch_messages[-1]["content"].lower()
+
+    r2 = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "/health"},
+    )
+    assert r2.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "health"
+    assert "integration" in db.fetch_messages[-1]["content"].lower()
+
+
+def test_fetch_post_ask_route_like_prompt_no_http(monkeypatch) -> None:
+    """Docs-shaped prompts must not trigger outbound HTTP from the ask handler."""
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Doc lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("unexpected outbound HTTP from fetch ask")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "Where is the xmpie uproduce documentation?"},
+    )
+    assert response.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "docs_candidate"
+    assert "vendor" in db.fetch_messages[-1]["content"].lower() or "documentation" in db.fetch_messages[-1]["content"].lower()
+    assert "stub" in db.fetch_messages[-1]["content"].lower()
+
+
+def test_fetch_shell_shows_routing_not_connected_when_fetch_enabled(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    FetchRepository(db.connection).create_conversation(user_id=user_id, title="Lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert "Routing: not connected" in response.text
+
+
+def test_home_hides_fetch_nav_without_access(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("plain@boonegraphics.net", "Plain User", "active")
+    settings = make_settings(email="plain@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Fetch disabled" not in response.text
 
 
 def test_non_admin_is_forbidden_from_admin_users() -> None:

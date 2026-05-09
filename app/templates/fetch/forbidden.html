@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Fetch{% endblock %}
+{% block title %}Fetch{% endblock %}
+
+{% block content %}
+<section class="page-intro fetch-forbidden">
+  {% if fetch_forbidden_reason == 'inactive' %}
+  <h2>Account not active</h2>
+  <p class="muted">You need an approved Retriever account before opening Fetch.</p>
+  {% else %}
+  <h2>Fetch access required</h2>
+  <p class="muted">An administrator must grant the Fetch module or Fetch access capability before this screen is available.</p>
+  {% endif %}
+  <p><a href="/">Return home</a></p>
+</section>
+{% endblock %}

@@ -5,6 +5,7 @@
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\rollback.ps1 -Reason "health check failure"
 #
 # Does NOT require GitHub or pip. Works from releases already on disk.
+# Restarts ONLY service RetrieverRebuild; never legacy "Retriever" on port 8000.
 
 param(
     [string]$Reason = "manual rollback",

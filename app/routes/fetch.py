@@ -1,0 +1,248 @@
+"""Fetch shell: conversation CRUD (DB-backed) and gated ask stub when Fetch is enabled."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from app.auth.cloudflare import get_identity_from_request
+from app.auth.permissions import CurrentUser
+from app.auth.sessions import (
+    current_user_from_identity,
+    ensure_session_cookie,
+    require_active_user,
+)
+from app.config import AppSettings
+from app.db.connection import create_connection
+from app.db.repositories.fetch import FetchRepository
+from app.dependencies import settings_dependency
+from app.fetch.local_routing import build_fetch_stub_reply, classify_fetch_intent
+
+router = APIRouter(prefix="/fetch", tags=["fetch"])
+templates = Jinja2Templates(directory="app/templates")
+
+_FETCH_ACCESS_MSG = "Fetch access is required"
+_NO_DB_MSG = "Conversation storage requires a configured database"
+_FETCH_ASK_DISABLED_MSG = "Fetch ask is not permitted for this account"
+
+
+def _has_db(settings: AppSettings) -> bool:
+    return bool(settings.mysql_host and settings.mysql_user and settings.mysql_password)
+
+
+def _repository(settings: AppSettings) -> Optional[FetchRepository]:
+    if not _has_db(settings):
+        return None
+    return FetchRepository(lambda: create_connection(settings))
+
+
+def _require_fetch_shell_user(user: CurrentUser) -> None:
+    require_active_user(user)
+    if not user.can_open_fetch_shell():
+        raise HTTPException(status_code=403, detail=_FETCH_ACCESS_MSG)
+
+
+@router.get("", response_class=HTMLResponse)
+async def fetch_shell(
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+    c: Optional[str] = None,
+    rename: Optional[str] = None,
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+
+    if user.status != "active":
+        return templates.TemplateResponse(
+            request,
+            "fetch/forbidden.html",
+            {
+                "settings": settings,
+                "user": user,
+                "active_nav": "fetch",
+                "fetch_forbidden_reason": "inactive",
+            },
+            status_code=403,
+        )
+
+    if not user.can_open_fetch_shell():
+        return templates.TemplateResponse(
+            request,
+            "fetch/forbidden.html",
+            {
+                "settings": settings,
+                "user": user,
+                "active_nav": "fetch",
+                "fetch_forbidden_reason": "no_module",
+            },
+            status_code=403,
+        )
+
+    repo = _repository(settings)
+    conversations: list = []
+    messages: list = []
+    active_id: Optional[str] = None
+    warn_no_db = repo is None
+
+    if repo is not None:
+        conversations = repo.list_conversations(user.id)
+        if c:
+            current = repo.get_conversation(user.id, c)
+            if current:
+                active_id = c
+            else:
+                active_id = conversations[0].conversation_id if conversations else None
+        else:
+            active_id = conversations[0].conversation_id if conversations else None
+
+        if rename and not any(conv.conversation_id == rename for conv in conversations):
+            rename = None
+
+        if active_id:
+            messages = repo.list_messages(user.id, active_id)
+
+    fetch_can_use_composer = bool(
+        settings.fetch_enabled
+        and not warn_no_db
+        and active_id
+        and user.can_submit_fetch_ask()
+    )
+    fetch_composer_disabled_reason = ""
+    if settings.fetch_enabled and not fetch_can_use_composer:
+        if warn_no_db:
+            fetch_composer_disabled_reason = "Connect MySQL to send messages."
+        elif not active_id:
+            fetch_composer_disabled_reason = "Select or create a conversation first."
+        else:
+            fetch_composer_disabled_reason = (
+                "Ask Fetch requires the fetch.ask_internal capability (admins may always ask)."
+            )
+
+    fetch_routing_label = "off" if not settings.fetch_enabled else "not connected"
+
+    response = templates.TemplateResponse(
+        request,
+        "fetch/shell.html",
+        {
+            "settings": settings,
+            "user": user,
+            "active_nav": "fetch",
+            "conversations": conversations,
+            "active_conversation_id": active_id,
+            "rename_conversation_id": rename,
+            "messages": messages,
+            "fetch_model_label": settings.model_default or "model not connected",
+            "fetch_context_percent": 0,
+            "fetch_context_state": "ready",
+            "fetch_path_label": "disabled" if not settings.fetch_enabled else "local",
+            "fetch_routing_label": fetch_routing_label,
+            "fetch_mode_label": "conversations" if not warn_no_db else "no database",
+            "fetch_can_use_composer": fetch_can_use_composer,
+            "fetch_composer_disabled_reason": fetch_composer_disabled_reason,
+            "warn_no_db": warn_no_db,
+        },
+    )
+    ensure_session_cookie(request, response, user, settings)
+    return response
+
+
+@router.post("/conversations/new", response_class=RedirectResponse)
+async def new_conversation(
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+    title: str = Form("New Fetch conversation"),
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    repo = _repository(settings)
+    if repo is None:
+        raise HTTPException(status_code=503, detail=_NO_DB_MSG)
+    created = repo.create_conversation(user_id=user.id, title=title)
+    return RedirectResponse(url=f"/fetch?c={created.conversation_id}", status_code=303)
+
+
+@router.post("/conversations/{conversation_id}/rename", response_class=RedirectResponse)
+async def rename_conversation(
+    conversation_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+    title: str = Form(...),
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    repo = _repository(settings)
+    if repo is None:
+        raise HTTPException(status_code=503, detail=_NO_DB_MSG)
+    if repo.get_conversation(user.id, conversation_id) is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    repo.rename_conversation(user.id, conversation_id, title)
+    return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+
+
+@router.post("/conversations/{conversation_id}/delete", response_class=RedirectResponse)
+async def delete_conversation_route(
+    conversation_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    repo = _repository(settings)
+    if repo is None:
+        raise HTTPException(status_code=503, detail=_NO_DB_MSG)
+    if repo.get_conversation(user.id, conversation_id) is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    repo.soft_delete_conversation(user.id, conversation_id)
+    return RedirectResponse(url="/fetch", status_code=303)
+
+
+@router.post("/conversations/{conversation_id}/ask", response_class=RedirectResponse)
+async def ask_in_conversation(
+    conversation_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+    question: str = Form(""),
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    if not settings.fetch_enabled:
+        return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    if not user.can_submit_fetch_ask():
+        raise HTTPException(status_code=403, detail=_FETCH_ASK_DISABLED_MSG)
+    repo = _repository(settings)
+    if repo is None:
+        raise HTTPException(status_code=503, detail=_NO_DB_MSG)
+    if repo.get_conversation(user.id, conversation_id) is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    cleaned = " ".join(question.split()).strip()
+    if not cleaned:
+        return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    route = classify_fetch_intent(cleaned)
+    assistant_text = build_fetch_stub_reply(route)
+    repo.append_message(
+        user.id,
+        conversation_id,
+        role="user",
+        content=cleaned,
+        route_key=route,
+    )
+    repo.append_message(
+        user.id,
+        conversation_id,
+        role="assistant",
+        content=assistant_text,
+        route_key=route,
+        model_label=settings.model_default,
+        context_percent=0,
+        context_state="stub",
+    )
+    response = RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    ensure_session_cookie(request, response, user, settings)
+    return response

@@ -34,11 +34,7 @@ This Mac currently has Python 3.9 available. The scaffold is compatible with tha
 .venv/bin/python -m pytest
 ```
 
-Expected current result:
-
-```text
-47 passed
-```
+Expectation: **all tests pass** (the count grows with the codebase; if you see failures, fix before shipping).
 
 ## Start Local Server
 
@@ -65,13 +61,15 @@ curl -i http://127.0.0.1:8810/health/deep
 curl -i http://127.0.0.1:8810/version
 ```
 
-Expected disabled Fetch route:
+Fetch route (unauthenticated `curl`):
 
 ```bash
 curl -i http://127.0.0.1:8810/fetch
 ```
 
-Expected result: `503 Service Unavailable` with a page saying Fetch is not enabled yet.
+Expected: **401** or **403** without a session when the app expects Cloudflare or session identity. In **local** mode with **`LOCAL_DEV_IDENTITY_ENABLED=true`**, browser access may show **200** HTML for the Fetch shell. Production-style smoke on Windows uses **`deploy/smoke.ps1`**, not raw `curl` alone.
+
+When you **do** have a session and Fetch access, **`GET /fetch`** returns **200**: the conversation rail works against MySQL when configured. With **`FETCH_ENABLED=false`**, the composer stays **off** and messages are not accepted through ask. With **`FETCH_ENABLED=true`**, ask saves the user line and appends the **stub** reply only (no live model)—and production operators should read **`deploy/WINDOWS_FETCH_RELEASE.md`** before using that flag because validation still requires model env vars.
 
 ## Expected Local Behavior
 
@@ -81,13 +79,13 @@ Expected result: `503 Service Unavailable` with a page saying Fetch is not enabl
 - `/health/ready` returns `ok` in local mode because missing MySQL is `disabled`, not failed.
 - `/health/deep` returns redacted config and dependency states, with no secrets.
 - `/version` returns app/version/environment metadata.
-- `/fetch` returns disabled until auth/admin/session behavior is proven.
+- `/fetch` behavior depends on identity: without a session, expect **401/403**; with local dev identity in the browser, expect the **Fetch shell**. **`FETCH_ENABLED=false`** still allows **conversation CRUD** when MySQL is configured—the **ask/composer** path stays locked until **`FETCH_ENABLED=true`** (see Windows runbook for production guidance).
 
 ## Real Database Mode Later
 
 When Boone MySQL or a local MySQL test database is available:
 
-1. Create `retriever_cloudflare`.
+1. Create `retriever_cloudflare` (and apply migrations including **`0002_fetch_conversations`** if you need conversation tables—same SQL as production).
 2. Configure `.env.local` with MySQL connection values.
 3. Run:
 
@@ -99,13 +97,13 @@ Then restart the app and smoke the same routes.
 
 ## Do Not Do Yet
 
-- Do not enable Fetch.
-- Do not point at production PrintSmith credentials.
+- Do not set **`FETCH_ENABLED=true`** in **production** without **`deploy/WINDOWS_FETCH_RELEASE.md`**: validation will require model settings even for the stub-only path.
+- Do not point at production PrintSmith credentials for unapproved tests.
 - Do not paste real Cloudflare Tunnel credentials into `.env.local`.
-- Do not migrate old Fetch conversations.
-- Do not move `retriever.boonegraphics.net`.
+- Do not migrate old Fetch conversations unless explicitly requested.
+- Do not move `retriever.boonegraphics.net` DNS or Tunnel targets without the Windows deploy runbook.
 
 ## First Browser Smoke Goal
 
-For this phase, the goal is only to prove the shell starts, renders, reports health, shows Admin, and keeps Fetch disabled.
+For this phase, the goal is to prove the shell starts, renders, reports health, shows Admin, and keeps **production-style** deploys on **`FETCH_ENABLED=false`** until deliberate enablement. Locally you may toggle flags for development if you accept the validation rules in **`app/config.py`**.
 

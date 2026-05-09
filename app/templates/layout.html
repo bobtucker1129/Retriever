@@ -37,16 +37,18 @@
             <span class="nav-label">Admin</span>
           </a>
           {% endif %}
+          {% if user and user.status == 'active' and user.can_open_fetch_shell() %}
           {% if settings.fetch_enabled %}
           <a class="nav-item{% if active_nav == 'fetch' %} active{% endif %}" href="/fetch" title="Fetch">
             <span class="nav-abbrev">F</span>
             <span class="nav-label">Fetch</span>
           </a>
           {% else %}
-          <a class="nav-item disabled{% if active_nav == 'fetch' %} active{% endif %}" href="/fetch" aria-disabled="true" title="Fetch disabled">
+          <a class="nav-item disabled{% if active_nav == 'fetch' %} active{% endif %}" href="/fetch" aria-disabled="true" title="Fetch — model not connected">
             <span class="nav-abbrev">F</span>
             <span class="nav-label">Fetch disabled</span>
           </a>
+          {% endif %}
           {% endif %}
         </nav>
         <div class="sidebar-footer">

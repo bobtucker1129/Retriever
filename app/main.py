@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.routes import admin, auth_shell, fetch_placeholder, health
+from app.routes import admin, auth_shell, fetch, health
 
 
 def create_app() -> FastAPI:
@@ -28,7 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth_shell.router)
     app.include_router(admin.router)
-    app.include_router(fetch_placeholder.router)
+    app.include_router(fetch.router)
     return app
 
 

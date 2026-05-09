@@ -3,7 +3,8 @@
 # NSSM calls this script to start the app. Do not call directly.
 # Mirrors the pattern from old Retriever's run_retriever_service.ps1.
 #
-# Service name: RetrieverRebuild
+# Service name: RetrieverRebuild (only). Do not reuse this script for legacy
+# service "Retriever" on port 8000 — that stack is installed and owned separately.
 # Port: 8810 (localhost only, behind Cloudflare Tunnel)
 
 param(

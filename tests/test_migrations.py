@@ -30,8 +30,19 @@ def test_initial_migration_does_not_touch_old_schema() -> None:
     assert "retriever_core" not in sql
 
 
+def test_fetch_migration_adds_conversation_storage_without_model_routes() -> None:
+    sql = Path("migrations/0002_fetch_conversations.sql").read_text()
+
+    assert "retriever_cloudflare.fetch_conversations" in sql
+    assert "retriever_cloudflare.fetch_messages" in sql
+    assert "model_provider" not in sql
+    assert "anthropic_api_key" not in sql
+    assert "retriever_core" not in sql
+
+
 def test_migration_helpers_find_migration_and_seed_files() -> None:
     assert any(path.name == "0001_retriever_cloudflare.sql" for path in list_sql_migrations())
+    assert any(path.name == "0002_fetch_conversations.sql" for path in list_sql_migrations())
     assert any(path.name == "0001_seed_auth_shell.sql" for path in list_seed_files())
 
 

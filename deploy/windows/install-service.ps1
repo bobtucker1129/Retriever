@@ -3,8 +3,8 @@
 # Run once (or again to update) as Administrator:
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\install-service.ps1
 #
-# Mirrors the pattern from old Retriever's install_retriever_service.ps1.
-# Requires NSSM to be installed (already present for old Retriever).
+# Manages ONLY RetrieverRebuild on port 8810. Never pass ServiceName "Retriever"
+# (legacy PrePress stack on port 8000).
 
 param(
     [string]$ServiceName = "RetrieverRebuild",
@@ -16,6 +16,13 @@ param(
 # into parser-looking failures when ErrorActionPreference is Stop. Explicit
 # exit-code checks below handle real failures.
 $ErrorActionPreference = "Continue"
+
+if ($ServiceName -eq "Retriever") {
+    throw "Refusing to install NSSM app for legacy service 'Retriever'. Use -ServiceName RetrieverRebuild (port 8810) only; do not replace the old Retriever service."
+}
+if ([int]$Port -eq 8000) {
+    throw "Refusing Port 8000 — legacy Retriever owns that port. Use -Port 8810 for RetrieverRebuild."
+}
 
 # ---------------------------------------------------------------------------
 # Locate NSSM (same search order as old Retriever)

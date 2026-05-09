@@ -5,6 +5,12 @@
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\deploy.ps1 965a75c
 #
 # Set $env:RETRIEVER_RUN_MIGRATIONS = "true" to run DB migrations on this deploy.
+# Set $env:RETRIEVER_ASSERT_MIGRATION_0002 = "true" to require MySQL to already
+#   have migration 0002_fetch_conversations applied (read-only check; fails before swap).
+#
+# GUARDRAILS (do not regress):
+# - Restarts and manages ONLY the RetrieverRebuild service on port 8810.
+# - Never stops or reconfigures legacy service "Retriever" on port 8000.
 
 param(
     [Parameter(Mandatory=$true)]
@@ -27,6 +33,10 @@ $LogDir      = "$AppBase\logs"
 $DeployLog   = "$LogDir\deploy.log"
 $LockFile    = "$AppBase\deploy.lock"
 $ServiceName = "RetrieverRebuild"
+# Explicit legacy names: this script must never call Restart-Service on these.
+$LegacyRetrieverServiceName = "Retriever"
+$LegacyRetrieverPort        = 8000
+$RetrieverRebuildPort       = 8810
 $GithubUrl   = "https://github.com/bobtucker1129/Retriever.git"
 $AppRepo     = "$AppBase\repo"
 
@@ -93,6 +103,13 @@ function Run-PythonScript {
     }
 }
 
+function Assert-NonLegacyServiceName {
+    param([string]$Name)
+    if ($Name -eq $LegacyRetrieverServiceName) {
+        throw "Refusing to operate on legacy service '$LegacyRetrieverServiceName'. Use '$ServiceName' (RetrieverRebuild) on port $RetrieverRebuildPort only."
+    }
+}
+
 function Clear-StaleEnvVars {
     # Old Retriever sets system-level FETCH_*, MODEL_*, ANTHROPIC_*, BOONEOPS_*,
     # PRINTSMITH_* env vars that pollute new Retriever's pydantic-settings.
@@ -125,10 +142,13 @@ if (Test-Path $LockFile) {
 
 try {
 
+Assert-NonLegacyServiceName -Name $ServiceName
+
 # ---------------------------------------------------------------------------
 # Pre-flight
 # ---------------------------------------------------------------------------
 Write-Log "=== Deploy starting: ref=$GitRef ==="
+Write-Log "Target service: $ServiceName (port $RetrieverRebuildPort). Legacy $LegacyRetrieverServiceName on port $LegacyRetrieverPort is not modified by this script."
 
 foreach ($dir in @($AppBase, $AppReleases)) {
     if (-not (Test-Path $dir)) { throw "$dir does not exist. Run VM_SETUP_RUNBOOK first." }
@@ -311,10 +331,57 @@ if ($configResult -ne 0) { throw "Config validation failed. Fix $EnvFile before 
 Write-Log "Config validation passed."
 
 # ---------------------------------------------------------------------------
-# Migrations
+# Migrations + 0002 verification (Fetch conversation tables)
 # ---------------------------------------------------------------------------
+$migrationVerifyScript = @'
+from __future__ import annotations
+
+from app.config import get_settings
+from app.db.connection import create_connection
+
+REQUIRED_VERSION = "0002_fetch_conversations"
+
+
+def main() -> None:
+    settings = get_settings()
+    if not settings.mysql_host or not settings.mysql_user:
+        print("migration-verify: skip (MySQL not configured)")
+        return
+    conn = create_connection(settings)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = %s",
+            (REQUIRED_VERSION,),
+        )
+        row = cur.fetchone()
+        if not row or row[0] < 1:
+            raise SystemExit(f"migration-verify: missing {REQUIRED_VERSION} in schema_migrations")
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = %s
+              AND table_name IN ('fetch_conversations', 'fetch_messages')
+            """,
+            (settings.mysql_database,),
+        )
+        n = cur.fetchone()[0]
+        if n != 2:
+            raise SystemExit(
+                "migration-verify: fetch_conversations / fetch_messages not found in "
+                + repr(settings.mysql_database)
+            )
+    finally:
+        conn.close()
+    print("migration-verify: OK (0002 + conversation tables)")
+
+
+if __name__ == "__main__":
+    main()
+'@
+
 if ($env:RETRIEVER_RUN_MIGRATIONS -eq "true") {
-    Write-Log "Running database migrations ..."
+    Write-Log "Running database migrations (including seeds) ..."
     $migScript = @'
 from app.db.migrations import run_migrations
 
@@ -323,9 +390,21 @@ for name, count in run_migrations(include_seeds=True):
 '@
     $migResult = Run-PythonScript -PythonExe $venvPython -Script $migScript -WorkDir $releaseDir
     if ($migResult -ne 0) { throw "Migrations failed." }
-    Write-Log "Migrations complete."
+    Write-Log "Migrations complete. Verifying 0002 Fetch conversation migration ..."
+    $verifyMig = Run-PythonScript -PythonExe $venvPython -Script $migrationVerifyScript -WorkDir $releaseDir
+    if ($verifyMig -ne 0) { throw "Post-migration verification failed (expect 0002_fetch_conversations + tables)." }
+    Write-Log "Migration verification passed."
 } else {
     Write-Log "Skipping migrations (set RETRIEVER_RUN_MIGRATIONS=true to run on next deploy)."
+}
+
+if ($env:RETRIEVER_ASSERT_MIGRATION_0002 -eq "true") {
+    Write-Log "RETRIEVER_ASSERT_MIGRATION_0002: verifying 0002 is present before junction swap ..."
+    $assertMig = Run-PythonScript -PythonExe $venvPython -Script $migrationVerifyScript -WorkDir $releaseDir
+    if ($assertMig -ne 0) {
+        throw "Database missing 0002_fetch_conversations. Run deploy with RETRIEVER_RUN_MIGRATIONS=true or apply migrations, then retry."
+    }
+    Write-Log "Assert migration 0002: OK."
 }
 
 # ---------------------------------------------------------------------------
@@ -344,9 +423,10 @@ Write-Log "current -> $releaseDir"
 "deployedAt=$(Get-Date -Format 'o')" | Out-File "$releaseDir\.release-meta" -Append -Encoding utf8
 
 # ---------------------------------------------------------------------------
-# Restart service
+# Restart service (RetrieverRebuild only; never legacy Retriever)
 # ---------------------------------------------------------------------------
-Write-Log "Restarting $ServiceName ..."
+Assert-NonLegacyServiceName -Name $ServiceName
+Write-Log "Restarting $ServiceName (localhost:$RetrieverRebuildPort) ..."
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc) {
     Restart-Service -Name $ServiceName -Force

@@ -2,6 +2,8 @@
 #
 # Exit 0 = healthy, Exit 1 = failed
 # Used by deploy.ps1, rollback.ps1, and manual checks.
+#
+# Targets ONLY port 8810 (RetrieverRebuild). Does not probe legacy Retriever.
 
 param(
     [string]$BaseUrl = "http://127.0.0.1:8810",
@@ -70,6 +72,14 @@ try {
         $allPassed = $false
     } else {
         Write-Host "[healthcheck] OK:   No required dependencies failed"
+    }
+    $fetchState = $body.checks.fetch
+    $modelState = $body.checks.modelProvider
+    if ($fetchState -ne "disabled" -or $modelState -ne "disabled") {
+        Write-Host "[healthcheck] FAIL: Fetch/model routing must stay disabled until explicitly enabled (fetch=$fetchState modelProvider=$modelState)"
+        $allPassed = $false
+    } else {
+        Write-Host "[healthcheck] OK:   Fetch integration and model routing disabled"
     }
 } catch {
     Write-Host "[healthcheck] WARN: Could not parse health/ready body: $($_.Exception.Message)"

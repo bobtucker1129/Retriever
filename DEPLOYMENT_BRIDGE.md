@@ -12,17 +12,30 @@ Cursor can help write, review, and organize the new Retriever. It should not hol
 
 The production Retriever should run on a Boone-controlled runtime, likely a Boone LAN server exposed through Cloudflare Access/Tunnel. Cursor should feed that runtime through reviewed code, commits, deployment scripts, and documented handoffs.
 
-## Concrete First Runtime Plan
+## Production runtime today (Windows)
 
-Use this as the working deployment shape until a later runtime pass changes it.
+Live production for the rebuild is **Windows Server** on **`bggol-vesko01`**, not the Linux **`systemd`** layout in the reference section below.
 
-| Dimension | First plan |
+| Item | Value |
+|---|---|
+| Host | `bggol-vesko01` |
+| Public URL | `https://retriever.boonegraphics.net` (Cloudflare Access + Tunnel to `127.0.0.1:8810`) |
+| New Retriever | Windows service **RetrieverRebuild** (NSSM), `127.0.0.1:8810` |
+| Legacy Retriever | Windows service **Retriever** on port **8000** (PrePress, DSF, PrintSmith token authority until cutover) |
+| Deploy + Fetch foundation | **`deploy/WINDOWS_FETCH_RELEASE.md`**: migration **`0002`**, **`smoke.ps1`**, **`FETCH_ENABLED=false`** recommended until deliberate enablement—see runbook for the validation quirk (stub vs required model env vars) |
+
+Plain English: operators follow **PowerShell/NSSM** procedures on the **`D:\retriever-rebuild\`** layout; do not assume **`/opt`**, **bash deploy**, or **`systemd`** on this host.
+
+## Reference: Linux sibling-VM runtime plan (deferred)
+
+The table below describes an **original** Linux-oriented shape (e.g. **`bggol-retriever01`**, **`retriever-web.service`**, **`retriever-next.boonegraphics.net`**) for a possible **future** sibling VM. It is **not** the active production path for **`bggol-vesko01`**. First live hostname is **`retriever.boonegraphics.net`**; a dedicated staging subdomain was deferred per **`PLAN.md`**.
+
+| Dimension | Reference plan (Linux sibling VM) |
 |---|---|
 | Production runtime | Boone LAN Linux server or VM, not OpenClaw and not Cursor Cloud. |
-| Host candidate | `bggol-vesko01` if capacity and ownership are acceptable; otherwise a sibling Boone LAN app VM. |
+| Host candidate | Sibling Boone LAN app VM (working name `bggol-retriever01` in older docs); not the current Windows host above. |
 | Public entry | Cloudflare Access + Cloudflare Tunnel. |
-| First test hostname | `retriever-next.boonegraphics.net`. |
-| Cutover hostname | `retriever.boonegraphics.net` only after Fetch/auth are proven. |
+| First test hostname | `retriever-next.boonegraphics.net` (historical; production launched on `retriever.boonegraphics.net` from first deploy). |
 | App bind address | `127.0.0.1` only, behind tunnel/reverse proxy. |
 | First app port | `8810` for new Retriever. |
 | Service user | `retriever`. |
@@ -157,6 +170,8 @@ Systemd should be the process owner. Cursor, OpenClaw, and ad hoc shells should 
 
 First deployment model: a human or approved automation logs into the Boone server and runs a Boone-side deploy script with an explicit Git ref.
 
+*Note: Automated CI/CD (pushing to a staging site, running tests, and promoting to main) is a confirmed Phase 2 goal. We are using manual server-pull first to prove the basic Windows NSSM service stability, but the end goal is a fully automated push pipeline.*
+
 Recommended command:
 
 ```bash
@@ -286,7 +301,9 @@ Use three levels:
 
 ## Smoke Tests
 
-Recommended command:
+**Windows production (`bggol-vesko01`, `RetrieverRebuild`):** run **`D:\retriever-rebuild\bin\smoke.ps1`** as documented in **`deploy/WINDOWS_FETCH_RELEASE.md`**. That script is the gate for Fetch foundation deploys (including expectations that **`fetch`** and **`modelProvider`** stay **`disabled`** while **`FETCH_ENABLED=false`**).
+
+Recommended command for a **Linux reference** host or local developer habit:
 
 ```bash
 sudo /opt/retriever-rebuild/bin/smoke.sh
@@ -390,20 +407,24 @@ If BooneOps broker later moves into the new Retriever runtime, update this docum
 
 ## Required Deployment Artifacts
 
+**`bggol-vesko01` (current production):** Windows paths and **`RetrieverRebuild`** / **`smoke.ps1`** — see **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`deploy/deploy.ps1`**, and **`D:\retriever-rebuild\env\retriever.env`**. Ignore the **`/opt`** / **`systemd`** list items below for this host.
+
+**Linux sibling VM (if used later):** keep the checklist below.
+
 Before production build-out, define:
 
-- production host or VM: `bggol-vesko01` or a sibling Boone LAN app VM
-- service name: `retriever-web.service`
-- filesystem layout: `/opt/retriever-rebuild`, `/etc/retriever-rebuild`, `/var/log/retriever-rebuild`
-- environment file location: `/etc/retriever-rebuild/retriever.env`
+- production host or VM: **`bggol-vesko01` (Windows, active)** or a sibling Boone LAN Linux app VM
+- service name: **`RetrieverRebuild` (Windows)** or **`retriever-web.service` (Linux reference)**
+- filesystem layout: **`D:\retriever-rebuild\` (Windows)** or **`/opt/retriever-rebuild` (Linux reference)**, **`/etc/retriever-rebuild`**, **`/var/log/retriever-rebuild`**
+- environment file location: **`D:\retriever-rebuild\env\retriever.env` (Windows)** or **`/etc/retriever-rebuild/retriever.env` (Linux)**
 - secret source: Boone-controlled env file or approved vault, not Cursor
-- deploy script: `/opt/retriever-rebuild/bin/deploy.sh <git-ref-or-sha>`
-- rollback script: `/opt/retriever-rebuild/bin/rollback.sh`
+- deploy script: **`deploy.ps1` (Windows)** or **`/opt/retriever-rebuild/bin/deploy.sh` (Linux reference)**
+- rollback script: **`rollback.ps1` (Windows)** or **`/opt/retriever-rebuild/bin/rollback.sh` (Linux reference)**
 - health endpoints: `/health/live`, `/health/ready`, `/health/deep`
 - version endpoint: `/version`
-- smoke test command: `/opt/retriever-rebuild/bin/smoke.sh`
-- log path: `journalctl -u retriever-web`, `/var/log/retriever-rebuild/deploy.log`, `/var/log/retriever-rebuild/audit.jsonl`
-- Cloudflare Tunnel routing: `retriever-next.boonegraphics.net` first, `retriever.boonegraphics.net` only at cutover
+- smoke test command: **`smoke.ps1` (Windows)** or **`/opt/retriever-rebuild/bin/smoke.sh` (Linux/local)**
+- log path: **Windows service logs / NSSM** (see VM notes) or `journalctl -u retriever-web`, `/var/log/retriever-rebuild/deploy.log`, `/var/log/retriever-rebuild/audit.jsonl`
+- Cloudflare Tunnel routing: **`retriever.boonegraphics.net`** to **`127.0.0.1:8810`** (staging subdomain optional/deferred)
 - Tailscale role: runtime path for BooneOps broker until broker moves
 - old/new Retriever coexistence path: separate hostname plus module gates until cutover
 
@@ -422,9 +443,9 @@ Old Retriever remains the current LAN reference and live runtime until a specifi
 
 First coexistence plan:
 
-- old Retriever keeps the current production hostname until new auth and Fetch are proven
-- new Retriever launches under `retriever-next.boonegraphics.net`
-- Cloudflare Access protects both hostnames
+- old Retriever stays **LAN-only** on port **8000** (no Cloudflare hostname); new Retriever uses **`retriever.boonegraphics.net`**
+- new Retriever is **`RetrieverRebuild`** on **`bggol-vesko01:8810`**, not a Linux staging host by default
+- Cloudflare Access protects the public Retriever hostname
 - new Retriever exposes only rebuilt modules
 - unfinished modules show no sidebar entry and no public route
 - PrePress stays on old Retriever
@@ -456,14 +477,14 @@ gitSha: <full sha>
 gitRef: <ref>
 previousSha: <full sha>
 host: <boone host>
-service: retriever-web.service
+service: RetrieverRebuild (Windows) or retriever-web.service (Linux reference)
 healthReady: pass/fail
 smoke: pass/fail
 rollbackPoint: <previous sha>
 notes: <short plain-English note>
 ```
 
-This can start as `/var/log/retriever-rebuild/deploy.log`. Later it can move into a deployment table or release dashboard.
+This can start as a **deploy log** on the server (Windows: alongside **`D:\retriever-rebuild\` operations**; Linux reference: **`/var/log/retriever-rebuild/deploy.log`**). Later it can move into a deployment table or release dashboard.
 
 ## Open Questions
 

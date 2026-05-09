@@ -73,6 +73,13 @@ Completed:
 - Installed `RetrieverRebuild` as an NSSM Windows service on `bggol-vesko01`; service started successfully and `/health/live` returned 200 on port `8810`.
 - Local smoke passed on `bggol-vesko01`: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
 - Fixed the `cloudflared` Windows service command so it runs `C:\cloudflared\cloudflared.exe --config C:\cloudflared\config.yml tunnel run retriever`; browser test now shows Cloudflare Access first, then reaches Retriever successfully.
+- Disabled old Fetch in the old Retriever runtime, clearing the duplicate Fetch surface while old Retriever continues to own PrePress, DSF, and PrintSmith token authority.
+- Built the first real new-Fetch slice: DB-backed conversation creation, listing, selection, rename, soft delete, message storage primitives, Fetch access gating, and a disabled-safe shell that keeps model/tool routing locked.
+- Built the first safe ask-path skeleton: ask submission is gated by active user, Fetch shell access, `FETCH_ENABLED`, and `fetch.ask_internal`; enabled asks write a deterministic stub reply only, with no model, PrintSmith, docs, BooneOps, upload, or delayed-report calls.
+- Hardened Windows deploy/smoke prep for the Fetch release: migration `0002_fetch_conversations` checks, explicit `RetrieverRebuild`/port `8810` guardrails, Fetch/model-off smoke assertions, and a read-only old Retriever port `8000` liveness check.
+- Verified the new Fetch slices locally: 65 tests passed, local route smoke passed, and edited files have no linter errors.
+- Added a gated **ask path** (`POST /fetch/conversations/{id}/ask`): requires the same shell access as before, plus `FETCH_ENABLED` (env) and **`fetch.ask_internal`** (capability; admins still pass via existing `has_capability` rules). When Fetch is off, the route redirects without persisting a user message. When Fetch is on but provider routing is not wired, it saves the user turn and appends a fixed stub assistant reply—no outbound model or tool calls.
+- **Fetch local routing (stub):** `classify_fetch_intent` assigns deterministic route labels (`local`, slash `help`/`sources`/`health`, `email_cleanup`, `printsmith_candidate`, `docs_candidate`, `general_candidate`, `blocked_write`, `unknown`). The ask handler persists those labels as `route_key` and returns route-specific offline copy; still no providers, PrintSmith, docs APIs, BooneOps, uploads, or web calls.
 
 ## Active Architecture Artifacts
 
@@ -91,6 +98,7 @@ Completed:
 - `CONFIG_AND_HEALTH_CONTRACT.md`: environment, validation, health, version, smoke, and redaction contract.
 - `AUTH_SHELL_BUILD_PLAN.md`: selected first framework/runtime and build slices for the Cloudflare auth shell.
 - `LOCAL_RUNBOOK.md`: local test/start/smoke instructions and first browser-smoke path.
+- `deploy/WINDOWS_FETCH_RELEASE.md`: Windows production deploy for **RetrieverRebuild**, migration **0002**, **`smoke.ps1`**, coexistence with port **8000**, **`FETCH_ENABLED`** vs validation, and future model enablement checklist.
 - `PRODUCT.md`: Impeccable product context for Retriever UI work.
 - `SHARED_LAYOUT_SHAPE.md`: confirmed Impeccable shape brief for the shared app shell.
 - `FETCH_UI_CONTINUITY.md`: current Fetch visual/layout continuity target for the first new Fetch skeleton.
@@ -101,6 +109,8 @@ Resolved:
 
 - `projects/Retriever/` is the old LAN repo reference copy, not the rebuild workspace.
 - `projects/retriever-rebuild/` is the planning/build home for the new Retriever.
+- Old Fetch on `bggol-vesko01` should be turned off via a feature flag. Nobody uses it, and disabling it clears the way for the new Fetch without confusing users.
+- Automated CI/CD deployments and staging validations are a core goal. We will establish a staging pipeline (`retriever-next.boonegraphics.net`) that runs tests before promoting code to `retriever.boonegraphics.net`. This will follow stabilizing the first manual deploy scripts.
 - Cloudflare Access should protect `retriever.boonegraphics.net` for everyone.
 - New Retriever should not expose old LAN modules through the new domain until they are rebuilt.
 - Fetch comes first, but auth comes before Fetch.
@@ -134,6 +144,7 @@ Resolved:
 - Visual continuity should stay close to old Retriever. The rebuild should feel like a sharper, cleaner version of the tool employees already know, not a new identity.
 - Fetch must preserve a left-side conversation sidebar/history, including the ability to rename conversations.
 - Fetch conversation rename should work like current Fetch.
+- Fetch sidebar navigation and `/fetch` shell access gate on module `fetch` or `fetch.access` capability plus active user status. `FETCH_ENABLED` remains tied to model routing and composer unlock; conversation CRUD can use MySQL while the model stays off.
 - Fetch should show the active context-window level and current model to all users, similar to OpenClaw's visible status pattern.
 - Context-window display should include both a simple amount/percentage and an operational state such as low, medium, high, or near full.
 - Fetch should keep the current Fetch layout, size, left-side behavior, and top-logo/header feel while improving the visuals with modestly more color and a little more font variation.
@@ -151,20 +162,31 @@ Open:
 - Which Python version should be pinned on `bggol-retriever01`.
 - Whether `/health/deep` requires admin session, Cloudflare service token, or both.
 
+## Fetch foundation — operator notes (Windows)
+
+Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, migration **`0002`**, smoke expectations, coexistence rules, and the **`FETCH_ENABLED`** warning.
+
+- **Where it runs:** **`RetrieverRebuild`** (NSSM) on **`bggol-vesko01`**, **`127.0.0.1:8810`**, public entry **`https://retriever.boonegraphics.net`** via Cloudflare Access and Tunnel.
+- **What stays on the old service:** **`Retriever`** on port **`8000`** continues PrePress, DSF, and PrintSmith REST token authority until an explicit cutover; Fetch releases must not touch that service.
+- **What “Fetch foundation” means:** conversation list/create/rename/delete in MySQL (**`0002`**), optional **stub** ask only when **`FETCH_ENABLED=true`** (still no real model or tool routing). **`FETCH_ENABLED=false`** remains the recommended production default: conversation CRUD still works; the ask composer stays off; post-deploy **`smoke.ps1`** expects **`fetch`** and **`modelProvider`** **disabled** in **`/health/ready`**. If **`FETCH_ENABLED=true`**, startup validation **still requires** model env vars even though code only runs the stub—see the runbook.
+- **Before real models/tools:** follow the enablement checklist at the bottom of **`deploy/WINDOWS_FETCH_RELEASE.md`** together with **`FETCH_TRUST_PLAN.md`**.
+
 ## Next Recommended Session
 
-Close first deploy and prepare Fetch build.
+Close first deploy and operate the Fetch foundation safely.
 
-Plain English goal: the auth shell is now running on `bggol-vesko01`, protected by Cloudflare Access at `retriever.boonegraphics.net`, and old Retriever remains untouched. The next move is to verify old Retriever one more time, then begin the first Fetch build behind the working auth shell.
+Plain English goal: the auth shell runs on **`bggol-vesko01`**, Cloudflare Access protects **`retriever.boonegraphics.net`**, old Fetch is off, and new Fetch provides conversation management with **`FETCH_ENABLED=false`** in production until a deliberate stub or model enablement pass. Operators should treat **`deploy/WINDOWS_FETCH_RELEASE.md`** as the source of truth for Windows deploy, migration **`0002`**, smoke, and coexistence with port **`8000`**.
 
 Recommended scope:
 
-1. Confirm old Retriever on port `8000` is still untouched and PrintSmith token authority remains old Retriever.
-2. Run the updated Cloudflare smoke script once after pulling the latest `smoke.ps1` fix.
-3. Start the next gate: first real Fetch implementation behind the deployed auth shell, with Fetch/model routing still disabled until explicitly turned on.
+1. Confirm legacy **Retriever** on port **`8000`** still serves PrePress/DSF and PrintSmith token authority after old Fetch was disabled.
+2. When shipping Fetch foundation code, apply migration **`0002`** once on **`retriever_cloudflare`**, deploy **`RetrieverRebuild`**, and run **`smoke.ps1`** (optionally with Cloudflare URL + service token vars).
+3. Keep **`FETCH_ENABLED=false`** in production env until the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** is satisfied for stub testing or real routing.
+4. After the foundation is stable, start real model-routing work only as a separate, explicitly reviewed enablement step.
 
 ## Later Work
 
+- Establish an automated CI/CD deployment pipeline to deploy to staging, run automated smoke tests, and safely promote to **`retriever.boonegraphics.net`** (a dedicated staging hostname remains optional per current host decisions).
 - Produce migration planning before production build-out, focused on real modules/data that matter; old Fetch data can be ignored or archived unless explicitly requested.
 - Expand `SECRETS_HANDLING.md`, `AUDIT_LOG_DESIGN.md`, `WEBHOOK_AND_BROKER_AUTH.md`, and `BUILD_CODE_LAYOUT.md` as implementation choices become concrete.
 - Produce a DSF action-service design after Fetch/auth are stable.

@@ -46,6 +46,9 @@ fixed facts for future agents:
   The deploy script uses explicit exit-code checks instead of relying on
   `$ErrorActionPreference = "Stop"` for native commands.
 
+For the **Fetch conversation migration (0002)** and guarded deploy/smoke flow, see
+`deploy/WINDOWS_FETCH_RELEASE.md` in the repo (copy onto the server with other `bin\` scripts as needed).
+
 First proven release:
 
 ```text
@@ -244,6 +247,7 @@ Copy-Item "D:\retriever-rebuild\repo\deploy\smoke.ps1"       "D:\retriever-rebui
 Copy-Item "D:\retriever-rebuild\repo\deploy\healthcheck.ps1" "D:\retriever-rebuild\bin\"
 Copy-Item "D:\retriever-rebuild\repo\deploy\windows\run-service.ps1"      "D:\retriever-rebuild\bin\"
 Copy-Item "D:\retriever-rebuild\repo\deploy\windows\install-service.ps1"  "D:\retriever-rebuild\bin\"
+Copy-Item "D:\retriever-rebuild\repo\deploy\WINDOWS_FETCH_RELEASE.md"     "D:\retriever-rebuild\bin\"
 ```
 
 ---
