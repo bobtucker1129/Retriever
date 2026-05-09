@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -19,7 +20,16 @@ from app.config import AppSettings
 from app.db.connection import create_connection
 from app.db.repositories.fetch import FetchRepository
 from app.dependencies import settings_dependency
-from app.fetch.local_routing import build_fetch_stub_reply, classify_fetch_intent
+from app.fetch.booneops_broker import (
+    BooneOpsBrokerTurnResult,
+    call_booneops_broker,
+    prior_messages_from_history,
+)
+from app.fetch.local_routing import (
+    build_fetch_stub_reply,
+    classify_fetch_intent,
+    should_delegate_ask_to_booneops_broker,
+)
 
 router = APIRouter(prefix="/fetch", tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
@@ -118,10 +128,18 @@ async def fetch_shell(
             fetch_composer_disabled_reason = "Select or create a conversation first."
         else:
             fetch_composer_disabled_reason = (
-                "Ask Fetch requires the fetch.ask_internal capability (admins may always ask)."
+                "Ask Fetch requires active Fetch module or Fetch access permission."
             )
 
-    fetch_routing_label = "off" if not settings.fetch_enabled else "not connected"
+    if not settings.fetch_enabled:
+        fetch_routing_label = "off"
+        fetch_path_label = "disabled"
+    elif settings.booneops_broker_enabled:
+        fetch_routing_label = "BooneOps broker"
+        fetch_path_label = "booneops"
+    else:
+        fetch_routing_label = "not connected"
+        fetch_path_label = "local"
 
     response = templates.TemplateResponse(
         request,
@@ -137,7 +155,7 @@ async def fetch_shell(
             "fetch_model_label": settings.model_default or "model not connected",
             "fetch_context_percent": 0,
             "fetch_context_state": "ready",
-            "fetch_path_label": "disabled" if not settings.fetch_enabled else "local",
+            "fetch_path_label": fetch_path_label,
             "fetch_routing_label": fetch_routing_label,
             "fetch_mode_label": "conversations" if not warn_no_db else "no database",
             "fetch_can_use_composer": fetch_can_use_composer,
@@ -225,7 +243,7 @@ async def ask_in_conversation(
     if not cleaned:
         return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
     route = classify_fetch_intent(cleaned)
-    assistant_text = build_fetch_stub_reply(route)
+    prior_records = repo.list_messages(user.id, conversation_id)
     repo.append_message(
         user.id,
         conversation_id,
@@ -233,15 +251,37 @@ async def ask_in_conversation(
         content=cleaned,
         route_key=route,
     )
+
+    request_id = str(uuid.uuid4())
+    use_broker = should_delegate_ask_to_booneops_broker(route, settings)
+    if use_broker:
+        prior_messages = prior_messages_from_history(prior_records)
+        broker_result: BooneOpsBrokerTurnResult = call_booneops_broker(
+            settings,
+            user=user,
+            conversation_id=conversation_id,
+            user_message=cleaned,
+            route_label=route,
+            request_id=request_id,
+            prior_messages=prior_messages,
+        )
+        assistant_text = broker_result.assistant_text
+        context_state = broker_result.context_state
+        model_label = settings.model_default
+    else:
+        assistant_text = build_fetch_stub_reply(route)
+        context_state = "stub"
+        model_label = settings.model_default
+
     repo.append_message(
         user.id,
         conversation_id,
         role="assistant",
         content=assistant_text,
         route_key=route,
-        model_label=settings.model_default,
+        model_label=model_label,
         context_percent=0,
-        context_state="stub",
+        context_state=context_state,
     )
     response = RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
     ensure_session_cookie(request, response, user, settings)

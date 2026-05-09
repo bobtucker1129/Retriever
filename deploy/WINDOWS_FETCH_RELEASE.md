@@ -9,6 +9,24 @@ Use on **bggol-vesko01** only. Employees reach the app through **Cloudflare Acce
 - **Old Fetch** in the legacy app is **off** so employees are not offered two Fetch surfaces.
 - **Real model calls, provider routing, PrintSmith/docs/BooneOps from the ask box, and uploads** are **not** wired through the ask path yet. If `FETCH_ENABLED=true`, the ask action still saves the user message and appends a **fixed stub assistant reply** only.
 
+## BooneOps broker (Tailscale — disabled until you intentionally enable)
+
+**Operator runbook:** `docs/runbooks/booneops-broker-fetch-windows.md` (broker health **`GET /health`**, **`BOONEOPS_*`** env names, **`bggol-vesko01`** PowerShell verification, coexistence with port **8000**).
+
+Phase 1 intent: Fetch should match **Discord `#printsmith`** behavior **via** the BooneOps broker (`projects/booneops-bots/FETCH_HANDOFF.md`). When **`BOONEOPS_BROKER_ENABLED=false`**, RetrieverRebuild does **not** require broker URL/token/secret at startup. **`BOONEOPS_BROKER_ENABLED=true`** prepares the outbound client, but **`FETCH_ENABLED=false`** still keeps the composer closed so broker turns are not reachable in the UI; follow the **`FETCH_ENABLED`** checklist below (and merged code changes) before employees rely on BooneOps replies.
+
+Exact **Retriever Fetch** env names (mirror **`AppSettings`** in **`app/config.py`**; values only in **`D:\retriever-rebuild\env\retriever.env`**, never in chat):
+
+- **`BOONEOPS_BROKER_ENABLED`** — default **`false`**; **`true`** only after Tailscale **`GET …/health`** smoke from **`bggol-vesko01`** passes and you accept startup validation (**URL**, **Bearer**, **HMAC** required when **true**).
+- **`BOONEOPS_BROKER_URL`** — broker base (**no trailing slash**, typically `http://<tailscale-host-or-ip>:3487`).
+- **`BOONEOPS_BROKER_BEARER_TOKEN`** — must match broker-side **`BOONEOPS_BROKER_TOKEN`**.
+- **`BOONEOPS_BROKER_HMAC_SECRET`** — must match broker-side **`BOONEOPS_BROKER_SIGNING_SECRET`** ( **`X-BooneOps-Signature`** body signing).
+- **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`** — default **`true`**.
+
+Separate from broker traffic: **`FETCH_GENERAL_QUESTIONS_ENABLED`** (**`false`** = no broad internet/general LLM path; future per-user admin + **`fetch.ask_general`** per **`FETCH_TRUST_PLAN.md`**).
+
+**Smoke nuance:** with **`BOONEOPS_BROKER_ENABLED=true`**, **`/health/ready`** exposes **`checks.booneopsBroker`** as **`degraded`** today (configured-on indicator, **not** a live broker socket check). Confirm the real broker with **`GET /health`** on the **`BOONEOPS_BROKER_URL`** host from **`bggol-vesko01`** before widening employee use.
+
 ## `FETCH_ENABLED` and config validation (read this before changing env)
 
 In code today, **`FETCH_ENABLED` only unlocks the ask/composer stub**; it does **not** turn on real model routing.
@@ -61,10 +79,11 @@ The shipped **`smoke.ps1`** is aligned with **foundation** operation:
 - **`/health/live`**, **`/health/ready`**, **`/version`** succeed on **`http://127.0.0.1:8810`** (or your base URL).
 - **`/version`** JSON includes **`gitSha`** and **`environment`**, and must not echo secrets.
 - **`/health/ready`**: under current health logic, **`checks.fetch`** and **`checks.modelProvider`** are both **`disabled`** when **`FETCH_ENABLED=false`**. The smoke script asserts that—if you set **`FETCH_ENABLED=true`**, expect these checks to fail until smoke expectations are updated for a pilot.
+- **`checks.booneopsBroker`**: **`disabled`** when **`BOONEOPS_BROKER_ENABLED=false`**. If you set **`BOONEOPS_BROKER_ENABLED=true`** for integration work, **`/health/ready`** may show **`degraded`** overall because broker/tailscale rows are placeholders—still run broker **`GET /health`** manually from **`docs/runbooks/booneops-broker-fetch-windows.md`** until smoke expectations catch up.
 - **`GET /fetch`**: without a browser session, expect **401/403** (Cloudflare identity or app auth). Anonymous **200** is only for local-dev smoke override.
 - **Legacy Retriever** on **8000**: by default, smoke still checks that something answers (token authority unchanged).
 
-Manual sanity after smoke: sign in through Access, open **Fetch**, create a conversation, rename it, confirm it survives refresh. Users need Fetch module/capability access for the shell; the stub **Ask** path additionally requires **`fetch.ask_internal`** (admins typically pass) when **`FETCH_ENABLED=true`**. **Do not** expect real AI replies while **`FETCH_ENABLED=false`**; with it **`true`**, expect only the **stub** reply text, not live tools or model output.
+Manual sanity after smoke: sign in through Access, open **Fetch**, create a conversation, rename it, confirm it survives refresh. Users need active Fetch module/capability access for the shell and ask path when **`FETCH_ENABLED=true`**. **Do not** expect real AI replies while **`FETCH_ENABLED=false`**; with it **`true`**, expect only the **stub** reply text unless BooneOps broker routing is deliberately enabled.
 
 ## Verify
 
@@ -99,6 +118,8 @@ Use this when you intentionally move past the stub. Items are decision + verific
 **Config and secrets**
 
 - [ ] Production env includes valid **`MODEL_*`** / provider keys **before** **`FETCH_ENABLED=true`** if validation requires them.
+- [ ] BooneOps broker: **`BOONEOPS_*`** aligns with **`projects/booneops-bots/BROKER.md`** / **`FETCH_HANDOFF.md`**; Tailscale **`GET /health`** from **`bggol-vesko01`** succeeded before **`BOONEOPS_BROKER_ENABLED=true`** (`docs/runbooks/booneops-broker-fetch-windows.md`).
+- [ ] **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** stays the default until the general LLM rollout is deliberate (broker-only BooneOps/`#printsmith`-style lanes do **not** need this flip).
 - [ ] PrintSmith token authority mode still matches coexistence plan (**old authority** on **8000** vs future cutover in **`PRINTSMITH_TOKEN_AUTHORITY.md`**).
 - [ ] No accidental use of dev identity or placeholder cookie secrets in production.
 

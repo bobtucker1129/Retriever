@@ -75,12 +75,13 @@ Completed:
 - Fixed the `cloudflared` Windows service command so it runs `C:\cloudflared\cloudflared.exe --config C:\cloudflared\config.yml tunnel run retriever`; browser test now shows Cloudflare Access first, then reaches Retriever successfully.
 - Disabled old Fetch in the old Retriever runtime, clearing the duplicate Fetch surface while old Retriever continues to own PrePress, DSF, and PrintSmith token authority.
 - Built the first real new-Fetch slice: DB-backed conversation creation, listing, selection, rename, soft delete, message storage primitives, Fetch access gating, and a disabled-safe shell that keeps model/tool routing locked.
-- Built the first safe ask-path skeleton: ask submission is gated by active user, Fetch shell access, `FETCH_ENABLED`, and `fetch.ask_internal`; enabled asks write a deterministic stub reply only, with no model, PrintSmith, docs, BooneOps, upload, or delayed-report calls.
+- Built the first safe ask-path skeleton: ask submission is gated by active user, Fetch shell access, and `FETCH_ENABLED`; enabled asks write a deterministic stub reply only, with no model, PrintSmith, docs, BooneOps, upload, or delayed-report calls.
 - Hardened Windows deploy/smoke prep for the Fetch release: migration `0002_fetch_conversations` checks, explicit `RetrieverRebuild`/port `8810` guardrails, Fetch/model-off smoke assertions, and a read-only old Retriever port `8000` liveness check.
 - Verified the new Fetch slices locally: 65 tests passed, local route smoke passed, and edited files have no linter errors.
-- Added a gated **ask path** (`POST /fetch/conversations/{id}/ask`): requires the same shell access as before, plus `FETCH_ENABLED` (env) and **`fetch.ask_internal`** (capability; admins still pass via existing `has_capability` rules). When Fetch is off, the route redirects without persisting a user message. When Fetch is on but provider routing is not wired, it saves the user turn and appends a fixed stub assistant reply—no outbound model or tool calls.
+- Added a gated **ask path** (`POST /fetch/conversations/{id}/ask`): requires active Fetch shell access plus `FETCH_ENABLED` (env). When Fetch is off, the route redirects without persisting a user message. When Fetch is on but provider routing is not wired, it saves the user turn and appends a fixed stub assistant reply—no outbound model or tool calls.
 - **Fetch local routing (stub):** `classify_fetch_intent` assigns deterministic route labels (`local`, slash `help`/`sources`/`health`, `email_cleanup`, `printsmith_candidate`, `docs_candidate`, `general_candidate`, `blocked_write`, `unknown`). The ask handler persists those labels as `route_key` and returns route-specific offline copy; still no providers, PrintSmith, docs APIs, BooneOps, uploads, or web calls.
 - Deployed commit `89ecd60` to `RetrieverRebuild` on `bggol-vesko01`; `smoke.ps1` passed, `RetrieverRebuild` is running, and legacy `Retriever` is still running.
+- **BooneOps broker (Phase 1, default off):** Optional `BOONEOPS_BROKER_ENABLED` path calls `POST /v1/booneops/message` with bearer token and `X-BooneOps-Signature: sha256=…` over the raw JSON body per `projects/booneops-bots` contract. When enabled with `FETCH_ENABLED`, `printsmith_candidate` and `docs_candidate` ask turns use the broker; `general_candidate` stays on the stub unless `FETCH_GENERAL_QUESTIONS_ENABLED`. Retriever maps users to broker `role`/`botId` from `is_admin`, `booneops_level` (`medium` → super bot), and otherwise production bot. Tests use mocked HTTP only.
 
 ## Active Architecture Artifacts
 
@@ -99,7 +100,8 @@ Completed:
 - `CONFIG_AND_HEALTH_CONTRACT.md`: environment, validation, health, version, smoke, and redaction contract.
 - `AUTH_SHELL_BUILD_PLAN.md`: selected first framework/runtime and build slices for the Cloudflare auth shell.
 - `LOCAL_RUNBOOK.md`: local test/start/smoke instructions and first browser-smoke path.
-- `deploy/WINDOWS_FETCH_RELEASE.md`: Windows production deploy for **RetrieverRebuild**, migration **0002**, **`smoke.ps1`**, coexistence with port **8000**, **`FETCH_ENABLED`** vs validation, and future model enablement checklist.
+- `deploy/WINDOWS_FETCH_RELEASE.md`: Windows production deploy for **RetrieverRebuild**, migration **0002**, **`smoke.ps1`**, coexistence with port **8000**, **`FETCH_ENABLED`** vs validation, BooneOps **`BOONEOPS_*`** / **`FETCH_GENERAL_QUESTIONS_ENABLED`** notes, plus future model enablement checklist.
+- `docs/runbooks/booneops-broker-fetch-windows.md`: **`GET /health`** on broker, **`BOONEOPS_*`** / **`AppSettings`**, **`bggol-vesko01`** PowerShell smoke, **8810** vs legacy **8000**.
 - `PRODUCT.md`: Impeccable product context for Retriever UI work.
 - `SHARED_LAYOUT_SHAPE.md`: confirmed Impeccable shape brief for the shared app shell.
 - `FETCH_UI_CONTINUITY.md`: current Fetch visual/layout continuity target for the first new Fetch skeleton.
@@ -169,6 +171,7 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 - **Where it runs:** **`RetrieverRebuild`** (NSSM) on **`bggol-vesko01`**, **`127.0.0.1:8810`**, public entry **`https://retriever.boonegraphics.net`** via Cloudflare Access and Tunnel.
 - **What stays on the old service:** **`Retriever`** on port **`8000`** continues PrePress, DSF, and PrintSmith REST token authority until an explicit cutover; Fetch releases must not touch that service.
+- **BooneOps broker (docs-first):** **`docs/runbooks/booneops-broker-fetch-windows.md`** walks **`BOONEOPS_BROKER_ENABLED`**, **`BOONEOPS_BROKER_URL`**, **`BOONEOPS_BROKER_BEARER_TOKEN`**, **`BOONEOPS_BROKER_HMAC_SECRET`**, optional **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`**, broker **`GET /health`** from **`bggol-vesko01`**, Fetch **`/health/ready`** on **`8810`**, and keeping **`FETCH_ENABLED=false`** and **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** until deliberate rollout. Goal: **`#printsmith`-equivalent BooneOps** over broker, **not** general internet LLM.
 - **What “Fetch foundation” means:** conversation list/create/rename/delete in MySQL (**`0002`**), optional **stub** ask only when **`FETCH_ENABLED=true`** (still no real model or tool routing). **`FETCH_ENABLED=false`** remains the recommended production default: conversation CRUD still works; the ask composer stays off; post-deploy **`smoke.ps1`** expects **`fetch`** and **`modelProvider`** **disabled** in **`/health/ready`**. If **`FETCH_ENABLED=true`**, startup validation **still requires** model env vars even though code only runs the stub—see the runbook.
 - **Before real models/tools:** follow the enablement checklist at the bottom of **`deploy/WINDOWS_FETCH_RELEASE.md`** together with **`FETCH_TRUST_PLAN.md`**.
 

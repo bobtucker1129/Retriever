@@ -95,6 +95,10 @@ When Boone MySQL or a local MySQL test database is available:
 
 Then restart the app and smoke the same routes.
 
+## BooneOps broker and general LLM (production reference)
+
+Windows operator details live in **`docs/runbooks/booneops-broker-fetch-windows.md`** — **`BOONEOPS_BROKER_ENABLED`**, **`BOONEOPS_BROKER_URL`**, **`BOONEOPS_BROKER_BEARER_TOKEN`**, **`BOONEOPS_BROKER_HMAC_SECRET`**, **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`**. **`FETCH_GENERAL_QUESTIONS_ENABLED`** should stay **`false`** until general internet answers ship behind admin + **`fetch.ask_general`** (**`FETCH_TRUST_PLAN.md`**).
+
 ## Do Not Do Yet
 
 - Do not set **`FETCH_ENABLED=true`** in **production** without **`deploy/WINDOWS_FETCH_RELEASE.md`**: validation will require model settings even for the stub-only path.

@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from typing import Final
 
+from app.config import AppSettings
+
 # Stable public set used by classification and tests.
 FETCH_ROUTE_LABELS: Final[tuple[str, ...]] = (
     "local",
@@ -115,6 +117,17 @@ def classify_fetch_intent(text: str) -> str:
         return "local"
 
     return "unknown"
+
+
+def should_delegate_ask_to_booneops_broker(route: str, settings: AppSettings) -> bool:
+    """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``)."""
+    if not settings.booneops_broker_enabled:
+        return False
+    if route in ("printsmith_candidate", "docs_candidate"):
+        return True
+    if route == "general_candidate" and settings.fetch_general_questions_enabled:
+        return True
+    return False
 
 
 _STATUS_OFFLINE: Final[str] = (

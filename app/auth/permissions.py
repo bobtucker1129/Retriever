@@ -14,6 +14,7 @@ class CurrentUser:
     capabilities: frozenset[str] = field(default_factory=frozenset)
     modules: frozenset[str] = field(default_factory=frozenset)
     is_admin: bool = False
+    booneops_level: str = "none"
 
     def has_capability(self, capability: str) -> bool:
         return self.is_admin or capability in self.capabilities
@@ -28,8 +29,6 @@ class CurrentUser:
         return self.has_module("fetch") or self.has_capability("fetch.access")
 
     def can_submit_fetch_ask(self) -> bool:
-        """POST /fetch/.../ask; shell access alone is not enough."""
-        if self.status != "active":
-            return False
-        return self.has_capability("fetch.ask_internal")
+        """POST /fetch/.../ask for the #printsmith-equivalent internal lane."""
+        return self.can_open_fetch_shell()
 

@@ -14,8 +14,16 @@ Old Fetch is not a compatibility target. It does not work well enough, and nobod
 
 This section is what **shipping code does today** on **new Retriever** (**`RetrieverRebuild`** on Windows **`bggol-vesko01`**, **`8810`**, Cloudflare **`retriever.boonegraphics.net`**). The rest of this document is still the **target** trust and routing contract.
 
+### BooneOps broker vs general internet answers (planned wiring)
+
+Phase 1 product intent: **`#printsmith`-style BooneOps turns** ride the **BooneOps broker** over Tailscale (same contract as **`projects/booneops-bots/FETCH_HANDOFF.md`**). Operators hold integration **`BOONEOPS_BROKER_ENABLED=false`** until **`docs/runbooks/booneops-broker-fetch-windows.md`** Tailscale **`GET /health`** checks pass.
+
+**Separate lane:** **`FETCH_GENERAL_QUESTIONS_ENABLED`** (**`fetch.general_questions_enabled`**) gates **general outside-world LLM** use. Leave it **`false`** until a later rollout pairs admin policy with **`fetch.ask_general`**. That general toggle does **not** need to turn on for internal BooneOps/`#printsmith`-equivalent routing.
+
+**Combined gate:** even with the broker configured, employee-visible BooneOps replies require the normal ask gates (**active Fetch access**, **`FETCH_ENABLED`**, broker routing implementation live—not this doc’s assumption until code ships).
+
 - **In service:** Fetch **shell** for users with Fetch module or capability access; **conversation CRUD** in **`retriever_cloudflare`** after migration **`0002_fetch_conversations`**.
-- **Ask path:** **`POST /fetch/conversations/{id}/ask`** is **gated** by active user, Fetch shell access, **`FETCH_ENABLED`**, and **`fetch.ask_internal`** (admins follow existing capability rules). When **`FETCH_ENABLED` is off**, the handler **redirects** without saving a user message. When on, it **persists** the user turn and appends a **fixed stub assistant reply**—**no** live **LLM**, **PrintSmith**, **docs**, **BooneOps**, **upload**, or **delayed-report** calls.
+- **Ask path:** **`POST /fetch/conversations/{id}/ask`** is **gated** by active user, Fetch shell access, and **`FETCH_ENABLED`**. When **`FETCH_ENABLED` is off**, the handler **redirects** without saving a user message. When on, it **persists** the user turn and appends a **fixed stub assistant reply**—**no** live **LLM**, **PrintSmith**, **docs**, **BooneOps**, **upload**, or **delayed-report** calls *(until broker/model routing replaces the stub in code)*.
 - **`FETCH_ENABLED` caveat:** In code, that flag only unlocks the **stub** behavior, but **startup validation** still **requires** **`MODEL_PROVIDER`**, **`MODEL_DEFAULT`**, and (for Anthropic) **`ANTHROPIC_API_KEY`** whenever **`FETCH_ENABLED=true`**. **Production** should keep **`FETCH_ENABLED=false`** until operators follow **`deploy/WINDOWS_FETCH_RELEASE.md`** for a deliberate enablement or pilot.
 - **Legacy coexistence:** **Old Retriever** on port **`8000`** remains PrintSmith token authority and PrePress/DSF host; **old Fetch** is **off**.
 
@@ -52,7 +60,7 @@ Prefer explicit routing over clever keyword guessing. The user should be able to
 | Uploaded files | local Fetch | Keep uploads local to the conversation/private library unless a later explicit policy allows otherwise. |
 | Email cleanup | local Fetch | Ephemeral helper; do not write the cleaned email into conversation history by default. |
 | Internal Fetch library/private sources | local Fetch | Use Retriever-owned retrieval and source display. |
-| BooneOps Light | BooneOps broker when needed | Read-only Boone operational helper. |
+| BooneOps Light / `#printsmith` equivalent | BooneOps broker (Tailscale) | Operational helper via OpenClaw Phase 1 contract; **`BOONEOPS_BROKER_*`** env on Fetch, **`projects/booneops-bots/BROKER.md`** on OpenClaw. |
 | BooneOps Medium | BooneOps broker plus Retriever scheduled/reporting features | Trusted reporting tier, not raw cron or server access. |
 | General outside-world questions | general LLM path | Only when admin setting and user capability allow it. |
 | Estimating automation | out of scope | `/printsmith-estimate` is not a Retriever Fetch route. |

@@ -9,6 +9,7 @@ import app.routes.fetch as fetch_routes
 from app.config import AppSettings
 from app.dependencies import settings_dependency
 from app.db.repositories.fetch import FetchRepository
+from app.fetch.booneops_broker import BooneOpsBrokerTurnResult
 from app.main import create_app
 from tests.fakes import FakeDb
 
@@ -56,6 +57,21 @@ def make_fetch_enabled_settings(
             }
         )
     return AppSettings(**kwargs)
+
+
+def make_fetch_broker_enabled_settings(
+    email: str = "asker@boonegraphics.net",
+    with_db: bool = True,
+) -> AppSettings:
+    base = make_fetch_enabled_settings(email=email, with_db=with_db)
+    return base.model_copy(
+        update={
+            "booneops_broker_enabled": True,
+            "booneops_broker_url": "http://broker.test.invalid:3487",
+            "booneops_broker_bearer_token": "test-bearer-token",
+            "booneops_broker_hmac_secret": "test-hmac-secret-value",
+        }
+    )
 
 
 def make_client(settings: AppSettings) -> TestClient:
@@ -210,12 +226,12 @@ def test_fetch_post_ask_redirects_without_message_when_fetch_disabled(monkeypatc
     assert len(db.fetch_messages) == 0
 
 
-def test_fetch_post_ask_forbidden_without_ask_capability(monkeypatch) -> None:
+def test_fetch_post_ask_allows_fetch_module_without_extra_ask_capability(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
     db.modules_by_user.setdefault(user_id, set()).add("fetch")
-    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="No ask cap")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Fetch module")
 
     settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
@@ -224,11 +240,12 @@ def test_fetch_post_ask_forbidden_without_ask_capability(monkeypatch) -> None:
 
     response = client.post(
         f"/fetch/conversations/{conv.conversation_id}/ask",
-        data={"question": "Should not persist"},
+        data={"question": "What is DSF?"},
     )
 
-    assert response.status_code == 403
-    assert len(db.fetch_messages) == 0
+    assert response.status_code == 303
+    assert len(db.fetch_messages) == 2
+    assert db.fetch_messages[0]["content"] == "What is DSF?"
 
 
 def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) -> None:
@@ -376,6 +393,96 @@ def test_fetch_shell_shows_routing_not_connected_when_fetch_enabled(monkeypatch)
     assert response.status_code == 200
     assert "Routing: not connected" in response.text
 
+
+def test_fetch_shell_shows_booneops_when_broker_enabled(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    FetchRepository(db.connection).create_conversation(user_id=user_id, title="Lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert "Routing: BooneOps broker" in response.text
+    assert "Path: booneops" in response.text
+
+
+def test_fetch_post_ask_printsmith_calls_broker_when_enabled(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Broker lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("Fetch ask must use broker client, not raw httpx")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult("Anchored BooneOps reply text.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What is PrintSmith DSF?"},
+    )
+
+    assert response.status_code == 303
+    assert len(db.fetch_messages) == 2
+    assert db.fetch_messages[1]["role"] == "assistant"
+    assert db.fetch_messages[1]["content"] == "Anchored BooneOps reply text."
+    assert db.fetch_messages[1]["context_state"] == "booneops"
+    assert "stub" not in db.fetch_messages[1]["content"].lower()
+
+
+def test_fetch_post_ask_broker_failure_keeps_conversation_usable(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Broker lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult(
+            "Fetch could not reach the BooneOps broker (network error).\n\n"
+            "Your message was saved.",
+            "booneops_error",
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "PrintSmith question"},
+    )
+
+    assert response.status_code == 303
+    assert db.fetch_messages[0]["role"] == "user"
+    assert db.fetch_messages[1]["role"] == "assistant"
+    assert "saved" in db.fetch_messages[1]["content"].lower()
+    assert db.fetch_messages[1]["context_state"] == "booneops_error"
 
 def test_home_hides_fetch_nav_without_access(monkeypatch) -> None:
     db = FakeDb()
