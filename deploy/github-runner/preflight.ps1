@@ -39,13 +39,13 @@ foreach ($must in @($AppBase, 'D:\retriever-rebuild\bin', 'D:\retriever-rebuild\
 Write-PreflightOk "App directories and env file exist under D:\retriever-rebuild."
 
 if (-not (Test-Path $DeployScript)) {
-    Write-PreflightFail "deploy.ps1 not found at $DeployScript — copy repo deploy scripts into bin\."
+    Write-PreflightFail "deploy.ps1 not found at $DeployScript - copy repo deploy scripts into bin\."
 }
 Write-PreflightOk "deploy.ps1 is present."
 
 $git = Get-Command git.exe -ErrorAction SilentlyContinue
 if (-not $git) {
-    Write-PreflightFail 'git.exe is not on PATH (GitHub runner install adds it — repair runner or install Git).'
+    Write-PreflightFail 'git.exe is not on PATH (GitHub runner install adds it - repair runner or install Git).'
 }
 Write-PreflightOk ('git.exe: ' + $git.Source)
 
@@ -60,7 +60,7 @@ else {
 }
 
 if ($svcLegacy) {
-    Write-PreflightOk "Legacy 'Retriever' service is present ($($svcLegacy.Status)) — this script does not stop or restart it."
+    Write-PreflightOk "Legacy 'Retriever' service is present ($($svcLegacy.Status)) - this script does not stop or restart it."
 }
 else {
     Write-Host "::warning::Legacy 'Retriever' service was not found; smoke legacy probe may fail unless SKIP_LEGACY."
