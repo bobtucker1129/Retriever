@@ -71,7 +71,7 @@ status: $Status
 function Invoke-Git {
     param([string[]]$GitArgs)
     & git @GitArgs
-    if ($LASTEXITCODE -ne 0) { throw "git $($GitArgs -join ' ') failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { Write-Error "git $($GitArgs -join ' ') failed (exit $LASTEXITCODE)"; exit 1 }
 }
 
 function Set-Junction {
@@ -106,7 +106,7 @@ function Run-PythonScript {
 function Assert-NonLegacyServiceName {
     param([string]$Name)
     if ($Name -eq $LegacyRetrieverServiceName) {
-        throw "Refusing to operate on legacy service '$LegacyRetrieverServiceName'. Use '$ServiceName' (RetrieverRebuild) on port $RetrieverRebuildPort only."
+        Write-Error "Refusing to operate on legacy service '$LegacyRetrieverServiceName'. Use '$ServiceName' (RetrieverRebuild) on port $RetrieverRebuildPort only."; exit 1
     }
 }
 
@@ -151,9 +151,9 @@ Write-Log "=== Deploy starting: ref=$GitRef ==="
 Write-Log "Target service: $ServiceName (port $RetrieverRebuildPort). Legacy $LegacyRetrieverServiceName on port $LegacyRetrieverPort is not modified by this script."
 
 foreach ($dir in @($AppBase, $AppReleases)) {
-    if (-not (Test-Path $dir)) { throw "$dir does not exist. Run VM_SETUP_RUNBOOK first." }
+    if (-not (Test-Path $dir)) { Write-Error "$dir does not exist. Run VM_SETUP_RUNBOOK first."; exit 1 }
 }
-if (-not (Test-Path $EnvFile)) { throw "Env file not found: $EnvFile" }
+if (-not (Test-Path $EnvFile)) { Write-Error "Env file not found: $EnvFile"; exit 1 }
 if (-not (Test-Path $LogDir))  { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 
 # ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ $gitOutput = & git -C $AppRepo rev-parse --verify "$GitRef^{commit}" 2>$null
 if ($LASTEXITCODE -eq 0 -and $gitOutput) {
     $fullSha = $gitOutput.Trim()
 }
-if (-not $fullSha) { throw "Could not resolve ref '$GitRef' to a commit in $AppRepo" }
+if (-not $fullSha) { Write-Error "Could not resolve ref '$GitRef' to a commit in $AppRepo"; exit 1 }
 Write-Log "Resolved $GitRef -> $fullSha"
 
 $releaseDir = "$AppReleases\$fullSha"
@@ -214,13 +214,13 @@ if (-not (Test-Path $releaseDir)) {
     $cloneOutput = & git clone $AppRepo $releaseDir 2>&1 | Out-String
     $cloneExit = $LASTEXITCODE
     if ($cloneOutput.Trim()) { Write-Log "git clone: $($cloneOutput.Trim())" }
-    if ($cloneExit -ne 0) { throw "git clone failed (exit $cloneExit)." }
+    if ($cloneExit -ne 0) { Write-Error "git clone failed (exit $cloneExit)."; exit 1 }
 
     Write-Log "Checking out $fullSha ..."
     $coOutput = & git -C $releaseDir checkout -f $fullSha 2>&1 | Out-String
     $coExit = $LASTEXITCODE
     if ($coOutput.Trim()) { Write-Log "git checkout: $($coOutput.Trim())" }
-    if ($coExit -ne 0) { throw "git checkout failed (exit $coExit)." }
+    if ($coExit -ne 0) { Write-Error "git checkout failed (exit $coExit)."; exit 1 }
 
     # Strip .git so the release is an immutable source snapshot
     Remove-Item -Recurse -Force "$releaseDir\.git" -ErrorAction SilentlyContinue
@@ -235,7 +235,7 @@ if (-not (Test-Path $releaseDir)) {
     # Verify required subdirectories made it
     foreach ($must in @('pyproject.toml', 'app\main.py', 'app\static', 'app\templates')) {
         if (-not (Test-Path "$releaseDir\$must")) {
-            throw "Source extraction did not produce $must at $releaseDir."
+            Write-Error "Source extraction did not produce $must at $releaseDir."; exit 1
         }
     }
     Write-Log "Source extracted to release directory."
@@ -256,7 +256,7 @@ if (-not (Test-Path $releaseDir)) {
     if (-not $pythonExe -or -not (Test-Path $pythonExe)) {
         $pythonExe = "D:\Repository\pm-review-dashboard-ContexEng\venv\Scripts\python.exe"
     }
-    if (-not (Test-Path $pythonExe)) { throw "python.exe not found." }
+    if (-not (Test-Path $pythonExe)) { Write-Error "python.exe not found."; exit 1 }
     Write-Log "Python: $pythonExe"
 
     # ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ if (-not (Test-Path $releaseDir)) {
     # ---------------------------------------------------------------------------
     Write-Log "Creating virtual environment ..."
     & $pythonExe -m venv "$releaseDir\.venv"
-    if ($LASTEXITCODE -ne 0) { throw "venv creation failed." }
+    if ($LASTEXITCODE -ne 0) { Write-Error "venv creation failed."; exit 1 }
 
     $venvPython = "$releaseDir\.venv\Scripts\python.exe"
     & $venvPython -m pip install --quiet --upgrade pip
@@ -278,7 +278,7 @@ if (-not (Test-Path $releaseDir)) {
     } finally {
         Pop-Location
     }
-    if ($pipExit -ne 0) { throw "pip install failed (exit $pipExit)." }
+    if ($pipExit -ne 0) { Write-Error "pip install failed (exit $pipExit)."; exit 1 }
     Write-Log "Dependencies installed."
 
     # ---------------------------------------------------------------------------
@@ -295,7 +295,7 @@ if (-not (Test-Path $releaseDir)) {
     } finally {
         Pop-Location
     }
-    if ($importExit -ne 0) { throw "Import check failed. Release is broken." }
+    if ($importExit -ne 0) { Write-Error "Import check failed. Release is broken."; exit 1 }
     Write-Log "Import check passed."
 
     # ---------------------------------------------------------------------------
@@ -327,7 +327,7 @@ except (ValidationError, ValueError) as e:
     raise SystemExit(1)
 '@
 $configResult = Run-PythonScript -PythonExe $venvPython -Script $configScript -WorkDir $releaseDir
-if ($configResult -ne 0) { throw "Config validation failed. Fix $EnvFile before deploying." }
+if ($configResult -ne 0) { Write-Error "Config validation failed. Fix $EnvFile before deploying."; exit 1 }
 Write-Log "Config validation passed."
 
 # ---------------------------------------------------------------------------
@@ -389,10 +389,10 @@ for name, count in run_migrations(include_seeds=True):
     print(f"applied {name}: {count} statements")
 '@
     $migResult = Run-PythonScript -PythonExe $venvPython -Script $migScript -WorkDir $releaseDir
-    if ($migResult -ne 0) { throw "Migrations failed." }
+    if ($migResult -ne 0) { Write-Error "Migrations failed."; exit 1 }
     Write-Log "Migrations complete. Verifying 0002 Fetch conversation migration ..."
     $verifyMig = Run-PythonScript -PythonExe $venvPython -Script $migrationVerifyScript -WorkDir $releaseDir
-    if ($verifyMig -ne 0) { throw "Post-migration verification failed (expect 0002_fetch_conversations + tables)." }
+    if ($verifyMig -ne 0) { Write-Error "Post-migration verification failed (expect 0002_fetch_conversations + tables)."; exit 1 }
     Write-Log "Migration verification passed."
 } else {
     Write-Log "Skipping migrations (set RETRIEVER_RUN_MIGRATIONS=true to run on next deploy)."
@@ -402,7 +402,7 @@ if ($env:RETRIEVER_ASSERT_MIGRATION_0002 -eq "true") {
     Write-Log "RETRIEVER_ASSERT_MIGRATION_0002: verifying 0002 is present before junction swap ..."
     $assertMig = Run-PythonScript -PythonExe $venvPython -Script $migrationVerifyScript -WorkDir $releaseDir
     if ($assertMig -ne 0) {
-        throw "Database missing 0002_fetch_conversations. Run deploy with RETRIEVER_RUN_MIGRATIONS=true or apply migrations, then retry."
+        Write-Error "Database missing 0002_fetch_conversations. Run deploy with RETRIEVER_RUN_MIGRATIONS=true or apply migrations, then retry."; exit 1
     }
     Write-Log "Assert migration 0002: OK."
 }
@@ -434,7 +434,7 @@ if ($svc) {
     $svc.Refresh()
     if ($svc.Status -ne 'Running') {
         Write-DeployRecord -Status "service-not-running" -Sha $fullSha -Prev $prevSha
-        throw "Service is not running after restart."
+        Write-Error "Service is not running after restart."; exit 1
     }
     Write-Log "Service restarted and running."
 } else {
@@ -453,7 +453,7 @@ if ($svcCheck -and $svcCheck.Status -eq 'Running') {
         Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
         Write-Log "Health check failed. Attempting auto-rollback ..."
         & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
-        throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
+        Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
     }
 
     Write-Log "Running smoke check ..."
@@ -462,7 +462,7 @@ if ($svcCheck -and $svcCheck.Status -eq 'Running') {
         Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
         Write-Log "Smoke check failed. Attempting auto-rollback ..."
         & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
-        throw "Deployment failed. Auto-rollback attempted. Check $DeployLog"
+        Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
     }
 }
 
