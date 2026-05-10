@@ -71,13 +71,11 @@ jobs:
           $ref = '${{ inputs.git_ref }}'.Trim()
           if (-not $ref) { Write-Error 'git_ref input is empty.'; exit 1 }
           Write-Host "=== GitHub Actions: invoking server deploy.ps1 Ref=$ref ==="
-          Write-Host "Target: RetrieverRebuild / port 8810 only — legacy Retriever on 8000 is not managed by deploy.ps1."
+          Write-Host "Target: RetrieverRebuild / port 8810 only - legacy Retriever on 8000 is not managed by deploy.ps1."
           $deployScript = 'D:\retriever-rebuild\bin\deploy.ps1'
           if (-not (Test-Path $deployScript)) {
             Write-Error "Deploy script not found at $deployScript. Copy repo deploy\*.ps1 per deploy/VM_SETUP_RUNBOOK.md."
             exit 1
           }
-          $nestedArgs = @('-ExecutionPolicy', 'Bypass', '-File', $deployScript, $ref)
-          Write-Host "& powershell $($nestedArgs -join ' ')"
-          & powershell @nestedArgs
+          powershell -ExecutionPolicy Bypass -File $deployScript $ref
           exit $LASTEXITCODE
