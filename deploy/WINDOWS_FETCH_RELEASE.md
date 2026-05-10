@@ -2,6 +2,8 @@
 
 Use on **bggol-vesko01** only. Employees reach the app through **Cloudflare Access** at **https://retriever.boonegraphics.net** (tunnel to `127.0.0.1:8810`). This path touches **RetrieverRebuild** on port **8810** and **must not** stop, reinstall, or retarget the legacy **Retriever** Windows service or port **8000**.
 
+For **manual GitHub Actions deploy** from **`bobtucker1129/Retriever`** (workflow dispatch, no repo secrets — server-side **`deploy.ps1`** only): see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`** (`preflight.ps1`, self-hosted runner labels **`self-hosted`, `Windows`, `RetrieverRebuild`**).
+
 ## What this release is (plain English)
 
 - **New Retriever** (**RetrieverRebuild**) is the auth shell, admin tools, and **new Fetch**: conversation list, rename, soft delete, and messages stored in MySQL after migration **0002**.

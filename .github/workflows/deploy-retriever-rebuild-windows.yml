@@ -1,0 +1,83 @@
+# Manual deploy for RetrieverRebuild on Windows Server (bggol-vesko01).
+#
+# Targets ONLY the NSSM service "RetrieverRebuild" / port 8810 via D:\retriever-rebuild\bin\deploy.ps1.
+# This workflow does NOT stop, reinstall, or reconfigure legacy "Retriever" on port 8000.
+#
+# Requires a self-hosted Windows runner on bggol-vesko01 with labels matching `runs-on` below.
+# No repository secrets are used; production credentials live only in server-side files.
+#
+name: Deploy RetrieverRebuild (Windows self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref for RetrieverRebuild (branch, tag, or full SHA)
+        required: true
+        type: string
+        default: main
+      run_migrations:
+        description: Run DB migrations on this deploy (RETRIEVER_RUN_MIGRATIONS=true). Use once per new migration.
+        required: false
+        type: boolean
+        default: false
+      assert_migration_0002:
+        description: Fail early if migration 0002 is missing (RETRIEVER_ASSERT_MIGRATION_0002=true)
+        required: false
+        type: boolean
+        default: false
+      skip_legacy_liveness:
+        description: Skip read-only probe of legacy Retriever on localhost:8000 (RETRIEVER_SMOKE_SKIP_LEGACY=true)
+        required: false
+        type: boolean
+        default: false
+
+# One deploy at a time on this host; never cancel an in-flight install.
+concurrency:
+  group: retriever-rebuild-deploy-bggol-vesko01
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: RetrieverRebuild-only deploy via server script
+    runs-on:
+      - self-hosted
+      - Windows
+      - RetrieverRebuild
+    defaults:
+      run:
+        shell: powershell
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (preflight tooling only)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: true
+          sparse-checkout: deploy/github-runner
+
+      - name: Runner preflight
+        working-directory: ${{ github.workspace }}
+        run: |
+          & .\deploy\github-runner\preflight.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
+        env:
+          RETRIEVER_RUN_MIGRATIONS: ${{ inputs.run_migrations && 'true' || '' }}
+          RETRIEVER_ASSERT_MIGRATION_0002: ${{ inputs.assert_migration_0002 && 'true' || '' }}
+          RETRIEVER_SMOKE_SKIP_LEGACY: ${{ inputs.skip_legacy_liveness && 'true' || '' }}
+        run: |
+          $ref = '${{ inputs.git_ref }}'.Trim()
+          if (-not $ref) { Write-Error 'git_ref input is empty.'; exit 1 }
+          Write-Host "=== GitHub Actions: invoking server deploy.ps1 Ref=$ref ==="
+          Write-Host "Target: RetrieverRebuild / port 8810 only — legacy Retriever on 8000 is not managed by deploy.ps1."
+          $deployScript = 'D:\retriever-rebuild\bin\deploy.ps1'
+          if (-not (Test-Path $deployScript)) {
+            Write-Error "Deploy script not found at $deployScript. Copy repo deploy\*.ps1 per deploy/VM_SETUP_RUNBOOK.md."
+            exit 1
+          }
+          $nestedArgs = @('-ExecutionPolicy', 'Bypass', '-File', $deployScript, $ref)
+          Write-Host "& powershell $($nestedArgs -join ' ')"
+          & powershell @nestedArgs
+          exit $LASTEXITCODE
