@@ -4,6 +4,16 @@ Tangents, deferred decisions, and ideas not on the active session goal.
 
 ---
 
+## OQ-10: RetrieverOps / Fetch-dedicated broker lane
+
+**Parked:** 2026-05-11  
+**Goal:** Long-term, give Retriever Fetch a **dedicated broker lane** (working name: RetrieverOps or Fetch-specific endpoint) with **its own logs**, **queue or concurrency limits**, **no instruction-update or write actions**, and **reduced competition** with Telegram/Discord BooneOps traffic.  
+**Constraints:** Must fit the existing trust model (read-heavy employee helper); evolves after observability is in place.  
+**Non-goal:** Do **not** treat this as “stand up a full **BooneOps clone** immediately.”  
+**Dependency:** **Correlation logging** across Fetch ask → broker → downstream should land **before** leaning on this lane for heavy tests or broad rollout.
+
+---
+
 ## OQ-1: Final Production Host
 
 **Parked:** 2026-05-04  

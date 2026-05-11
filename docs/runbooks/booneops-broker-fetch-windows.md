@@ -10,6 +10,10 @@ Retriever Fetch should behave like **Discord `#printsmith` via the BooneOps brok
 
 **Broad internet / general-purpose LLM** is a separate lane and stays **off** here: leave **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** until a deliberate per-account policy uses capability **`fetch.ask_general`** plus admin toggles (`FETCH_TRUST_PLAN.md`). Internal PrintSmith-like traffic goes to the broker **only** when **`BOONEOPS_BROKER_ENABLED=true`** **and** the ask path is allowed (**active Fetch access**, **`FETCH_ENABLED=true`**, etc.—see Windows fetch release notes).
 
+### Identity / persona (pilot)
+
+Live pilot expectation: **Retriever Fetch** speaks as **BooneOps**—the **employee-facing** Boone operations helper—not **private LordTate**. If replies sound like the wrong audience or route oddly, **verify broker persona and routing** on the OpenClaw/broker side against `FETCH_TRUST_PLAN.md` (pilot findings).
+
 Store production values only in **`D:\retriever-rebuild\env\retriever.env`**. Do **not** paste secrets into tickets or chat.
 
 ## Coexistence (do not regress legacy Retriever)

@@ -115,6 +115,7 @@ Completed:
 
 Resolved:
 
+- **Fetch pilot — persona:** Retriever Fetch should present as **BooneOps** (employee-facing operations identity), not private LordTate.
 - `projects/Retriever/` is the old LAN repo reference copy, not the rebuild workspace.
 - `projects/retriever-rebuild/` is the planning/build home for the new Retriever.
 - Old Fetch on `bggol-vesko01` should be turned off via a feature flag. Nobody uses it, and disabling it clears the way for the new Fetch without confusing users.
@@ -160,6 +161,8 @@ Resolved:
 
 Open:
 
+- **Fetch pilot — `/docs` presentation:** Pilot replies looked like **raw retrieval dumps**; needs **summary + source cleanup** before wider rollout (`FETCH_TRUST_PLAN.md` pilot section).
+- **RetrieverOps / Fetch-specific broker lane:** Deferred direction—**separate** lane (logs, limits, no instruction-update/write actions, less competition with chat surfaces)—**not** “clone BooneOps now.” See **`PARKED.md`**.
 - **Automated feedback:** exact **artifact format** and size cap for Phase A; whether Phase B public URL checks run on **every push** or a slower cadence; **rotation owner** for the Cloudflare Access service token on `bggol-vesko01`.
 - Whether general outside-world Fetch answers are enabled for all active users at launch or only beta users.
 - How to bind Cloudflare identity safely without allowing direct LAN header spoofing.
@@ -183,6 +186,8 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 - **Before real models/tools:** follow the enablement checklist at the bottom of **`deploy/WINDOWS_FETCH_RELEASE.md`** together with **`FETCH_TRUST_PLAN.md`**.
 
 ## Next Recommended Session
+
+**Fetch next step (pilot follow-up):** prioritize **correlation logging** across **Fetch ask → broker → downstream** before heavier integration tests or wider rollout; gate expands only after traces are usable.
 
 **Close the automated feedback loop (Phase A), then stage B–D.**
 

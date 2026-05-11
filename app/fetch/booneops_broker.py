@@ -101,6 +101,43 @@ def serialize_broker_json(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
+def _normalize_broker_error_message(raw: str, *, max_len: int = 200) -> str:
+    """Collapse to one line and truncate for safe logs (no raw body)."""
+    one_line = " ".join((raw or "").split())
+    if len(one_line) <= max_len:
+        return one_line
+    return one_line[:max_len]
+
+
+def sanitized_broker_error_summary(data: dict[str, Any]) -> tuple[Optional[str], Optional[str], list[str]]:
+    """Extract broker error code, one-line message, and ``details`` key names only (no values)."""
+    err_obj: Optional[dict[str, Any]] = None
+    errors = data.get("errors")
+    if isinstance(errors, list) and errors:
+        first = errors[0]
+        if isinstance(first, dict):
+            err_obj = first
+    if err_obj is None:
+        err = data.get("error")
+        if isinstance(err, dict):
+            err_obj = err
+
+    if err_obj is None:
+        return None, None, []
+
+    code_raw = str(err_obj.get("code") or "").strip()
+    code = code_raw if code_raw else None
+    msg_raw = str(err_obj.get("message") or "").strip()
+    message = _normalize_broker_error_message(msg_raw) if msg_raw else None
+
+    detail_keys: list[str] = []
+    details = err_obj.get("details")
+    if isinstance(details, dict):
+        detail_keys = sorted(str(k) for k in details.keys())
+
+    return code, message, detail_keys
+
+
 def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
     """Build user-visible assistant text from broker JSON (only safe fields)."""
     errors = data.get("errors") or []
@@ -254,7 +291,16 @@ def call_booneops_broker(
         )
 
     if response.status_code >= 500:
-        logger.warning("BooneOps broker server error request_id=%s status=%s", request_id, response.status_code)
+        b_code, b_msg, b_detail_keys = sanitized_broker_error_summary(data)
+        logger.warning(
+            "BooneOps broker server error request_id=%s status=%s broker_code=%s broker_message=%s "
+            "broker_detail_keys=%s",
+            request_id,
+            response.status_code,
+            b_code if b_code is not None else "-",
+            b_msg if b_msg is not None else "-",
+            ",".join(b_detail_keys) if b_detail_keys else "-",
+        )
         return BooneOpsBrokerTurnResult(
             assistant_text=(
                 "BooneOps encountered a server error.\n\n"

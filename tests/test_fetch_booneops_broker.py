@@ -6,6 +6,7 @@ from dataclasses import replace
 import hashlib
 import hmac
 import json
+import logging
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ from app.fetch.booneops_broker import (
     call_booneops_broker,
     format_assistant_text_from_broker_json,
     map_user_to_broker_principal,
+    sanitized_broker_error_summary,
     sign_body_hmac_sha256,
 )
 from app.fetch.local_routing import should_delegate_ask_to_booneops_broker
@@ -171,6 +173,99 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     assert payload["sessionMetadata"]["routeLabel"] == "printsmith_candidate"
     assert "unit-test-bearer" not in result.assistant_text
     assert "unit-test-hmac" not in result.assistant_text
+
+
+def test_sanitized_broker_error_summary_prefers_errors0_over_error() -> None:
+    code, msg, keys = sanitized_broker_error_summary(
+        {
+            "ok": False,
+            "error": {"code": "from_error", "message": "e"},
+            "errors": [{"code": "from_list", "message": "first"}],
+        }
+    )
+    assert code == "from_list"
+    assert msg == "first"
+    assert keys == []
+
+
+def test_sanitized_broker_error_summary_reads_error_object_and_detail_keys_only() -> None:
+    secret = "must_not_appear_in_keys_or_msg"
+    code, msg, keys = sanitized_broker_error_summary(
+        {
+            "ok": False,
+            "error": {
+                "code": "upstream_bad_gateway",
+                "message": "line1\nline2",
+                "details": {"z_key": secret, "a_key": 1},
+            },
+        }
+    )
+    assert code == "upstream_bad_gateway"
+    assert msg == "line1 line2"
+    assert keys == ["a_key", "z_key"]
+    assert secret not in msg
+    assert secret not in ",".join(keys)
+
+
+def test_sanitized_broker_error_summary_truncates_long_message() -> None:
+    long = "word " * 80
+    _, msg, _ = sanitized_broker_error_summary(
+        {"ok": False, "errors": [{"code": "x", "message": long}]}
+    )
+    assert msg is not None
+    assert len(msg) == 200
+
+
+def test_call_booneops_broker_502_logs_sanitized_fields_not_secret_details(caplog, monkeypatch) -> None:
+    caplog.set_level(logging.WARNING, logger="app.fetch.booneops_broker")
+    secret_in_details = "sk_live_dummy_never_log_this"
+    body = json.dumps(
+        {
+            "ok": False,
+            "error": {
+                "code": "upstream_bad_gateway",
+                "message": "Broker upstream\nfailed",
+                "details": {"internalToken": secret_in_details, "route": "bots"},
+            },
+        }
+    ).encode()
+
+    def fake_post(_url: str, **_kw: object):
+        class Resp:
+            status_code = 502
+            content = body
+
+            def json(self):
+                return json.loads(body.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    result = call_booneops_broker(
+        _make_settings(),
+        user=_make_user(),
+        conversation_id="c",
+        user_message="hi",
+        route_label="printsmith_candidate",
+        request_id="req-502-test",
+        prior_messages=[],
+        http_post=None,
+    )
+    expected_user = (
+        "BooneOps encountered a server error.\n\n"
+        "Your message was saved; try again later."
+    )
+    assert result.assistant_text == expected_user
+
+    joined = " ".join(r.message for r in caplog.records)
+    assert "req-502-test" in joined
+    assert "502" in joined
+    assert "upstream_bad_gateway" in joined
+    assert "Broker upstream failed" in joined
+    assert "internalToken,route" in joined
+    assert secret_in_details not in joined
+    assert "unit-test-bearer" not in joined
+    assert "unit-test-hmac" not in joined
 
 
 def test_call_booneops_broker_network_error_is_user_safe(monkeypatch) -> None:

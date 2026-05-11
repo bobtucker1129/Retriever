@@ -4,6 +4,17 @@
 **Scope:** new Retriever rebuild, first Fetch implementation  
 **Sources:** `AUTH_REDESIGN.md`, `REVIEW-2026-05-04-OPUS.md`, old `projects/Retriever/` Fetch reference
 
+## Live pilot findings (concise)
+
+- **Identity:** Retriever Fetch should use the **BooneOps** employee-facing operations voice, not private LordTate.
+- **`/docs` answers:** The pilot surfaced **raw retrieval-style dumps**. Before wider rollout, docs answers need a **human-friendly summary** and **clear source cleanup** in how they are presented (see roadmap note below).
+- **Observability gate:** Add **correlation logging end-to-end** (Fetch ask → broker → downstream) **before** heavier tests or broad rollout so incidents are traceable.
+- **Longer-term lane:** A **RetrieverOps / Fetch-dedicated broker lane** (separate logs, queue or concurrency limits, no instruction-update or write actions, less contention with Telegram/Discord) is the direction—not an immediate second copy of BooneOps. Detail is parked in **`PARKED.md`** (RetrieverOps / Fetch broker lane).
+
+### `/docs` presentation roadmap note
+
+Treat pilot `/docs` output as **evidence of retrieval**, not ship-ready copy: plan a presentation layer (short summary, cleaned citations, consistent source labels) before scaling `/docs` traffic.
+
 ## Plain-English Summary
 
 Fetch is the first thing most Boone employees should use in the new Retriever. It has to feel alive, predictable, and honest.
