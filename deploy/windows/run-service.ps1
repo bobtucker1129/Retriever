@@ -30,6 +30,13 @@ function Write-Boot {
     "$ts $Message" | Out-File -FilePath $bootstrapLog -Append -Encoding utf8
 }
 
+# Strip UTF-8 BOM (U+FEFF) so keys match after Out-File / editor quirks on .release-meta.
+function Normalize-MetaLineKey {
+    param([string]$Key)
+    if (-not $Key) { return $Key }
+    return $Key.Trim().TrimStart([char]0xFEFF)
+}
+
 Write-Boot "RetrieverRebuild bootstrap starting."
 
 # ---------------------------------------------------------------------------
@@ -85,10 +92,14 @@ $ReleaseMeta = Join-Path $AppCurrent ".release-meta"
 if (Test-Path $ReleaseMeta) {
     Write-Boot "Loading release metadata from $ReleaseMeta"
     Get-Content $ReleaseMeta |
+        ForEach-Object {
+            $rawLine = $_.TrimStart([char]0xFEFF)
+            $rawLine
+        } |
         Where-Object { $_ -notmatch '^\s*#' -and $_ -match '=' } |
         ForEach-Object {
             $key, $value = $_ -split '=', 2
-            $key   = $key.Trim()
+            $key   = Normalize-MetaLineKey -Key $key
             $value = $value.Trim()
             if ($key) {
                 [System.Environment]::SetEnvironmentVariable($key, $value, 'Process')
@@ -98,6 +109,14 @@ if (Test-Path $ReleaseMeta) {
 else {
     Write-Boot "Release metadata not found at $ReleaseMeta"
 }
+
+$gitShaLoaded = -not [string]::IsNullOrEmpty(
+    [System.Environment]::GetEnvironmentVariable('GIT_SHA', 'Process'))
+$gitRefLoaded = -not [string]::IsNullOrEmpty(
+    [System.Environment]::GetEnvironmentVariable('GIT_REF', 'Process'))
+$shaState = if ($gitShaLoaded) { 'loaded' } else { 'missing' }
+$refState = if ($gitRefLoaded) { 'loaded' } else { 'missing' }
+Write-Boot "Release meta env keys: GIT_SHA=$shaState, GIT_REF=$refState"
 
 $pythonExe = Join-Path $AppCurrent ".venv\Scripts\python.exe"
 if (-not (Test-Path $pythonExe)) {

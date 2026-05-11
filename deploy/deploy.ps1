@@ -43,6 +43,19 @@ $AppRepo     = "$AppBase\repo"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# PowerShell's Out-File -Encoding utf8 writes UTF-8 with BOM, which can prefix
+# the first key in .release-meta (e.g. ﻿GIT_SHA) and break env injection.
+function Write-Utf8NoBomText {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+        [Parameter(Mandatory=$true)]
+        [string]$Text
+    )
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Text, $utf8NoBom)
+}
+
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"
@@ -118,7 +131,8 @@ function Read-ReleaseMetaValue {
         if ($line -eq "" -or $line.StartsWith("#")) { continue }
         $parts = $line -split "=", 2
         if ($parts.Count -ne 2) { continue }
-        if ($parts[0].Trim() -ne $Key) { continue }
+        $foundKey = $parts[0].Trim().TrimStart([char]0xFEFF)
+        if ($foundKey -ne $Key) { continue }
         return $parts[1].Trim()
     }
     return $null
@@ -141,7 +155,8 @@ function Write-ReleaseMetaComplete {
         "DEPLOY_OPERATOR=$env:USERNAME",
         "DEPLOYED_AT=$(Get-Date -Format 'o')"
     )
-    ($lines -join "`n") + "`n" | Out-File -FilePath $metaPath -Encoding utf8
+    $body = ($lines -join "`n") + "`n"
+    Write-Utf8NoBomText -Path $metaPath -Text $body
 }
 
 function Clear-StaleEnvVars {
@@ -276,7 +291,7 @@ if (-not (Test-Path $releaseDir)) {
 
     # Stamp metadata
     $meta = "GIT_SHA=$fullSha`nGIT_REF=$GitRef`nBUILT_AT=$(Get-Date -Format 'o')`nHOST_NAME=$env:COMPUTERNAME`nDEPLOY_OPERATOR=$env:USERNAME"
-    $meta | Out-File "$releaseDir\.release-meta" -Encoding utf8
+    Write-Utf8NoBomText -Path "$releaseDir\.release-meta" -Text $meta
 
     # ---------------------------------------------------------------------------
     # Find Python (PS 5.1 compatible - no ?. operator)
