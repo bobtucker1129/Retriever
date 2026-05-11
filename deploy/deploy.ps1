@@ -241,7 +241,7 @@ if (-not (Test-Path $releaseDir)) {
     Write-Log "Source extracted to release directory."
 
     # Stamp metadata
-    $meta = "gitSha=$fullSha`ngitRef=$GitRef`nbuiltAt=$(Get-Date -Format 'o')`noperator=$env:USERNAME"
+    $meta = "GIT_SHA=$fullSha`nGIT_REF=$GitRef`nBUILT_AT=$(Get-Date -Format 'o')`nHOST_NAME=$env:COMPUTERNAME`nDEPLOY_OPERATOR=$env:USERNAME"
     $meta | Out-File "$releaseDir\.release-meta" -Encoding utf8
 
     # ---------------------------------------------------------------------------
@@ -420,7 +420,7 @@ if (Test-Path $currentLink) {
 Set-Junction -Link $currentLink -Target $releaseDir
 Write-Log "current -> $releaseDir"
 
-"deployedAt=$(Get-Date -Format 'o')" | Out-File "$releaseDir\.release-meta" -Append -Encoding utf8
+"DEPLOYED_AT=$(Get-Date -Format 'o')" | Out-File "$releaseDir\.release-meta" -Append -Encoding utf8
 
 # ---------------------------------------------------------------------------
 # Restart service (RetrieverRebuild only; never legacy Retriever)

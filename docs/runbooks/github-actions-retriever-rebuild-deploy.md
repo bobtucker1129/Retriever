@@ -106,7 +106,7 @@ or install as service per GitHub's Windows service snippet (elevated prompt).
 
 Repo path: **`deploy/github-runner/preflight.ps1`**
 
-The workflow checks out **`deploy/github-runner/`** minimally and invokes this script **before** `deploy.ps1`. It verifies:
+The workflow checks out **`deploy/`**, syncs the latest deploy scripts into **`D:\retriever-rebuild\bin\`**, and invokes this script **before** `deploy.ps1`. It verifies:
 
 - **`D:\retriever-rebuild`** layout (**`bin`**, **`releases`**, **`env\retriever.env`**).
 - **`D:\retriever-rebuild\bin\deploy.ps1`**
@@ -141,6 +141,7 @@ Observe logs on GitHub Actions and cross-check **`D:\retriever-rebuild\logs\depl
 Built-in **`deploy.ps1` behavior:**
 
 - Validates config, swaps staged release dirs, **`Restart-Service RetrieverRebuild`**, **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**).
+- Before invoking **`deploy.ps1`**, the workflow copies **`deploy\*.ps1`** and **`deploy\windows\*.ps1`** from the GitHub checkout into **`D:\retriever-rebuild\bin\`** so deploy script fixes ship automatically.
 
 **There is intentionally no YAML toggle to skip automated health/smoke** — see **`WINDOWS_FETCH_RELEASE.md`** rationale.
 
@@ -160,4 +161,4 @@ Concurrency: **`concurrency.group: retriever-rebuild-deploy-bggol-vesko01`** mea
 
 ## After changes to deploy scripts locally
 
-Whenever **`deploy/deploy.ps1`**, **`deploy/smoke.ps1`**, or **`rollback.ps1`** change in Git, **`WINDOWS_FETCH_RELEASE.md`** reminds operators to **`Copy-Item` updated scripts into **`D:\retriever-rebuild\bin\`**. Actions **does not** replace those **`bin`** copies automatically — reconcile versions after merges.
+The GitHub Actions workflow now copies **`deploy/deploy.ps1`**, **`deploy/smoke.ps1`**, **`deploy/healthcheck.ps1`**, **`deploy/rollback.ps1`**, and **`deploy/windows/*.ps1`** into **`D:\retriever-rebuild\bin\`** before each deploy. Manual RDP deploys should do the same if you bypass Actions.

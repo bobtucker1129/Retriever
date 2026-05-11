@@ -57,13 +57,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout-cone-mode: true
-          sparse-checkout: deploy/github-runner
+          sparse-checkout: deploy
 
       - name: Runner preflight
         working-directory: ${{ github.workspace }}
         run: |
           & .\deploy\github-runner\preflight.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Sync deploy scripts to server bin
+        working-directory: ${{ github.workspace }}
+        run: |
+          $bin = 'D:\retriever-rebuild\bin'
+          $windowsBin = Join-Path $bin 'windows'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          New-Item -ItemType Directory -Force -Path $windowsBin | Out-Null
+          Copy-Item -Force .\deploy\deploy.ps1 .\deploy\smoke.ps1 .\deploy\healthcheck.ps1 .\deploy\rollback.ps1 $bin
+          Copy-Item -Force .\deploy\windows\*.ps1 $windowsBin
 
       - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
         env:

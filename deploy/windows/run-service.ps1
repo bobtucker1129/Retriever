@@ -78,6 +78,27 @@ if (-not (Test-Path $AppCurrent)) {
 
 Set-Location -Path $AppCurrent
 
+# ---------------------------------------------------------------------------
+# Load release metadata after env file so /version reflects the deployed build.
+# ---------------------------------------------------------------------------
+$ReleaseMeta = Join-Path $AppCurrent ".release-meta"
+if (Test-Path $ReleaseMeta) {
+    Write-Boot "Loading release metadata from $ReleaseMeta"
+    Get-Content $ReleaseMeta |
+        Where-Object { $_ -notmatch '^\s*#' -and $_ -match '=' } |
+        ForEach-Object {
+            $key, $value = $_ -split '=', 2
+            $key   = $key.Trim()
+            $value = $value.Trim()
+            if ($key) {
+                [System.Environment]::SetEnvironmentVariable($key, $value, 'Process')
+            }
+        }
+}
+else {
+    Write-Boot "Release metadata not found at $ReleaseMeta"
+}
+
 $pythonExe = Join-Path $AppCurrent ".venv\Scripts\python.exe"
 if (-not (Test-Path $pythonExe)) {
     Write-Boot "ERROR: Python not found at $pythonExe"
