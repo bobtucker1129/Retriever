@@ -63,9 +63,14 @@
     </div>
     {% endif %}
 
-    <div class="fetch-thread fetch-thread--scroll" data-fetch-scroll-root>
+    <div class="fetch-thread">
       {% if active_conversation_id %}
-      <div class="fetch-message-list" id="fetch-message-list" data-fetch-message-list>
+      <div
+        class="fetch-message-list fetch-message-list--scroll"
+        id="fetch-message-list"
+        data-fetch-message-list
+        data-fetch-scroll-root
+      >
         {% if not messages %}
         <div class="fetch-thread-empty-placeholder" aria-hidden="false">
           <div class="fetch-empty-state fetch-empty-state--inline">

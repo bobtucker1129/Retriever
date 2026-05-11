@@ -125,23 +125,54 @@ _FETCH_SHELL_TEMPLATE = (
 _APP_CSS = Path(__file__).resolve().parent.parent / "app" / "static" / "app.css"
 
 
-def test_fetch_shell_css_message_list_not_nested_scroll_container() -> None:
-    """Conversation list carries content height; only `.fetch-thread` scrolls."""
+def test_fetch_shell_css_scroll_root_on_message_list() -> None:
+    """`.fetch-message-list` scrolls transcript; `.fetch-thread` is a non-scrolling flex shell."""
     css = _APP_CSS.read_text(encoding="utf-8")
-    match = re.search(r"\.fetch-message-list\s*\{([^}]*)\}", css, re.DOTALL)
-    assert match is not None, "expected .fetch-message-list block in app.css"
-    block = match.group(1)
-    assert "overflow: auto" not in block
+    ml = re.search(r"\.fetch-message-list\s*\{([^}]*)\}", css, re.DOTALL)
+    assert ml is not None, "expected .fetch-message-list block in app.css"
+    ml_block = ml.group(1)
+    assert "overflow: auto" in ml_block or "overflow-y: auto" in ml_block
+    assert "min-height: 0" in ml_block
+    assert "flex: 1" in ml_block
+
+    th = re.search(r"\.fetch-thread\s*\{([^}]*)\}", css, re.DOTALL)
+    assert th is not None
+    thread_block = th.group(1)
+    assert "overflow: hidden" in thread_block
+    assert re.search(r"overflow:\s*auto", thread_block) is None
 
 
-def test_fetch_shell_css_thread_scroll_smooth_disabled() -> None:
+def test_fetch_shell_css_message_list_scroll_smooth_disabled() -> None:
     """Programmatic scroll anchors use scrollTop jumps; scroll root avoids smooth CSS."""
     css = _APP_CSS.read_text(encoding="utf-8")
-    scroll_block = re.search(r"\.fetch-thread--scroll\s*\{([^}]*)\}", css, re.DOTALL)
-    assert scroll_block is not None, "expected .fetch-thread--scroll block in app.css"
+    scroll_block = re.search(
+        r"\.fetch-message-list--scroll\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert scroll_block is not None, "expected .fetch-message-list--scroll block in app.css"
     inner = scroll_block.group(1)
     assert "scroll-behavior:" in inner
     assert "smooth" not in inner
+
+
+def test_fetch_shell_template_scroll_root_matches_message_list() -> None:
+    """`data-fetch-scroll-root` sits on `.fetch-message-list` with message rows."""
+    html = _FETCH_SHELL_TEMPLATE.read_text(encoding="utf-8")
+    assert (
+        re.search(
+            r'<div[^>]+class="[^"]*\bfetch-message-list\b[^"]*"[^>]*\bdata-fetch-message-list\b[^>]*'
+            r"\bdata-fetch-scroll-root\b",
+            html,
+            re.DOTALL,
+        )
+        or re.search(
+            r'<div[^>]+class="[^"]*\bfetch-message-list\b[^"]*"[^>]*\bdata-fetch-scroll-root\b[^>]*'
+            r"\bdata-fetch-message-list\b",
+            html,
+            re.DOTALL,
+        )
+    )
 
 
 def test_fetch_shell_template_script_and_scroll_hooks() -> None:
@@ -149,6 +180,7 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     template_text = _FETCH_SHELL_TEMPLATE.read_text(encoding="utf-8")
     assert "<footer" not in template_text.lower()
     assert 'data-fetch-scroll-root' in template_text
+    assert 'fetch-message-list--scroll' in template_text
     assert 'data-fetch-scroll-more' in template_text
     assert 'data-fetch-focus-latest' in template_text
     assert "preventDefault" in template_text
