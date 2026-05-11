@@ -9,8 +9,14 @@
 #   have migration 0002_fetch_conversations applied (read-only check; fails before swap).
 #
 # GUARDRAILS (do not regress):
-# - Restarts and manages ONLY the RetrieverRebuild service on port 8810.
-# - Never stops or reconfigures legacy service "Retriever" on port 8000.
+# - Before RetrieverRebuild restart: stops only processes listening on 8810 whose
+#   command line includes the app root (D:\retriever-rebuild) and --port 8810 (or
+#   --port=8810), and never if --port 8000 appears — clears orphaned uvicorn after
+#   junction swap. Does not touch legacy service or port 8000.
+# - After restart: requires GET /version JSON field gitSha to equal the resolved
+#   full deploy SHA before health/smoke; mismatch fails deploy and triggers rollback.
+# - If RetrieverRebuild is not installed after the junction swap, deploy fails (no
+#   success without restart + live /version SHA proof).
 
 param(
     [Parameter(Mandatory=$true)]
@@ -121,6 +127,122 @@ function Assert-NonLegacyServiceName {
     if ($Name -eq $LegacyRetrieverServiceName) {
         Write-Error "Refusing to operate on legacy service '$LegacyRetrieverServiceName'. Use '$ServiceName' (RetrieverRebuild) on port $RetrieverRebuildPort only."; exit 1
     }
+}
+
+function Get-ListeningPidsOnPort {
+    param([int]$Port)
+    $pids = New-Object 'System.Collections.Generic.HashSet[int]'
+    try {
+        $mod = Get-Module -ListAvailable -Name NetTCPIP -ErrorAction SilentlyContinue
+        if ($mod) {
+            Import-Module NetTCPIP -ErrorAction Stop | Out-Null
+            $conns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
+            foreach ($c in $conns) {
+                if ($c.OwningProcess -and $c.OwningProcess -gt 0) {
+                    [void]$pids.Add([int]$c.OwningProcess)
+                }
+            }
+        }
+    } catch {
+        # NetTCPIP may be unavailable or deny access; netstat merge below still runs.
+    }
+    $lines = @(netstat -ano 2>$null)
+    foreach ($line in $lines) {
+        if ($line -notmatch 'LISTENING') { continue }
+        if ($line -notmatch ":$Port\s") { continue }
+        $parts = @($line -split '\s+' | Where-Object { $_ -ne '' })
+        if ($parts.Length -lt 4) { continue }
+        $pidStr = $parts[-1]
+        if ($pidStr -match '^\d+$' -and [int]$pidStr -gt 0) {
+            [void]$pids.Add([int]$pidStr)
+        }
+    }
+    return @([int[]]@($pids))
+}
+
+function Get-ProcessCommandLine {
+    param([int]$ProcessId)
+    try {
+        $p = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction Stop
+        if ($p) { return [string]$p.CommandLine }
+    } catch { }
+    return $null
+}
+
+function Test-StaleRetrieverRebuild8810CommandLine {
+    param(
+        [string]$CommandLine,
+        [string]$AppRootPath
+    )
+    if (-not $CommandLine) { return $false }
+    if ($CommandLine -notmatch '(?i)--port(\s+|=)8810\b') { return $false }
+    if ($CommandLine -match '(?i)--port(\s+|=)8000\b') { return $false }
+    $normRoot = $AppRootPath.TrimEnd('\')
+    if (-not $normRoot) { return $false }
+    if ($CommandLine -notmatch '(?i)' + [regex]::Escape($normRoot)) { return $false }
+    return $true
+}
+
+function Stop-StaleRetrieverRebuild8810Listeners {
+    param([string]$AppRootPath)
+    $pids = Get-ListeningPidsOnPort -Port $RetrieverRebuildPort
+    if ($pids.Count -eq 0) {
+        Write-Log "No process listening on port $RetrieverRebuildPort before service restart (clean)."
+        return
+    }
+    foreach ($procId in $pids) {
+        $cmd = Get-ProcessCommandLine -ProcessId $procId
+        if (-not (Test-StaleRetrieverRebuild8810CommandLine -CommandLine $cmd -AppRootPath $AppRootPath)) {
+            Write-Log "Port $RetrieverRebuildPort listener PID $procId skipped (guards not met; not killing): $(if ($cmd) { $cmd } else { '<no command line>' })"
+            continue
+        }
+        Write-Log "Stopping stale RetrieverRebuild listener on port $RetrieverRebuildPort (PID $procId) ..."
+        Write-Log "  commandLine: $cmd"
+        try {
+            Stop-Process -Id $procId -Force -ErrorAction Stop
+            Start-Sleep -Milliseconds 500
+        } catch {
+            Write-Log "WARNING: Stop-Process failed for PID ${procId}: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Assert-VersionGitShaMatches {
+    param(
+        [string]$ExpectedFullSha,
+        [string]$BaseUrl = "http://127.0.0.1:8810",
+        [int]$MaxWaitSeconds = 45
+    )
+    if (-not $ExpectedFullSha) {
+        Write-Error "Assert-VersionGitShaMatches: ExpectedFullSha is empty."; return $false
+    }
+    $deadline = (Get-Date).AddSeconds($MaxWaitSeconds)
+    $lastBody = ""
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $r = Invoke-WebRequest -Uri "$BaseUrl/version" -UseBasicParsing -TimeoutSec 8
+            $lastBody = $r.Content
+            $json = $r.Content | ConvertFrom-Json
+            $got = [string]$json.gitSha
+            if (-not $got) {
+                Write-Log "WAIT /version: gitSha missing in JSON (body length $($lastBody.Length))."
+            } else {
+                if ([string]::Equals($got, $ExpectedFullSha, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    Write-Log "Verified /version.gitSha matches deploy target: $ExpectedFullSha"
+                    return $true
+                }
+                Write-Log "WAIT /version: gitSha mismatch (got '$got', want '$ExpectedFullSha')."
+            }
+        } catch {
+            Write-Log "WAIT /version: request failed (will retry): $($_.Exception.Message)"
+        }
+        Start-Sleep -Seconds 2
+    }
+    Write-Log "ERROR: /version.gitSha did not match '$ExpectedFullSha' within ${MaxWaitSeconds}s."
+    if ($lastBody) {
+        Write-Log "Last /version body (truncated): $($lastBody.Substring(0, [Math]::Min(500, $lastBody.Length)))"
+    }
+    return $false
 }
 
 function Read-ReleaseMetaValue {
@@ -478,42 +600,49 @@ Write-Log "Updated $releaseDir\.release-meta (full stamp for current release)."
 Assert-NonLegacyServiceName -Name $ServiceName
 Write-Log "Restarting $ServiceName (localhost:$RetrieverRebuildPort) ..."
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($svc) {
-    Restart-Service -Name $ServiceName -Force
-    Start-Sleep -Seconds 4
-    $svc.Refresh()
-    if ($svc.Status -ne 'Running') {
-        Write-DeployRecord -Status "service-not-running" -Sha $fullSha -Prev $prevSha
-        Write-Error "Service is not running after restart."; exit 1
-    }
-    Write-Log "Service restarted and running."
-} else {
-    Write-Log "Service '$ServiceName' not installed yet. Run install-service.ps1 first."
-    Write-Log "Release staged at $releaseDir - install the service then run deploy again."
+if (-not $svc) {
+    Write-DeployRecord -Status "service-not-installed" -Sha $fullSha -Prev $prevSha
+    Write-Error "Deploy failed: Windows service '$ServiceName' is not installed. The release junction was swapped; run install-service.ps1, then deploy again so restart and GET /version can prove the target SHA is live."; exit 1
 }
 
-# ---------------------------------------------------------------------------
-# Health and smoke checks (only if service is running)
-# ---------------------------------------------------------------------------
-$svcCheck = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($svcCheck -and $svcCheck.Status -eq 'Running') {
-    Write-Log "Running health check ..."
-    & "$AppBin\healthcheck.ps1"
-    if ($LASTEXITCODE -ne 0) {
-        Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
-        Write-Log "Health check failed. Attempting auto-rollback ..."
-        & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
-        Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
-    }
+Write-Log "Pre-restart: clearing any stale process still listening on $RetrieverRebuildPort under $AppBase (guarded Stop-Process) ..."
+Stop-StaleRetrieverRebuild8810Listeners -AppRootPath $AppBase
+Restart-Service -Name $ServiceName -Force
+Start-Sleep -Seconds 4
+$svc.Refresh()
+if ($svc.Status -ne 'Running') {
+    Write-DeployRecord -Status "service-not-running" -Sha $fullSha -Prev $prevSha
+    Write-Error "Service is not running after restart."; exit 1
+}
+Write-Log "Service restarted and running."
 
-    Write-Log "Running smoke check ..."
-    & "$AppBin\smoke.ps1"
-    if ($LASTEXITCODE -ne 0) {
-        Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
-        Write-Log "Smoke check failed. Attempting auto-rollback ..."
-        & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
-        Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
-    }
+# ---------------------------------------------------------------------------
+# Live SHA gate, then health and smoke (required for deploy success)
+# ---------------------------------------------------------------------------
+Write-Log "Verifying running code matches deploy target (GET /version gitSha == $fullSha) ..."
+if (-not (Assert-VersionGitShaMatches -ExpectedFullSha $fullSha)) {
+    Write-DeployRecord -Status "version-sha-mismatch" -Sha $fullSha -Prev $prevSha
+    Write-Log "/version.gitSha mismatch after restart. Attempting auto-rollback ..."
+    & "$AppBin\rollback.ps1" -Reason "auto-rollback: /version.gitSha did not match $fullSha after deploy"
+    Write-Error "Deployment failed: /version.gitSha did not match deployed commit $fullSha. Auto-rollback attempted. Check $DeployLog"; exit 1
+}
+
+Write-Log "Running health check ..."
+& "$AppBin\healthcheck.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
+    Write-Log "Health check failed. Attempting auto-rollback ..."
+    & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
+    Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
+}
+
+Write-Log "Running smoke check ..."
+& "$AppBin\smoke.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
+    Write-Log "Smoke check failed. Attempting auto-rollback ..."
+    & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
+    Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
 }
 
 # ---------------------------------------------------------------------------

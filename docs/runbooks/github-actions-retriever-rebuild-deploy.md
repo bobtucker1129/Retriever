@@ -151,7 +151,7 @@ Observe logs on GitHub Actions and cross-check **`D:\retriever-rebuild\logs\depl
 
 Built-in **`deploy.ps1` behavior:**
 
-- Validates config, swaps staged release dirs, **`Restart-Service RetrieverRebuild`**, **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**). **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** is **machine-level** env on the runner when **`FETCH_ENABLED=true`** so deploy smoke asserts **`checks.fetch`** / **`checks.modelProvider`** as **`ok`**; leave unset for the default foundation expectation (**`disabled`**).
+- Validates config, swaps staged release dirs, **clears guarded stale listeners still bound to `8810` under `D:\retriever-rebuild`**, **`Restart-Service RetrieverRebuild`**, then **`GET /version`** must report **`gitSha`** equal to the deployed full SHA (else deploy fails and rollback runs) before **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**). **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** is **machine-level** env on the runner when **`FETCH_ENABLED=true`** so deploy smoke asserts **`checks.fetch`** / **`checks.modelProvider`** as **`ok`**; leave unset for the default foundation expectation (**`disabled`**).
 - Before invoking **`deploy.ps1`**, the workflow copies **`deploy\*.ps1`**, **`deploy\github-runner\post-deploy-feedback.ps1`**, and **`deploy\windows\*.ps1`** from the GitHub checkout into **`D:\retriever-rebuild\bin\`** so deploy script fixes ship automatically.
 
 **There is intentionally no YAML toggle to skip automated health/smoke** — see **`WINDOWS_FETCH_RELEASE.md`** rationale.
