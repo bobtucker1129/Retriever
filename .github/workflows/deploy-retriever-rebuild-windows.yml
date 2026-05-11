@@ -52,6 +52,7 @@ jobs:
         shell: powershell
     permissions:
       contents: read
+      actions: write
     steps:
       - name: Checkout (preflight tooling only)
         uses: actions/checkout@v4
@@ -75,6 +76,7 @@ jobs:
           foreach ($script in @('deploy.ps1', 'smoke.ps1', 'healthcheck.ps1', 'rollback.ps1')) {
             Copy-Item -Force (Join-Path '.\deploy' $script) $bin
           }
+          Copy-Item -Force .\deploy\github-runner\post-deploy-feedback.ps1 $bin
           Copy-Item -Force .\deploy\windows\*.ps1 $windowsBin
 
       - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
@@ -95,3 +97,36 @@ jobs:
           }
           powershell -ExecutionPolicy Bypass -File $deployScript $ref
           exit $LASTEXITCODE
+
+      - name: Post-deploy feedback (machine-readable)
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          RETRIEVER_SMOKE_SKIP_LEGACY: ${{ inputs.skip_legacy_liveness && 'true' || '' }}
+        run: |
+          $outDir = Join-Path $env:GITHUB_WORKSPACE 'deploy-feedback'
+          $feedbackScript = Join-Path $env:GITHUB_WORKSPACE 'deploy\github-runner\post-deploy-feedback.ps1'
+          if (-not (Test-Path -LiteralPath $feedbackScript)) {
+            Write-Error "Missing $feedbackScript"
+            exit 1
+          }
+          & $feedbackScript -OutputDir $outDir -RunSmoke
+          $fbExit = $LASTEXITCODE
+          $summary = Join-Path $outDir 'FEEDBACK_SUMMARY.md'
+          Write-Host ""
+          Write-Host "=== FEEDBACK_SUMMARY (concise) ==="
+          if (Test-Path -LiteralPath $summary) {
+            Get-Content -LiteralPath $summary | Write-Host
+          } else {
+            Write-Host "(summary file missing)"
+          }
+          Write-Host "=== End FEEDBACK_SUMMARY ==="
+          exit $fbExit
+
+      - name: Upload deploy feedback artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retriever-rebuild-deploy-feedback
+          path: deploy-feedback/
+          if-no-files-found: warn

@@ -4,9 +4,11 @@ This is the cross-session project dashboard. `SESSION-LOG.md` records what happe
 
 ## Current Phase
 
-Phase 0: planning and architecture.
+**Operations track — automated feedback after deploy**
 
-Plain English: before building new Retriever, lock the auth model, Fetch trust plan, production runtime shape, and the boundary between the new app and the old LAN repo.
+Plain English: **push-to-`main` deploy** on the Windows self-hosted runner is working; **`RetrieverRebuild`** on **`8810`** updates without manual RDP deploy as the default path. The active gap is **feedback the agent can read**—deploy/smoke/health/version outcomes and (later) public URL and Fetch checks—without clipboard mediation. Implementation follows the staged roadmap in **`docs/runbooks/automated-feedback-bridge-windows.md`** (Phases A–D).
+
+Planning-and-architecture artifacts below remain authoritative for auth, Fetch trust, and runtime boundaries; the **session focus** shifts to closing the deploy feedback loop while **legacy `Retriever` on `8000`** stays untouched.
 
 ## Current Status
 
@@ -82,6 +84,7 @@ Completed:
 - **Fetch local routing (stub):** `classify_fetch_intent` assigns deterministic route labels (`local`, slash `help`/`sources`/`health`, `email_cleanup`, `printsmith_candidate`, `docs_candidate`, `general_candidate`, `blocked_write`, `unknown`). The ask handler persists those labels as `route_key` and returns route-specific offline copy; still no providers, PrintSmith, docs APIs, BooneOps, uploads, or web calls.
 - Deployed commit `89ecd60` to `RetrieverRebuild` on `bggol-vesko01`; `smoke.ps1` passed, `RetrieverRebuild` is running, and legacy `Retriever` is still running.
 - **BooneOps broker (Phase 1, default off):** Optional `BOONEOPS_BROKER_ENABLED` path calls `POST /v1/booneops/message` with bearer token and `X-BooneOps-Signature: sha256=…` over the raw JSON body per `projects/booneops-bots` contract. When enabled with `FETCH_ENABLED`, `printsmith_candidate` and `docs_candidate` ask turns use the broker; `general_candidate` stays on the stub unless `FETCH_GENERAL_QUESTIONS_ENABLED`. Retriever maps users to broker `role`/`botId` from `is_admin`, `booneops_level` (`medium` → super bot), and otherwise production bot. Tests use mocked HTTP only.
+- **Auto deploy via GitHub:** Self-hosted Windows runner on `bggol-vesko01` runs **`.github/workflows/deploy-retriever-rebuild-windows.yml`** on **every push to `main`** (and manual dispatch when operators need migration or legacy-probe toggles). Production secrets stay on-server; the workflow only checks out `deploy/` and invokes `D:\retriever-rebuild\bin\deploy.ps1`. Documented in **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**.
 
 ## Active Architecture Artifacts
 
@@ -102,6 +105,8 @@ Completed:
 - `LOCAL_RUNBOOK.md`: local test/start/smoke instructions and first browser-smoke path.
 - `deploy/WINDOWS_FETCH_RELEASE.md`: Windows production deploy for **RetrieverRebuild**, migration **0002**, **`smoke.ps1`**, coexistence with port **8000**, **`FETCH_ENABLED`** vs validation, BooneOps **`BOONEOPS_*`** / **`FETCH_GENERAL_QUESTIONS_ENABLED`** notes, plus future model enablement checklist.
 - `docs/runbooks/booneops-broker-fetch-windows.md`: **`GET /health`** on broker, **`BOONEOPS_*`** / **`AppSettings`**, **`bggol-vesko01`** PowerShell smoke, **8810** vs legacy **8000**.
+- `docs/runbooks/automated-feedback-bridge-windows.md`: staged **post-deploy feedback** roadmap (localhost artifact → Cloudflare Access service-token checks on-box → Fetch/broker smoke → agent-readable summaries); **Windows** and **legacy `8000`** guardrails.
+- `docs/runbooks/github-actions-retriever-rebuild-deploy.md`: self-hosted runner, **push + manual** workflow, preflight, coexistence with **`deploy/WINDOWS_FETCH_RELEASE.md`**.
 - `PRODUCT.md`: Impeccable product context for Retriever UI work.
 - `SHARED_LAYOUT_SHAPE.md`: confirmed Impeccable shape brief for the shared app shell.
 - `FETCH_UI_CONTINUITY.md`: current Fetch visual/layout continuity target for the first new Fetch skeleton.
@@ -113,7 +118,7 @@ Resolved:
 - `projects/Retriever/` is the old LAN repo reference copy, not the rebuild workspace.
 - `projects/retriever-rebuild/` is the planning/build home for the new Retriever.
 - Old Fetch on `bggol-vesko01` should be turned off via a feature flag. Nobody uses it, and disabling it clears the way for the new Fetch without confusing users.
-- Automated CI/CD deployments and staging validations are a core goal. We have established an automated pipeline that pushes directly to `RetrieverRebuild` (`retriever.boonegraphics.net`) on commits to `main`. (A dedicated staging site will follow later if needed).
+- Automated CI/CD deployments and staging validations are a core goal. **Done for first production lane:** a self-hosted Windows GitHub Actions runner on `bggol-vesko01` deploys `RetrieverRebuild` on **push to `main`**, with optional **manual dispatch** for migrations and controlled **`skip_legacy_liveness`**. (A dedicated staging site may follow later if needed.) **Next:** automated **feedback** to the agent (artifacts/summaries, then public URL checks with on-box service token—see **`docs/runbooks/automated-feedback-bridge-windows.md`**).
 - Cloudflare Access should protect `retriever.boonegraphics.net` for everyone.
 - New Retriever should not expose old LAN modules through the new domain until they are rebuilt.
 - Fetch comes first, but auth comes before Fetch.
@@ -155,6 +160,7 @@ Resolved:
 
 Open:
 
+- **Automated feedback:** exact **artifact format** and size cap for Phase A; whether Phase B public URL checks run on **every push** or a slower cadence; **rotation owner** for the Cloudflare Access service token on `bggol-vesko01`.
 - Whether general outside-world Fetch answers are enabled for all active users at launch or only beta users.
 - How to bind Cloudflare identity safely without allowing direct LAN header spoofing.
 - Tailscale is required for first Fetch launch if Fetch keeps the existing BooneOps broker/report path; later, decide whether that broker moves closer to Retriever.
@@ -172,21 +178,23 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 - **Where it runs:** **`RetrieverRebuild`** (NSSM) on **`bggol-vesko01`**, **`127.0.0.1:8810`**, public entry **`https://retriever.boonegraphics.net`** via Cloudflare Access and Tunnel.
 - **What stays on the old service:** **`Retriever`** on port **`8000`** continues PrePress, DSF, and PrintSmith REST token authority until an explicit cutover; Fetch releases must not touch that service.
 - **BooneOps broker (docs-first):** **`docs/runbooks/booneops-broker-fetch-windows.md`** walks **`BOONEOPS_BROKER_ENABLED`**, **`BOONEOPS_BROKER_URL`**, **`BOONEOPS_BROKER_BEARER_TOKEN`**, **`BOONEOPS_BROKER_HMAC_SECRET`**, optional **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`**, broker **`GET /health`** from **`bggol-vesko01`**, Fetch **`/health/ready`** on **`8810`**, and keeping **`FETCH_ENABLED=false`** and **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** until deliberate rollout. Goal: **`#printsmith`-equivalent BooneOps** over broker, **not** general internet LLM.
+- **After auto deploy:** **`docs/runbooks/automated-feedback-bridge-windows.md`** is the staged plan so agents get **health/smoke/version/legacy-probe** feedback (then public URL and Fetch smoke) **without clipboard handoff**.
 - **What “Fetch foundation” means:** conversation list/create/rename/delete in MySQL (**`0002`**), optional **stub** ask only when **`FETCH_ENABLED=true`** (still no real model or tool routing). **`FETCH_ENABLED=false`** remains the recommended production default: conversation CRUD still works; the ask composer stays off; post-deploy **`smoke.ps1`** expects **`fetch`** and **`modelProvider`** **disabled** in **`/health/ready`**. If **`FETCH_ENABLED=true`**, startup validation **still requires** model env vars even though code only runs the stub—see the runbook.
 - **Before real models/tools:** follow the enablement checklist at the bottom of **`deploy/WINDOWS_FETCH_RELEASE.md`** together with **`FETCH_TRUST_PLAN.md`**.
 
 ## Next Recommended Session
 
-Close first deploy and operate the Fetch foundation safely.
+**Close the automated feedback loop (Phase A), then stage B–D.**
 
-Plain English goal: the Fetch foundation is now deployed and healthy on **`RetrieverRebuild`**. Old Fetch is off, legacy **`Retriever`** still serves PrePress/DSF and token authority on **`8000`**, and new Fetch provides conversation management plus deterministic local route stubs while **`FETCH_ENABLED=false`** keeps production model/tool routing off.
+Plain English goal: **deploy is already automatic** on **`main`**; the operator/agent should get a **small, readable bundle** after each run—deploy ref, **health + smoke** outcome, **`/version`** (and related **`/health/*`** snippets), and the **read-only legacy `8000`** probe result—via a GitHub **artifact** and/or a **bounded log block**, not copy-paste. That is Phase A in **`docs/runbooks/automated-feedback-bridge-windows.md`**.
 
 Recommended scope:
 
-1. Browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Access with an approved admin user and confirm the Fetch shell/conversation UI renders.
-2. Keep **`FETCH_ENABLED=false`** in production env until the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** is satisfied for stub testing or real routing.
-3. Start real model-routing work only as a separate, explicitly reviewed enablement step.
-4. Plan the next user-facing Fetch slice: either admin settings for Fetch capabilities, live model-provider configuration, or the first read-only internal/docs route.
+1. Implement or verify **Phase A** output from the Windows runner (script + workflow step as needed), keeping **repo secrets empty** for this design unless policy changes.
+2. Document the **exact artifact name and format** in **`github-actions-retriever-rebuild-deploy.md`** once chosen.
+3. **Fetch/product work in parallel** (optional this session): browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Access; keep **`FETCH_ENABLED=false`** until **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist allows deliberate enablement.
+4. **Phase B prep:** confirm where the **Cloudflare Access service token** will live on **`bggol-vesko01`** (not GitHub repo secrets); wire **`smoke.ps1`** (or sibling) only when variables are present—see feedback runbook.
+5. Defer **Phase C** (real Fetch prompt + broker smoke) until broker/Fetch flags are intentionally on for a controlled window.
 
 ## Later Work
 
@@ -212,6 +220,7 @@ Reference: `memory/shared/seeds/2026-05-05-cursor-security-model.md`
 ## Guardrails
 
 - Do not edit `projects/Retriever/` unless explicitly asked.
+- **Post-deploy feedback** automation must **never** stop, reinstall, or retarget legacy **`Retriever`** on **`8000`**; read-only liveness only unless an operator explicitly uses **`skip_legacy_liveness`** for controlled maintenance.
 - Treat old Fetch as a reference for ideas, not a compatibility target.
 - Keep LLMs away from direct write credentials.
 - Prefer explicit tool routing over clever keyword guessing.

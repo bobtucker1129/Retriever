@@ -1,9 +1,12 @@
 # GitHub Actions manual deploy — RetrieverRebuild (`bggol-vesko01`)
 
-This document covers installing a **GitHub self-hosted Actions runner** on **Windows Server `bggol-vesko01`** and triggering the **`Deploy RetrieverRebuild (Windows self-hosted)`** workflow. It complements:
+This document covers installing a **GitHub self-hosted Actions runner** on **Windows Server `bggol-vesko01`** and running the **`Deploy RetrieverRebuild (Windows self-hosted)`** workflow. It complements:
 
 - **`deploy/WINDOWS_FETCH_RELEASE.md`** — Fetch foundation, migrations, BooneOps broker, smoke expectations.
 - **`deploy/VM_SETUP_RUNBOOK.md`** — First-time **`D:\retriever-rebuild`** layout, NSSM **`RetrieverRebuild`**, ports.
+- **`docs/runbooks/automated-feedback-bridge-windows.md`** — extended plan (Cloudflare-path checks with on-box service token, deeper Fetch probes). **Part E** in this file covers the **localhost JSON + artifact** loop that ships today.
+
+After deploy, operators and agents should pull **Part E** artifacts from GitHub Actions; use the bridge runbook for staged public-path work.
 
 ## Deployment scope (critical)
 
@@ -117,11 +120,18 @@ Failures block the workflow **before** a partial deploy wastes time.
 
 ---
 
-## Part D — Run the workflow (manual dispatch)
+## Part D — When the workflow runs
 
 Repository: **`bobtucker1129/Retriever`**
 
-Steps:
+Workflow **`.github/workflows/deploy-retriever-rebuild-windows.yml`** runs on:
+
+- **`push`** to **`main`** (automatic deploy to **`RetrieverRebuild`** / **`8810`**), and
+- **`workflow_dispatch`** (manual run with inputs below).
+
+For **push** events, optional dispatch inputs are absent—**`deploy.ps1`** receives the commit **`github.sha`**. Use **manual dispatch** when you need migrations toggles or **`skip_legacy_liveness`** for controlled maintenance.
+
+### Manual dispatch steps
 
 1. Open **GitHub Actions** tab → workflow **`Deploy RetrieverRebuild (Windows self-hosted)`**.
 2. **`Run workflow` → choose branch carrying the YAML** (usually **`main`**).
@@ -136,16 +146,53 @@ Steps:
 
 4. **`Run workflow`**.
 
-Observe logs on GitHub Actions and cross-check **`D:\retriever-rebuild\logs\deploy.log`**.
+Observe logs on GitHub Actions and cross-check **`D:\retriever-rebuild\logs\deploy.log`**. For structured feedback, see **Part E**.
 
 Built-in **`deploy.ps1` behavior:**
 
 - Validates config, swaps staged release dirs, **`Restart-Service RetrieverRebuild`**, **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**).
-- Before invoking **`deploy.ps1`**, the workflow copies **`deploy\*.ps1`** and **`deploy\windows\*.ps1`** from the GitHub checkout into **`D:\retriever-rebuild\bin\`** so deploy script fixes ship automatically.
+- Before invoking **`deploy.ps1`**, the workflow copies **`deploy\*.ps1`**, **`deploy\github-runner\post-deploy-feedback.ps1`**, and **`deploy\windows\*.ps1`** from the GitHub checkout into **`D:\retriever-rebuild\bin\`** so deploy script fixes ship automatically.
 
 **There is intentionally no YAML toggle to skip automated health/smoke** — see **`WINDOWS_FETCH_RELEASE.md`** rationale.
 
 Concurrency: **`concurrency.group: retriever-rebuild-deploy-bggol-vesko01`** means parallel dispatches serialize (second waits). **`cancel-in-progress: false`** prevents aborting mid-restart mid-deploy.
+
+---
+
+## Part E — Post-deploy feedback (agents, Cursor, humans)
+
+After every workflow run, the job runs **`deploy/github-runner/post-deploy-feedback.ps1`** with **`if: always()`**, so it still collects localhost probes when **`deploy.ps1`** fails partway (for example after a bad restart). That does **not** turn a failed deploy green: the deploy step outcome still drives the overall workflow result unless a later step fails for a separate reason.
+
+### What gets written (under the Actions workspace)
+
+| File | Purpose |
+|---|---|
+| **`deploy-feedback/feedback.json`** | Machine-readable: version, health, Fetch `GET /fetch` status, optional broker **`GET …/health`**, legacy **`:8000`** probe, **`RetrieverRebuild` / `Retriever`** service states, optional **`smoke-transcript.txt`** metadata. No tokens or env secrets are read from **`retriever.env`** except **`BOONEOPS_BROKER_URL`** for an optional broker health URL (no bearer/HMAC). |
+| **`deploy-feedback/FEEDBACK_SUMMARY.md`** | Short Markdown table for log paste and chat. ASCII-oriented. |
+| **`deploy-feedback/smoke-transcript.txt`** | Full console capture of a second **`smoke.ps1`** pass (workflow uses **`-RunSmoke`**). Deploy already ran smoke once on success; this file is for CI visibility. |
+
+### Where to download it
+
+1. Open the workflow run on GitHub.
+2. Under **Artifacts**, download **`retriever-rebuild-deploy-feedback`**.
+3. Unzip and open **`FEEDBACK_SUMMARY.md`** first; use **`feedback.json`** for tools and agents.
+
+The job log also prints a block between **`=== FEEDBACK_SUMMARY (concise) ===`** markers so you can screenshot or copy without downloading.
+
+### How agents and operators should use it
+
+- Treat **`gitStampOk: false`** (or the summary line **git stamp ok … NO**) as a mis-stamped release: **`/version`** still shows placeholder **`gitSha`** **`dev`** or **`gitRef`** **`local`**, which should not happen after **`deploy.ps1`** (see **`.release-meta`** stamping in **`deploy.ps1`**). Investigate the running release and env before trusting the deploy.
+- **`fetchGet.statusCode`** should be **401** or **403** on production; **200** is only expected when **`RETRIEVER_SMOKE_LOCAL_FETCH=true`** (local dev identity). The script never sends cookies or service tokens.
+- **Broker**: when **`BOONEOPS_BROKER_URL`** is set in **`D:\retriever-rebuild\env\retriever.env`**, the script probes **`{url}/health`**. By default a broker outage does **not** fail the workflow. Set the machine env **`RETRIEVER_FEEDBACK_FAIL_ON_BROKER=true`** on the runner (or a user env visible to the runner) if you want **`post-deploy-feedback.ps1`** to exit **1** when that probe fails.
+- **Legacy**: respects **`RETRIEVER_SMOKE_SKIP_LEGACY`** / **`RETRIEVER_FEEDBACK_SKIP_LEGACY`** the same way as **`smoke.ps1`**.
+
+### Manual rerun on the server
+
+```powershell
+powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\post-deploy-feedback.ps1 -RunSmoke
+# or from a full repo checkout:
+powershell -ExecutionPolicy Bypass -File .\deploy\github-runner\post-deploy-feedback.ps1 -OutputDir .\deploy-feedback -RunSmoke
+```
 
 ---
 
@@ -161,4 +208,4 @@ Concurrency: **`concurrency.group: retriever-rebuild-deploy-bggol-vesko01`** mea
 
 ## After changes to deploy scripts locally
 
-The GitHub Actions workflow now copies **`deploy/deploy.ps1`**, **`deploy/smoke.ps1`**, **`deploy/healthcheck.ps1`**, **`deploy/rollback.ps1`**, and **`deploy/windows/*.ps1`** into **`D:\retriever-rebuild\bin\`** before each deploy. Manual RDP deploys should do the same if you bypass Actions.
+The GitHub Actions workflow now copies **`deploy/deploy.ps1`**, **`deploy/smoke.ps1`**, **`deploy/healthcheck.ps1`**, **`deploy/rollback.ps1`**, **`deploy/github-runner/post-deploy-feedback.ps1`**, and **`deploy/windows/*.ps1`** into **`D:\retriever-rebuild\bin\`** before each deploy. Manual RDP deploys should do the same if you bypass Actions.

@@ -26,6 +26,8 @@ Live production for the rebuild is **Windows Server** on **`bggol-vesko01`**, no
 
 Plain English: operators follow **PowerShell/NSSM** procedures on the **`D:\retriever-rebuild\`** layout; do not assume **`/opt`**, **bash deploy**, or **`systemd`** on this host.
 
+**CI lane:** merges to **`main`** trigger **GitHub Actions** on a **self-hosted Windows runner** on this host, which runs **`D:\retriever-rebuild\bin\deploy.ps1`** (see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**). The **post-deploy feedback** roadmap—so agents read smoke/health/version outcomes without clipboard mediation—is **`docs/runbooks/automated-feedback-bridge-windows.md`**.
+
 ## Reference: Linux sibling-VM runtime plan (deferred)
 
 The table below describes an **original** Linux-oriented shape (e.g. **`bggol-retriever01`**, **`retriever-web.service`**, **`retriever-next.boonegraphics.net`**) for a possible **future** sibling VM. It is **not** the active production path for **`bggol-vesko01`**. First live hostname is **`retriever.boonegraphics.net`**; a dedicated staging subdomain was deferred per **`PLAN.md`**.

@@ -4,6 +4,27 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-11 — Automated feedback bridge documented (post auto-deploy)
+
+**Goal:** Plan the **automated feedback bridge** after GitHub self-hosted **push-to-`main`** deploy: agent-readable outcomes without clipboard mediation, Windows- and **`8000`**-safe.
+
+**What happened:**
+
+- Confirmed **auto deploy** is **`on.push.branches: main`** on **`.github/workflows/deploy-retriever-rebuild-windows.yml`** (plus **manual dispatch**).
+- Added **`docs/runbooks/automated-feedback-bridge-windows.md`**: Phases **A** (localhost feedback artifact), **B** (Cloudflare Access public URL via **service token on `bggol-vesko01`**, not repo secrets), **C** (Fetch/broker prompt smoke when enabled), **D** (workflow summaries / artifacts for agents).
+- Updated **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**: intro links, **Part D** describes **push + manual**, **post-deploy feedback** pointer.
+- Updated **`PLAN.md`**: **current phase** = feedback after deploy; **completed** auto deploy line; **resolved** decision text; **next session** = Phase A implementation; **open** items for artifact format/cadence/token rotation; **guardrail** for legacy **`8000`**.
+
+**Plain-English result:**
+
+Deploy lane is documented as **done** for routine **`main`** merges; the project now points **next engineering** at **Phase A feedback** (bundle health/smoke/version/legacy probe for agents), then Access token-on-box checks, then broker Fetch smoke.
+
+**Next recommended session:**
+
+Implement **Phase A** (workflow +/or server script producing artifact or bounded log block) and record the chosen format in the GitHub Actions runbook.
+
+---
+
 ## 2026-05-09 — Fetch foundation deployed and smoke passed
 
 **Goal:** Build and deploy the first real new-Fetch foundation behind the deployed auth shell while keeping model and tool routing disabled.
