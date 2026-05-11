@@ -1,4 +1,4 @@
-# Manual deploy for RetrieverRebuild on Windows Server (bggol-vesko01).
+# Auto/manual deploy for RetrieverRebuild on Windows Server (bggol-vesko01).
 #
 # Targets ONLY the NSSM service "RetrieverRebuild" / port 8810 via D:\retriever-rebuild\bin\deploy.ps1.
 # This workflow does NOT stop, reinstall, or reconfigure legacy "Retriever" on port 8000.
@@ -67,12 +67,13 @@ jobs:
 
       - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
         env:
+          DEPLOY_GIT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
           RETRIEVER_RUN_MIGRATIONS: ${{ inputs.run_migrations && 'true' || '' }}
           RETRIEVER_ASSERT_MIGRATION_0002: ${{ inputs.assert_migration_0002 && 'true' || '' }}
           RETRIEVER_SMOKE_SKIP_LEGACY: ${{ inputs.skip_legacy_liveness && 'true' || '' }}
         run: |
-          $ref = '${{ inputs.git_ref }}'.Trim()
-          if (-not $ref) { Write-Error 'git_ref input is empty.'; exit 1 }
+          $ref = $env:DEPLOY_GIT_REF.Trim()
+          if (-not $ref) { Write-Error 'DEPLOY_GIT_REF is empty.'; exit 1 }
           Write-Host "=== GitHub Actions: invoking server deploy.ps1 Ref=$ref ==="
           Write-Host "Target: RetrieverRebuild / port 8810 only - legacy Retriever on 8000 is not managed by deploy.ps1."
           $deployScript = 'D:\retriever-rebuild\bin\deploy.ps1'
