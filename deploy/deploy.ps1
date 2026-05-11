@@ -110,6 +110,40 @@ function Assert-NonLegacyServiceName {
     }
 }
 
+function Read-ReleaseMetaValue {
+    param([string]$MetaPath, [string]$Key)
+    if (-not (Test-Path -LiteralPath $MetaPath)) { return $null }
+    foreach ($raw in Get-Content -LiteralPath $MetaPath) {
+        $line = $raw.Trim()
+        if ($line -eq "" -or $line.StartsWith("#")) { continue }
+        $parts = $line -split "=", 2
+        if ($parts.Count -ne 2) { continue }
+        if ($parts[0].Trim() -ne $Key) { continue }
+        return $parts[1].Trim()
+    }
+    return $null
+}
+
+function Write-ReleaseMetaComplete {
+    param(
+        [string]$ReleaseDirPath,
+        [string]$Sha,
+        [string]$RefForMeta
+    )
+    $metaPath = Join-Path $ReleaseDirPath ".release-meta"
+    $builtAt = Read-ReleaseMetaValue -MetaPath $metaPath -Key "BUILT_AT"
+    if (-not $builtAt) { $builtAt = Get-Date -Format "o" }
+    $lines = @(
+        "GIT_SHA=$Sha",
+        "GIT_REF=$RefForMeta",
+        "BUILT_AT=$builtAt",
+        "HOST_NAME=$env:COMPUTERNAME",
+        "DEPLOY_OPERATOR=$env:USERNAME",
+        "DEPLOYED_AT=$(Get-Date -Format 'o')"
+    )
+    ($lines -join "`n") + "`n" | Out-File -FilePath $metaPath -Encoding utf8
+}
+
 function Clear-StaleEnvVars {
     # Old Retriever sets system-level FETCH_*, MODEL_*, ANTHROPIC_*, BOONEOPS_*,
     # PRINTSMITH_* env vars that pollute new Retriever's pydantic-settings.
@@ -420,7 +454,8 @@ if (Test-Path $currentLink) {
 Set-Junction -Link $currentLink -Target $releaseDir
 Write-Log "current -> $releaseDir"
 
-"DEPLOYED_AT=$(Get-Date -Format 'o')" | Out-File "$releaseDir\.release-meta" -Append -Encoding utf8
+Write-ReleaseMetaComplete -ReleaseDirPath $releaseDir -Sha $fullSha -RefForMeta $GitRef
+Write-Log "Updated $releaseDir\.release-meta (full stamp for current release)."
 
 # ---------------------------------------------------------------------------
 # Restart service (RetrieverRebuild only; never legacy Retriever)

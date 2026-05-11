@@ -104,6 +104,29 @@ function Remove-NonAscii {
     return -join ($Text.ToCharArray() | Where-Object { [int]$_ -lt 128 })
 }
 
+function Test-BrokerProbeUrl {
+    param([string]$TrimmedUrl, [ref]$ReasonOut)
+    $ReasonOut.Value = $null
+    if ([string]::IsNullOrWhiteSpace($TrimmedUrl)) {
+        $ReasonOut.Value = "not_set"
+        return $false
+    }
+    if ($TrimmedUrl.IndexOf("<") -ge 0 -or $TrimmedUrl.IndexOf(">") -ge 0) {
+        $ReasonOut.Value = "placeholder_or_template"
+        return $false
+    }
+    $uri = $null
+    if (-not [uri]::TryCreate($TrimmedUrl, [System.UriKind]::Absolute, [ref]$uri)) {
+        $ReasonOut.Value = "invalid_uri"
+        return $false
+    }
+    if ($uri.Scheme -ne "http" -and $uri.Scheme -ne "https") {
+        $ReasonOut.Value = "invalid_uri"
+        return $false
+    }
+    return $true
+}
+
 function Resolve-SmokePath {
     if ($SmokeScript -and (Test-Path -LiteralPath $SmokeScript)) { return $SmokeScript }
     $binSmoke = "D:\retriever-rebuild\bin\smoke.ps1"
@@ -210,17 +233,23 @@ $feed["retrieverRebuild"] = $rebuild
 # Broker GET /health when BOONEOPS_BROKER_URL is present in env file
 # ---------------------------------------------------------------------------
 $brokerBase = Get-SimpleEnvFileValue -Path $EnvFile -Key "BOONEOPS_BROKER_URL"
+$brokerTrimmed = if ($brokerBase) { $brokerBase.Trim() } else { "" }
+$brokerSkipReason = $null
+$brokerProbeOk = Test-BrokerProbeUrl -TrimmedUrl $brokerTrimmed -ReasonOut ([ref]$brokerSkipReason)
+
 $brokerOut = New-Object System.Collections.Specialized.OrderedDictionary
 $brokerOut["envFile"] = $EnvFile
-$brokerOut["urlConfigured"] = [bool]($brokerBase -and $brokerBase.Trim().Length -gt 0)
+$brokerOut["envValuePresent"] = [bool]($brokerTrimmed.Length -gt 0)
+$brokerOut["urlConfigured"] = [bool]$brokerProbeOk
+$brokerOut["skipReason"] = if ($brokerProbeOk) { $null } else { $brokerSkipReason }
 $brokerOut["probeRan"] = $false
 $brokerOut["healthUrl"] = $null
 $brokerOut["statusCode"] = $null
 $brokerOut["ok"] = $null
 $brokerOut["error"] = $null
 
-if ($brokerOut["urlConfigured"]) {
-    $bb = $brokerBase.Trim().TrimEnd("/")
+if ($brokerProbeOk) {
+    $bb = $brokerTrimmed.TrimEnd("/")
     $healthUrl = $bb + "/health"
     $brokerOut["probeRan"] = $true
     $brokerOut["healthUrl"] = $healthUrl
@@ -324,6 +353,15 @@ if ($brokerOut["probeRan"]) {
     [void]$lines.Add("- Probed: $($brokerOut['healthUrl'])")
     [void]$lines.Add("- HTTP: $($brokerOut['statusCode']) ok=$($brokerOut['ok'])")
     if ($brokerOut["error"]) { [void]$lines.Add("- Error: $(Remove-NonAscii ([string]$brokerOut['error']))") }
+} elseif ($brokerOut["envValuePresent"] -and $brokerOut["skipReason"]) {
+    $sr = [string]$brokerOut["skipReason"]
+    if ($sr -eq "placeholder_or_template") {
+        [void]$lines.Add("- Skipped: BOONEOPS_BROKER_URL looks like a placeholder (contains angle brackets); not probed.")
+    } elseif ($sr -eq "invalid_uri") {
+        [void]$lines.Add("- Skipped: BOONEOPS_BROKER_URL is not a valid absolute http(s) URL; not probed.")
+    } else {
+        [void]$lines.Add("- Skipped: BOONEOPS_BROKER_URL not usable for probe (reason: $sr).")
+    }
 } else {
     [void]$lines.Add("- Skipped (BOONEOPS_BROKER_URL not set in env file).")
 }

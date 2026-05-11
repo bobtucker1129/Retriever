@@ -78,6 +78,8 @@ jobs:
           }
           Copy-Item -Force .\deploy\github-runner\post-deploy-feedback.ps1 $bin
           Copy-Item -Force .\deploy\windows\*.ps1 $windowsBin
+          # NSSM launches bin\run-service.ps1; keep this path in sync with the windows scripts copy.
+          Copy-Item -Force .\deploy\windows\run-service.ps1 (Join-Path $bin 'run-service.ps1')
 
       - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
         env:
