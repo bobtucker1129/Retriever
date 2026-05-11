@@ -104,6 +104,29 @@ if ($svc) {
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
+# Align pilot expectations with retriever.env when not already set (deploy.ps1 loads
+# the full file; standalone rollback does not).
+if ($env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED -ne "true") {
+    $envFileRb = "$AppBase\env\retriever.env"
+    if (Test-Path -LiteralPath $envFileRb) {
+        foreach ($raw in Get-Content -LiteralPath $envFileRb) {
+            $line = $raw.Trim()
+            if ($line -eq "" -or $line.StartsWith("#")) { continue }
+            $parts = $line -split "=", 2
+            if ($parts.Count -ne 2) { continue }
+            if ($parts[0].Trim() -ne "RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED") { continue }
+            $v = $parts[1].Trim()
+            if ($v.StartsWith('"') -and $v.EndsWith('"') -and $v.Length -ge 2) {
+                $v = $v.Substring(1, $v.Length - 2)
+            }
+            if ($v.Equals("true", [StringComparison]::OrdinalIgnoreCase)) {
+                $env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED = "true"
+            }
+            break
+        }
+    }
+}
+
 Write-Log "Running health check ..."
 & "$AppBin\healthcheck.ps1"
 if ($LASTEXITCODE -ne 0) { throw "Health check failed after rollback. Manual inspection required." }

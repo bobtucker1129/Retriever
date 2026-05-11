@@ -2,6 +2,9 @@
 #
 # Runs on bggol-vesko01 after deploy.ps1 (or standalone). Writes JSON + summary under
 # -OutputDir. Does not print secrets; does not read token/HMAC lines from retriever.env.
+# For -RunSmoke: if RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED is not already true in the
+# process environment, reads that single key from retriever.env (same path as -EnvFile)
+# so the second smoke pass matches deploy pilot expectations (no secret values printed).
 #
 # PowerShell 5.1 compatible. ASCII-only output files (non-ASCII stripped in summaries).
 #
@@ -298,6 +301,14 @@ if ($RunSmoke) {
     if ($sp) {
         $smokeMeta["script"] = $sp
         $smokeMeta["transcriptPath"] = $SmokeTranscriptPath
+        if ($env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED -ne "true") {
+            $pilotLine = Get-SimpleEnvFileValue -Path $EnvFile -Key "RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED"
+            $pilotTrim = if ($pilotLine) { $pilotLine.Trim() } else { "" }
+            if ($pilotTrim.Equals("true", [StringComparison]::OrdinalIgnoreCase)) {
+                $env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED = "true"
+            }
+        }
+        $smokeMeta["expectFetchPilot"] = ($env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED -eq "true")
         try {
             & $sp *>&1 | Out-File -FilePath $SmokeTranscriptPath -Encoding ascii
             $smokeMeta["exitCode"] = $LASTEXITCODE
@@ -387,6 +398,10 @@ foreach ($svcName in $servicesOut.Keys) {
 if ($RunSmoke -and $smokeMeta["transcriptPath"]) {
     [void]$lines.Add("- Path: $($smokeMeta['transcriptPath'])")
     [void]$lines.Add("- Exit code: $($smokeMeta['exitCode'])")
+    if ($null -ne $smokeMeta["expectFetchPilot"]) {
+        $efp = $smokeMeta["expectFetchPilot"]
+        [void]$lines.Add("- Expect fetch pilot (RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED): $efp")
+    }
 } else {
     [void]$lines.Add("- Not captured (omit -RunSmoke or script missing).")
 }

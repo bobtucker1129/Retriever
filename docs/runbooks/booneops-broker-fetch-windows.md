@@ -129,7 +129,7 @@ Get-Service Retriever
 
 1. Broker **`GET /health`** succeeds from **`bggol-vesko01`**.
 2. **`BOONEOPS_BROKER_ENABLED=true`** — **RetrieverRebuild restart** — confirm config validation passes (**URL**, **bearer**, **HMAC** all set).
-3. **`FETCH_ENABLED=true`** — only after **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist (includes model env vars for validation). For post-deploy **`smoke.ps1`**, set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** (machine or session env) whenever the service intentionally has **`FETCH_ENABLED=true`**, including GitHub Actions deploys on **`bggol-vesko01`** (see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**).
+3. **`FETCH_ENABLED=true`** — only after **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist (includes model env vars for validation). For deploy-time **`healthcheck.ps1`** and **`smoke.ps1`**, set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** (machine or session env **or** the same line in **`retriever.env`**, inherited when **`deploy.ps1`** loads the file) whenever the service intentionally has **`FETCH_ENABLED=true`**, including GitHub Actions deploys on **`bggol-vesko01`** (see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**). Feedback **`-RunSmoke`** applies the **same pilot flag** (process env, else that key read safely from **`retriever.env`**).
 4. **`FETCH_GENERAL_QUESTIONS_ENABLED`** stays **`false`** until the separate general-LLM design ships.
 
 ## Source references

@@ -4,6 +4,10 @@
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\deploy.ps1 main
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\deploy.ps1 965a75c
 #
+# Optional pilot: add RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true to retriever.env while
+# FETCH_ENABLED=true so healthcheck.ps1 + smoke.ps1 expect checks.fetch/modelProvider ok
+# (see deploy/WINDOWS_FETCH_RELEASE.md).
+#
 # Set $env:RETRIEVER_RUN_MIGRATIONS = "true" to run DB migrations on this deploy.
 # Set $env:RETRIEVER_ASSERT_MIGRATION_0002 = "true" to require MySQL to already
 #   have migration 0002_fetch_conversations applied (read-only check; fails before swap).
@@ -493,6 +497,8 @@ Get-Content $EnvFile |
             [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), 'Process')
         }
     }
+# Process env from the file (including optional RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true)
+# is inherited by healthcheck.ps1 and smoke.ps1 later in this script.
 
 # ---------------------------------------------------------------------------
 # Current release for rollback reference

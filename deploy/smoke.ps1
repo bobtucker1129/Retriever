@@ -15,8 +15,7 @@
 #   $env:RETRIEVER_SMOKE_CF_SERVICE_TOKEN = "client-id:client-secret"
 #   $env:RETRIEVER_SMOKE_SKIP_LEGACY = "true"   # skip legacy :8000 check
 #   $env:RETRIEVER_SMOKE_LOCAL_FETCH = "true"   # allow anonymous /fetch 200 (local dev identity)
-#   $env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED = "true"
-#       # pilot: FETCH_ENABLED=true on the service — assert checks.fetch and checks.modelProvider are "ok" (not disabled)
+#   $env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED = "true"   # pilot: expect checks.fetch/modelProvider ok (healthcheck.ps1 uses same var; deploy.ps1 can load from retriever.env)
 
 param(
     [string]$BaseUrl        = "http://127.0.0.1:8810",

@@ -27,7 +27,7 @@ This complements:
 **Plain English contents (target):**
 
 - Git SHA (or ref) that **`deploy.ps1`** actually deployed.
-- Exit codes / pass-fail lines from **`healthcheck.ps1`** and **`smoke.ps1`** (or equivalent).
+- Exit codes / pass-fail lines from **`healthcheck.ps1`** and **`smoke.ps1`** (or equivalent). **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED`** governs Fetch-pilot assertions in **both** scripts; **`post-deploy-feedback.ps1`** **`-RunSmoke`** mirrors **`smoke.ps1`** expectations (fills the flag from **`retriever.env`** when process env does not).
 - Redacted **`GET http://127.0.0.1:8810/version`** (and key **`/health/*`** fields if useful).
 - **Read-only** legacy probe summary for **`localhost:8000`** when enabled (matches today’s “do not skip unless you mean it” posture).
 

@@ -4,11 +4,18 @@
 # Used by deploy.ps1, rollback.ps1, and manual checks.
 #
 # Targets ONLY port 8810 (RetrieverRebuild). Does not probe legacy Retriever.
+#
+# Foundation (default): /health/ready must show checks.fetch and checks.modelProvider
+# as "disabled" (FETCH_ENABLED=false on the service).
+# Pilot: set RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true (process env, or same key in
+# retriever.env when deploy.ps1 has loaded it) to require both checks as "ok".
 
 param(
     [string]$BaseUrl = "http://127.0.0.1:8810",
     [int]$MaxWaitSeconds = 15
 )
+
+$expectFetchEnabledPilot = ($env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED -eq "true")
 
 $ErrorActionPreference = "SilentlyContinue"
 
@@ -39,6 +46,10 @@ while ($elapsed -lt $MaxWaitSeconds) {
 if (-not $ready) {
     Write-Host "[healthcheck] FAIL: Service did not respond within ${MaxWaitSeconds}s."
     exit 1
+}
+
+if ($expectFetchEnabledPilot) {
+    Write-Host "[healthcheck] Pilot: RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true (expect checks.fetch/modelProvider = ok)"
 }
 
 # ---------------------------------------------------------------------------
@@ -75,7 +86,14 @@ try {
     }
     $fetchState = $body.checks.fetch
     $modelState = $body.checks.modelProvider
-    if ($fetchState -ne "disabled" -or $modelState -ne "disabled") {
+    if ($expectFetchEnabledPilot) {
+        if ($fetchState -eq "ok" -and $modelState -eq "ok") {
+            Write-Host "[healthcheck] OK:   Pilot Fetch/model checks (fetch=$fetchState modelProvider=$modelState)"
+        } else {
+            Write-Host "[healthcheck] FAIL: Pilot expects checks.fetch and checks.modelProvider ok (fetch=$fetchState modelProvider=$modelState)"
+            $allPassed = $false
+        }
+    } elseif ($fetchState -ne "disabled" -or $modelState -ne "disabled") {
         Write-Host "[healthcheck] FAIL: Fetch/model routing must stay disabled until explicitly enabled (fetch=$fetchState modelProvider=$modelState)"
         $allPassed = $false
     } else {
