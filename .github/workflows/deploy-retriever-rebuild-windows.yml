@@ -72,7 +72,9 @@ jobs:
           $windowsBin = Join-Path $bin 'windows'
           New-Item -ItemType Directory -Force -Path $bin | Out-Null
           New-Item -ItemType Directory -Force -Path $windowsBin | Out-Null
-          Copy-Item -Force .\deploy\deploy.ps1 .\deploy\smoke.ps1 .\deploy\healthcheck.ps1 .\deploy\rollback.ps1 $bin
+          foreach ($script in @('deploy.ps1', 'smoke.ps1', 'healthcheck.ps1', 'rollback.ps1')) {
+            Copy-Item -Force (Join-Path '.\deploy' $script) $bin
+          }
           Copy-Item -Force .\deploy\windows\*.ps1 $windowsBin
 
       - name: Deploy via D:\retriever-rebuild\bin\deploy.ps1
