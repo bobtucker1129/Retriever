@@ -99,6 +99,7 @@
       aria-label="Fetch composer"
       method="post"
       action="{% if active_conversation_id %}/fetch/conversations/{{ active_conversation_id }}/ask{% else %}#{% endif %}"
+      data-fetch-ask-form
     >
       <textarea
         id="fetch-question"
@@ -110,10 +111,14 @@
       {% if not settings.fetch_enabled %}
       <p class="fetch-disabled-note">Composer is locked until Fetch is enabled in environment settings.</p>
       {% elif fetch_can_use_composer %}
-      <p class="fetch-disabled-note muted">Replies are stubbed until provider routing is connected. No live model, PrintSmith, docs, BooneOps, or uploads run.</p>
+      <p class="fetch-disabled-note muted">What runs depends on how this server is configured. Pilot setups may route some questions through BooneOps. Live PrintSmith data, documentation lookup, file uploads, and broad internet answers stay off until operators enable those paths; until then you may see stubs or offline wording.</p>
       {% else %}
       <p class="fetch-disabled-note">{{ fetch_composer_disabled_reason }}</p>
       {% endif %}
+      <div class="fetch-ask-working" id="fetch-ask-working" hidden role="status" aria-live="polite">
+        <span class="fetch-ask-spinner" aria-hidden="true"></span>
+        <span>Fetch is working… This may take a moment on slow requests.</span>
+      </div>
       <div class="fetch-composer-actions">
         <label class="fetch-upload-toggle" for="fetch-save-uploads">
           <input id="fetch-save-uploads" name="save_uploads" type="checkbox" disabled>
@@ -189,6 +194,31 @@
       });
     }
     syncToggle();
+
+    var askForm = shell.querySelector("[data-fetch-ask-form]");
+    var askWorking = document.getElementById("fetch-ask-working");
+    if (askForm && askWorking) {
+      askForm.addEventListener("submit", function () {
+        var action = askForm.getAttribute("action") || "";
+        if (action === "#" || action.indexOf("/ask") === -1) {
+          return;
+        }
+        var submitBtn = askForm.querySelector('button[type="submit"]');
+        var ta = askForm.querySelector("#fetch-question");
+        if (submitBtn && submitBtn.disabled) {
+          return;
+        }
+        askWorking.hidden = false;
+        askForm.classList.add("fetch-composer-submitting");
+        askForm.setAttribute("aria-busy", "true");
+        if (submitBtn) {
+          submitBtn.disabled = true;
+        }
+        if (ta && !ta.disabled) {
+          ta.readOnly = true;
+        }
+      });
+    }
   })();
 </script>
 {% endblock %}

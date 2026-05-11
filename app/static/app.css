@@ -996,6 +996,40 @@ a.fetch-row-action:hover {
   margin-top: -0.2rem;
 }
 
+.fetch-ask-working {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.82rem;
+  gap: var(--space-sm);
+  margin-top: -0.15rem;
+}
+
+.fetch-ask-working[hidden] {
+  display: none !important;
+}
+
+.fetch-ask-spinner {
+  animation: fetch-ask-spin 0.65s linear infinite;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  border-top-color: var(--color-muted);
+  flex-shrink: 0;
+  height: 1rem;
+  width: 1rem;
+}
+
+@keyframes fetch-ask-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fetch-composer.fetch-composer-submitting textarea:not(:disabled) {
+  cursor: wait;
+  opacity: 0.92;
+}
+
 .fetch-upload-toggle {
   align-items: center;
   display: inline-flex;

@@ -200,6 +200,8 @@ First-version user experience:
 
 This should feel closer to Cursor than to a dead web form. The goal is not fake personality. The goal is visible progress.
 
+**UI roadmap:** Plain HTML ask posts should never leave the composer looking idle while the browser waits on a slow broker or model turn. Short term that means immediate client-side working state (disabled send + clear copy) without streaming. Longer term, match Cursor-style cues: a muted in-thread progress or “thinking” line that updates during the turn and collapses into the final assistant message so people do not assume the page froze or send the same prompt again.
+
 Useful progress messages can be simple:
 
 - "Connecting to PrintSmith..."

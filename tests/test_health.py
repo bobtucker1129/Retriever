@@ -14,6 +14,19 @@ def test_disabled_features_report_disabled_not_failed() -> None:
     assert checks["booneopsBroker"] == "disabled"
 
 
+def test_fetch_enabled_marks_fetch_and_model_checks_ok() -> None:
+    """Contract for RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED smoke pilot mode."""
+    checks = readiness_checks(
+        AppSettings(
+            fetch_enabled=True,
+            model_provider="openai",
+            model_default="test-model",
+        )
+    )
+    assert checks["fetch"] == "ok"
+    assert checks["modelProvider"] == "ok"
+
+
 def test_ready_status_is_degraded_until_mysql_is_checked() -> None:
     checks = readiness_checks(AppSettings())
 

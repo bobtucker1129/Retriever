@@ -74,13 +74,16 @@ With **`FETCH_ENABLED=false`**, **model-related environment variables are not re
 
    For checks through the public hostname, set **`RETRIEVER_SMOKE_CF_URL`** (and optional Access service-token variables documented in **`smoke.ps1`**). To skip the legacy **8000** listener check, set **`RETRIEVER_SMOKE_SKIP_LEGACY=true`**.
 
+   When the service is intentionally running a **Fetch pilot** with **`FETCH_ENABLED=true`**, set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** for the same **`smoke.ps1`** invocation so **`/health/ready`** asserts **`checks.fetch`** and **`checks.modelProvider`** are **`ok`** instead of **`disabled`**. Omit the variable (default) for foundation deploys where **`FETCH_ENABLED=false`**.
+
 ## Smoke expectations (foundation, `FETCH_ENABLED=false`)
 
-The shipped **`smoke.ps1`** is aligned with **foundation** operation:
+The shipped **`smoke.ps1`** is aligned with **foundation** operation (**`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED`** unset or not **`true`**):
 
 - **`/health/live`**, **`/health/ready`**, **`/version`** succeed on **`http://127.0.0.1:8810`** (or your base URL).
 - **`/version`** JSON includes **`gitSha`** and **`environment`**, and must not echo secrets.
-- **`/health/ready`**: under current health logic, **`checks.fetch`** and **`checks.modelProvider`** are both **`disabled`** when **`FETCH_ENABLED=false`**. The smoke script asserts that—if you set **`FETCH_ENABLED=true`**, expect these checks to fail until smoke expectations are updated for a pilot.
+- **`/health/ready`**: under current health logic, **`checks.fetch`** and **`checks.modelProvider`** are both **`disabled`** when **`FETCH_ENABLED=false`**. The smoke script asserts that.
+- **Fetch pilot (`FETCH_ENABLED=true`):** set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** when you run **`smoke.ps1`** so those two checks must be **`ok`** (matching **`app/services/health.py`** when ask is enabled). If the service has Fetch enabled but you omit this variable, smoke will still expect **`disabled`** and **fail** — that mismatch is intentional unless you opt into the pilot expectation.
 - **`checks.booneopsBroker`**: **`disabled`** when **`BOONEOPS_BROKER_ENABLED=false`**. If you set **`BOONEOPS_BROKER_ENABLED=true`** for integration work, **`/health/ready`** may show **`degraded`** overall because broker/tailscale rows are placeholders—still run broker **`GET /health`** manually from **`docs/runbooks/booneops-broker-fetch-windows.md`** until smoke expectations catch up.
 - **`GET /fetch`**: without a browser session, expect **401/403** (Cloudflare identity or app auth). Anonymous **200** is only for local-dev smoke override.
 - **Legacy Retriever** on **8000**: by default, smoke still checks that something answers (token authority unchanged).
@@ -134,7 +137,7 @@ Use this when you intentionally move past the stub. Items are decision + verific
 
 - [ ] Automated tests green for the release that wires routing.
 - [ ] Manual: internal question, PrintSmith-backed question (when routed), docs question, failure and timeout behavior per trust plan.
-- [ ] Post-deploy **`smoke.ps1`** updated if **`FETCH_ENABLED=true`** is normal—today’s script assumes both integrations **`disabled`**.
+- [ ] Post-deploy **`smoke.ps1`** passes: foundation leaves **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED`** unset; Fetch pilot runs set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** so **`checks.fetch`** / **`checks.modelProvider`** **`ok`** is required.
 
 **Operational**
 

@@ -129,7 +129,7 @@ Get-Service Retriever
 
 1. Broker **`GET /health`** succeeds from **`bggol-vesko01`**.
 2. **`BOONEOPS_BROKER_ENABLED=true`** — **RetrieverRebuild restart** — confirm config validation passes (**URL**, **bearer**, **HMAC** all set).
-3. **`FETCH_ENABLED=true`** — only after **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist (includes model env vars for validation).
+3. **`FETCH_ENABLED=true`** — only after **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist (includes model env vars for validation). For post-deploy **`smoke.ps1`**, set **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** (machine or session env) whenever the service intentionally has **`FETCH_ENABLED=true`**, including GitHub Actions deploys on **`bggol-vesko01`** (see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**).
 4. **`FETCH_GENERAL_QUESTIONS_ENABLED`** stays **`false`** until the separate general-LLM design ships.
 
 ## Source references

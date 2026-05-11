@@ -15,6 +15,8 @@
 #   $env:RETRIEVER_SMOKE_CF_SERVICE_TOKEN = "client-id:client-secret"
 #   $env:RETRIEVER_SMOKE_SKIP_LEGACY = "true"   # skip legacy :8000 check
 #   $env:RETRIEVER_SMOKE_LOCAL_FETCH = "true"   # allow anonymous /fetch 200 (local dev identity)
+#   $env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED = "true"
+#       # pilot: FETCH_ENABLED=true on the service — assert checks.fetch and checks.modelProvider are "ok" (not disabled)
 
 param(
     [string]$BaseUrl        = "http://127.0.0.1:8810",
@@ -25,6 +27,7 @@ param(
 )
 
 $effectiveSkipLegacy = $SkipLegacyCheck -or ($env:RETRIEVER_SMOKE_SKIP_LEGACY -eq "true")
+$expectFetchEnabledPilot = ($env:RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED -eq "true")
 
 $ErrorActionPreference = "SilentlyContinue"
 $pass = 0
@@ -67,6 +70,9 @@ function Get-CfHeaders {
 # 1. Localhost checks
 # ---------------------------------------------------------------------------
 Write-Host "[smoke] === Localhost checks ($BaseUrl) ==="
+if ($expectFetchEnabledPilot) {
+    Write-Host "[smoke] Pilot: RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true (expect checks.fetch/modelProvider = ok)"
+}
 
 foreach ($path in @("/health/live", "/health/ready", "/version")) {
     $r = Invoke-Check -Url "$BaseUrl$path"
@@ -83,7 +89,8 @@ if ($r) {
     Write-Result -Ok $false -Label "version body checks" -Detail "(no response)"
 }
 
-# health/ready must not leak secrets; Fetch + model must stay disabled until explicitly enabled
+# health/ready must not leak secrets.
+# Default: Fetch + modelProvider must be disabled (foundation). Pilot: RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true expects both "ok".
 $r = Invoke-Check -Url "$BaseUrl/health/ready"
 if ($r) {
     Write-Result -Ok ($r.Content -notmatch '"password"') -Label "health does not leak secrets"
@@ -91,8 +98,13 @@ if ($r) {
         $ready = $r.Content | ConvertFrom-Json
         $fetchState = $ready.checks.fetch
         $modelState = $ready.checks.modelProvider
-        Write-Result -Ok ($fetchState -eq "disabled") -Label "health: fetch integration disabled [$fetchState]"
-        Write-Result -Ok ($modelState -eq "disabled") -Label "health: model routing disabled [$modelState]"
+        if ($expectFetchEnabledPilot) {
+            Write-Result -Ok ($fetchState -eq "ok") -Label "health: fetch integration enabled (pilot expects ok) [$fetchState]"
+            Write-Result -Ok ($modelState -eq "ok") -Label "health: model routing enabled for pilot (expects ok) [$modelState]"
+        } else {
+            Write-Result -Ok ($fetchState -eq "disabled") -Label "health: fetch integration disabled [$fetchState]"
+            Write-Result -Ok ($modelState -eq "disabled") -Label "health: model routing disabled [$modelState]"
+        }
     } catch {
         Write-Result -Ok $false -Label "health/ready Fetch guardrails parse" -Detail $_.Exception.Message
     }
@@ -149,8 +161,13 @@ if ($CfUrl) {
         if ($rcf) {
             try {
                 $cj = $rcf.Content | ConvertFrom-Json
-                Write-Result -Ok ($cj.checks.fetch -eq "disabled") -Label "CF health: fetch disabled"
-                Write-Result -Ok ($cj.checks.modelProvider -eq "disabled") -Label "CF health: model routing disabled"
+                if ($expectFetchEnabledPilot) {
+                    Write-Result -Ok ($cj.checks.fetch -eq "ok") -Label "CF health: fetch enabled pilot (expects ok) [$($cj.checks.fetch)]"
+                    Write-Result -Ok ($cj.checks.modelProvider -eq "ok") -Label "CF health: model routing pilot (expects ok) [$($cj.checks.modelProvider)]"
+                } else {
+                    Write-Result -Ok ($cj.checks.fetch -eq "disabled") -Label "CF health: fetch disabled"
+                    Write-Result -Ok ($cj.checks.modelProvider -eq "disabled") -Label "CF health: model routing disabled"
+                }
             } catch {
                 Write-Result -Ok $false -Label "CF health/ready parse" -Detail $_.Exception.Message
             }

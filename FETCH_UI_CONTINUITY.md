@@ -106,6 +106,13 @@ The skeleton should include visual states for:
 
 Do not wait until backend routing is complete to design these states. These states are part of why Fetch will feel trustworthy.
 
+## Slow turns and live progress (roadmap)
+
+Heavy routes already plan for delayed-report cards with visible updates. Separately, **synchronous** asks can still take noticeable time (broker round trips, future model latency). The UI must not look idle during that wait.
+
+- **Shipped increment:** Progressive enhancement on the HTML ask form—immediate working state (spinner, disabled Ask, plain-English “working” copy) while the navigation completes. No backend or streaming required; without JavaScript the form still posts normally.
+- **Target experience:** Cursor-like muted progress or an in-thread “thinking” line that reflects ongoing work and **resolves into** the final assistant reply when the turn completes, so users do not spam duplicate messages during long work.
+
 ## Non-Goals
 
 - Do not preserve old Fetch data shape as a compatibility requirement.

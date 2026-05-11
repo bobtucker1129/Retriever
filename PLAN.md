@@ -198,6 +198,7 @@ Recommended scope:
 
 ## Later Work
 
+- **Fetch slow-turn UX:** Cursor-style muted in-thread progress or “thinking” state during long broker/model turns, updating over time and collapsing into the final assistant message (companion to delayed-report cards). Near-term without streaming: keep explicit client-side working feedback on ask submit so the composer never looks idle behind a slow POST.
 - Produce migration planning before production build-out, focused on real modules/data that matter; old Fetch data can be ignored or archived unless explicitly requested.
 - Expand `SECRETS_HANDLING.md`, `AUDIT_LOG_DESIGN.md`, `WEBHOOK_AND_BROKER_AUTH.md`, and `BUILD_CODE_LAYOUT.md` as implementation choices become concrete.
 - Produce a DSF action-service design after Fetch/auth are stable.

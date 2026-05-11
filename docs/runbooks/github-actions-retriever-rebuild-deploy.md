@@ -143,6 +143,7 @@ For **push** events, optional dispatch inputs are absent—**`deploy.ps1`** rece
 | **`run_migrations`** | **True once** whenever a migration ships (**`WINDOWS_FETCH_RELEASE.md`** recommends **`RETRIEVER_RUN_MIGRATIONS=true`** for first **`0002`**, then usually false). Workflow maps to **`$env:RETRIEVER_RUN_MIGRATIONS`**. |
 | **`assert_migration_0002`** | Optional safety (**`deploy.ps1`**: **`RETRIEVER_ASSERT_MIGRATION_0002=true`**) forcing DB verification before swapping junctions. |
 | **`skip_legacy_liveness`** | When **false** (default), **`smoke.ps1`** still performs the **read-only HTTP probe** against **`localhost:8000`** to prove legacy stays up alongside **`8810`**. Toggle **true** only if probing legacy is undesirable (temporary outage troubleshooting). Workflow maps to **`$env:RETRIEVER_SMOKE_SKIP_LEGACY`**. |
+| **Runner host env (not a workflow input)** | **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** — set **on the Windows host** (system or account env visible to the runner) **only** while **`RetrieverRebuild`** intentionally runs with **`FETCH_ENABLED=true`**, so **`smoke.ps1`** expects **`checks.fetch`** and **`checks.modelProvider`** = **`ok`**. Omit for **`FETCH_ENABLED=false`** (foundation). Same pattern as optional **`RETRIEVER_SMOKE_CF_URL`**. |
 
 4. **`Run workflow`**.
 
@@ -150,7 +151,7 @@ Observe logs on GitHub Actions and cross-check **`D:\retriever-rebuild\logs\depl
 
 Built-in **`deploy.ps1` behavior:**
 
-- Validates config, swaps staged release dirs, **`Restart-Service RetrieverRebuild`**, **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**).
+- Validates config, swaps staged release dirs, **`Restart-Service RetrieverRebuild`**, **`healthcheck.ps1`** + **`smoke.ps1`** (includes Cloudflare knobs only if **`RETRIEVER_SMOKE_CF_URL`** / secrets are preset **on-server**). **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** is **machine-level** env on the runner when **`FETCH_ENABLED=true`** so deploy smoke asserts **`checks.fetch`** / **`checks.modelProvider`** as **`ok`**; leave unset for the default foundation expectation (**`disabled`**).
 - Before invoking **`deploy.ps1`**, the workflow copies **`deploy\*.ps1`**, **`deploy\github-runner\post-deploy-feedback.ps1`**, and **`deploy\windows\*.ps1`** from the GitHub checkout into **`D:\retriever-rebuild\bin\`** so deploy script fixes ship automatically.
 
 **There is intentionally no YAML toggle to skip automated health/smoke** — see **`WINDOWS_FETCH_RELEASE.md`** rationale.
