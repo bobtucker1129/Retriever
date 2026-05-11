@@ -134,6 +134,16 @@ def test_fetch_shell_css_message_list_not_nested_scroll_container() -> None:
     assert "overflow: auto" not in block
 
 
+def test_fetch_shell_css_thread_scroll_smooth_disabled() -> None:
+    """Programmatic scroll anchors use scrollTop jumps; scroll root avoids smooth CSS."""
+    css = _APP_CSS.read_text(encoding="utf-8")
+    scroll_block = re.search(r"\.fetch-thread--scroll\s*\{([^}]*)\}", css, re.DOTALL)
+    assert scroll_block is not None, "expected .fetch-thread--scroll block in app.css"
+    inner = scroll_block.group(1)
+    assert "scroll-behavior:" in inner
+    assert "smooth" not in inner
+
+
 def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     """Static contract for Fetch JS: optimistic ask, single scroller, focus=latest."""
     template_text = _FETCH_SHELL_TEMPLATE.read_text(encoding="utf-8")
@@ -144,7 +154,12 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     assert "preventDefault" in template_text
     assert "fetch(" in template_text
     assert "location.assign" in template_text
-    assert "scrollScrollRootToBottom" in template_text
+    assert "clampFetchScrollTop" in template_text
+    assert "scrollFetchBottomFallback" in template_text
+    assert "scrollFetchRowBottomBreathing" in template_text
+    assert "scrollFetchFocusLatestPair" in template_text
+    assert "runFetchScrollAfterLayout" in template_text
+    assert "getBoundingClientRect" in template_text
     assert "scrollHeight" in template_text
     assert "URLSearchParams" in template_text
 

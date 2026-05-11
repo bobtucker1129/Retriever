@@ -214,6 +214,10 @@
 
     var scrollRoot = shell.querySelector("[data-fetch-scroll-root]");
     var scrollMore = shell.querySelector("[data-fetch-scroll-more]");
+    /** Bottom inset for optimistic user row (~20–32px). */
+    var FETCH_SCROLL_BOTTOM_ROOM = 28;
+    var FETCH_SCROLL_PAIR_PAD = 12;
+    var FETCH_SCROLL_AFTER_LAYOUT_FRAMES = 18;
 
     function updateScrollMore() {
       if (!scrollRoot || !scrollMore) return;
@@ -222,10 +226,111 @@
       scrollMore.hidden = gap <= tolerance;
     }
 
-    /** Pin the conversation scroller to the latest turn (bottom), not a row's block-start. */
-    function scrollScrollRootToBottom(root) {
+    function clampFetchScrollTop(root, y) {
+      if (!root) return 0;
+      var maxTop = Math.max(0, root.scrollHeight - root.clientHeight);
+      if (y < 0) return 0;
+      if (y > maxTop) return maxTop;
+      return y;
+    }
+
+    /** Content-space Y for element top relative to scroll root (not window). */
+    function fetchRootContentTop(root, el) {
+      if (!root || !el) return 0;
+      var rr = root.getBoundingClientRect();
+      var er = el.getBoundingClientRect();
+      return er.top - rr.top + root.scrollTop;
+    }
+
+    /** Content-space Y for element bottom relative to scroll root. */
+    function fetchRootContentBottom(root, el) {
+      if (!root || !el) return 0;
+      var rr = root.getBoundingClientRect();
+      var er = el.getBoundingClientRect();
+      return er.bottom - rr.top + root.scrollTop;
+    }
+
+    /** Last resort / no anchor: clamp to logical bottom using scroll geometry. */
+    function scrollFetchBottomFallback(root) {
       if (!root) return;
-      root.scrollTop = root.scrollHeight;
+      root.scrollTop = clampFetchScrollTop(root, root.scrollHeight - root.clientHeight);
+    }
+
+    /**
+     * Optimistic submit: pin row bottom with breathing room inside the scroll root.
+     */
+    function scrollFetchRowBottomBreathing(root, row, breathingPx) {
+      if (!root || !row || !root.contains(row)) return;
+      var bp = breathingPx || FETCH_SCROLL_BOTTOM_ROOM;
+      var rowBot = fetchRootContentBottom(root, row);
+      var desired = rowBot - root.clientHeight + bp;
+      root.scrollTop = clampFetchScrollTop(root, desired);
+    }
+
+    /**
+     * After reload with focus=latest: show last user turn with assistant header in view when possible.
+     * Picks the largest feasible scrollTop in [asstTop-H, userTop] so both tops stay visible — stays near bottom, not old history.
+     */
+    function scrollFetchFocusLatestPair(root, lastUserMessageId) {
+      if (!root) return;
+      if (!lastUserMessageId) {
+        scrollFetchBottomFallback(root);
+        return;
+      }
+      var userEl = document.getElementById("fetch-msg-" + lastUserMessageId);
+      if (!userEl || !root.contains(userEl)) {
+        scrollFetchBottomFallback(root);
+        return;
+      }
+      var sibling = userEl.nextElementSibling;
+      var assistantEl =
+        sibling &&
+        sibling.classList &&
+        sibling.classList.contains("fetch-message-row") &&
+        sibling.classList.contains("assistant")
+          ? sibling
+          : null;
+
+      var H = root.clientHeight;
+      var maxS = Math.max(0, root.scrollHeight - H);
+
+      if (!assistantEl) {
+        scrollFetchRowBottomBreathing(root, userEl, FETCH_SCROLL_BOTTOM_ROOM);
+        return;
+      }
+
+      var userTop = fetchRootContentTop(root, userEl);
+      var asstTop = fetchRootContentTop(root, assistantEl);
+      var lo = Math.max(0, asstTop - H + FETCH_SCROLL_PAIR_PAD);
+      var hi = Math.min(maxS, userTop);
+      if (lo <= hi) {
+        root.scrollTop = clampFetchScrollTop(root, hi);
+        return;
+      }
+      var peek = Math.min(120, Math.floor(H * 0.33));
+      var fallbackDesired = clampFetchScrollTop(root, asstTop - peek);
+      if (fallbackDesired > hi) {
+        fallbackDesired = clampFetchScrollTop(root, hi);
+      }
+      root.scrollTop = fallbackDesired;
+    }
+
+    /**
+     * Re-apply anchor across layout changes (fonts, wrapping, stacked rAF paints). Bounded; no infinite loop.
+     */
+    function runFetchScrollAfterLayout(root, anchorFn) {
+      if (!root || typeof anchorFn !== "function") return;
+      var frames = 0;
+      function frameTick() {
+        anchorFn();
+        frames++;
+        if (frames >= FETCH_SCROLL_AFTER_LAYOUT_FRAMES) {
+          updateScrollMore();
+          return;
+        }
+        requestAnimationFrame(frameTick);
+      }
+      requestAnimationFrame(frameTick);
     }
 
     if (scrollRoot && scrollMore) {
@@ -280,16 +385,14 @@
           wrap.appendChild(p);
           optimisticRow.appendChild(wrap);
           list.appendChild(optimisticRow);
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              if (scrollRoot) {
-                scrollScrollRootToBottom(scrollRoot);
-              } else {
-                optimisticRow.scrollIntoView({ block: "end", behavior: "auto" });
-              }
-              updateScrollMore();
+          if (scrollRoot) {
+            runFetchScrollAfterLayout(scrollRoot, function () {
+              scrollFetchRowBottomBreathing(scrollRoot, optimisticRow, FETCH_SCROLL_BOTTOM_ROOM);
             });
-          });
+          } else {
+            optimisticRow.scrollIntoView({ block: "end", behavior: "auto" });
+            updateScrollMore();
+          }
         }
 
         if (askError) {
@@ -352,23 +455,19 @@
       });
     }
 
-    if (shell.getAttribute("data-fetch-focus-latest") === "true") {
-      if (scrollRoot) {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            scrollScrollRootToBottom(scrollRoot);
-            try {
-              var u = new URL(window.location.href);
-              if (u.searchParams.get("focus") === "latest") {
-                u.searchParams.delete("focus");
-                var next = u.pathname + (u.search ? u.search : "") + u.hash;
-                window.history.replaceState({}, "", next);
-              }
-            } catch (err) {}
-            updateScrollMore();
-          });
-        });
-      }
+    if (shell.getAttribute("data-fetch-focus-latest") === "true" && scrollRoot) {
+      var lastUserMid = shell.getAttribute("data-fetch-last-user-id") || "";
+      runFetchScrollAfterLayout(scrollRoot, function () {
+        scrollFetchFocusLatestPair(scrollRoot, lastUserMid);
+      });
+      try {
+        var u = new URL(window.location.href);
+        if (u.searchParams.get("focus") === "latest") {
+          u.searchParams.delete("focus");
+          var next = u.pathname + (u.search ? u.search : "") + u.hash;
+          window.history.replaceState({}, "", next);
+        }
+      } catch (err) {}
     }
   })();
 </script>

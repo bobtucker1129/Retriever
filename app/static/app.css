@@ -768,7 +768,7 @@ a.fetch-row-action:hover {
 }
 
 .fetch-thread--scroll {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 .fetch-thread-reports-preview {
