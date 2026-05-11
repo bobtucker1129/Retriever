@@ -15,6 +15,7 @@ from app.auth.permissions import CurrentUser
 from app.config import AppSettings
 from app.fetch.booneops_broker import (
     broker_message_url,
+    build_broker_message_presentation,
     call_booneops_broker,
     format_assistant_text_from_broker_json,
     map_user_to_broker_principal,
@@ -122,6 +123,49 @@ def test_format_assistant_only_uses_safe_fields(payload: dict, expect_substr: st
     assert expect_substr in text
     assert "evil-leak" not in text
     assert "Bearer" not in text
+
+
+def test_build_broker_message_presentation_adds_docs_summary_and_source_cards() -> None:
+    raw = "\n".join(
+        [
+            "Switch flow elements process jobs from left to right.",
+            "Use connections to pass jobs between elements.",
+            "Check private data keys when a script needs state.",
+            "Detailed paragraph " * 40,
+        ]
+    )
+    text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": raw,
+            "requestId": "req-docs",
+            "sources": [
+                {
+                    "kind": "docs",
+                    "title": "Switch Scripting Guide",
+                    "description": "Script element reference",
+                    "url": "/docs/switch-script-guide",
+                }
+            ],
+        },
+        "docs_candidate",
+    )
+
+    assert text.startswith("Summary\n")
+    assert "Details\n" in text
+    assert metadata["request_id"] == "req-docs"
+    assert metadata["source_cards"][0]["title"] == "Switch Scripting Guide"
+    assert metadata["source_cards"][0]["url"] == "/docs/switch-script-guide"
+
+
+def test_build_broker_message_presentation_adds_docs_route_card_without_sources() -> None:
+    text, metadata = build_broker_message_presentation(
+        {"ok": True, "message": "Short docs answer."},
+        "docs_candidate",
+    )
+
+    assert text == "Short docs answer."
+    assert metadata["source_cards"][0]["title"] == "BooneOps documentation route"
 
 
 def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:

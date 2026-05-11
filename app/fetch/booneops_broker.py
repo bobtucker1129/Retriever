@@ -138,8 +138,107 @@ def sanitized_broker_error_summary(data: dict[str, Any]) -> tuple[Optional[str],
     return code, message, detail_keys
 
 
-def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
-    """Build user-visible assistant text from broker JSON (only safe fields)."""
+def _safe_text(value: object, *, max_len: int = 240) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    return text[:max_len]
+
+
+def _is_probably_url(value: str) -> bool:
+    return value.startswith(("http://", "https://", "/"))
+
+
+def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list[dict[str, str]]:
+    cards: list[dict[str, str]] = []
+    source_candidates: list[object] = []
+    for key in ("sourceCards", "source_cards", "sources", "citations"):
+        value = data.get(key)
+        if isinstance(value, list):
+            source_candidates.extend(value)
+
+    for item in source_candidates[:6]:
+        if isinstance(item, str):
+            title = _safe_text(item)
+            if title:
+                cards.append({"kind": "source", "title": title})
+            continue
+        if not isinstance(item, dict):
+            continue
+        title = _safe_text(
+            item.get("title")
+            or item.get("label")
+            or item.get("name")
+            or item.get("filename")
+            or item.get("source")
+        )
+        if not title:
+            continue
+        card: dict[str, str] = {
+            "kind": _safe_text(item.get("kind") or item.get("type") or "source", max_len=40),
+            "title": title,
+        }
+        detail = _safe_text(item.get("description") or item.get("snippet") or item.get("detail"))
+        if detail:
+            card["detail"] = detail
+        url = _safe_text(item.get("url") or item.get("href") or item.get("downloadPath"))
+        if url and _is_probably_url(url):
+            card["url"] = url
+        cards.append(card)
+
+    if not cards and route_label == "docs_candidate":
+        cards.append(
+            {
+                "kind": "docs",
+                "title": "BooneOps documentation route",
+                "detail": "Answer was routed through BooneOps for vendor/tool documentation lookup.",
+            }
+        )
+    return cards
+
+
+def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]:
+    artifacts = data.get("artifacts") or []
+    if not isinstance(artifacts, list):
+        return []
+    cards: list[dict[str, str]] = []
+    for art in artifacts[:6]:
+        if not isinstance(art, dict):
+            continue
+        filename = _safe_text(art.get("filename") or "attachment")
+        artifact_id = _safe_text(art.get("artifactId"), max_len=80)
+        card = {"filename": filename}
+        if artifact_id:
+            card["artifactId"] = artifact_id
+        description = _safe_text(art.get("description") or art.get("sizeLabel"))
+        if description:
+            card["description"] = description
+        download_path = _safe_text(art.get("downloadPath"))
+        if download_path and _is_probably_url(download_path):
+            card["downloadPath"] = download_path
+        cards.append(card)
+    return cards
+
+
+def _first_nonempty_lines(text: str, *, limit: int = 3) -> list[str]:
+    lines = [line.strip(" -•\t") for line in text.splitlines()]
+    return [line for line in lines if line][:limit]
+
+
+def _summarize_broker_answer(raw_message: str, route_label: str) -> Optional[str]:
+    if route_label != "docs_candidate":
+        return None
+    if len(raw_message) < 520 and raw_message.count("\n") < 5:
+        return None
+    lines = _first_nonempty_lines(raw_message, limit=3)
+    if not lines:
+        return None
+    summary = " ".join(lines)
+    return summary[:420]
+
+
+def build_broker_message_presentation(
+    data: dict[str, Any], route_label: str
+) -> tuple[str, dict[str, Any]]:
+    """Build safe user-visible text and rendering metadata from broker JSON."""
     errors = data.get("errors") or []
     policy_denied = any(
         isinstance(e, dict) and str(e.get("code") or "") == "policy_denied" for e in errors
@@ -155,11 +254,11 @@ def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
                 "BooneOps policy blocked this request.\n\n"
                 f"{msg}\n\n"
                 "If you think this is a mistake, contact an operator."
-            )
+            ), {}
         return (
             "BooneOps policy blocked this request.\n\n"
             "Your message was saved; no automated action ran."
-        )
+        ), {}
 
     ok = bool(data.get("ok", True)) if "ok" in data else not errors
     raw_message = str(data.get("message") or "").strip()
@@ -177,13 +276,13 @@ def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
         return (
             f"{body}\n\n"
             "Your message was saved. You can try again or rephrase the question."
-        )
+        ), {}
 
     if not raw_message:
         return (
             "BooneOps returned an empty reply.\n\n"
             "Your message was saved; try again in a moment."
-        )
+        ), {}
 
     lines = [raw_message]
     artifacts = data.get("artifacts") or []
@@ -197,13 +296,35 @@ def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
             aid = str(art.get("artifactId") or "").strip()
             label = f"- {fn}" + (f" ({aid})" if aid else "")
             lines.append(label)
-    return "\n".join(lines)
+    assistant_text = "\n".join(lines)
+    summary = _summarize_broker_answer(raw_message, route_label)
+    if summary:
+        assistant_text = f"Summary\n{summary}\n\nDetails\n{assistant_text}"
+
+    metadata: dict[str, Any] = {}
+    source_cards = _extract_broker_source_cards(data, route_label)
+    if source_cards:
+        metadata["source_cards"] = source_cards
+    artifact_cards = _extract_broker_artifact_cards(data)
+    if artifact_cards:
+        metadata["artifacts"] = artifact_cards
+    request_id = _safe_text(data.get("requestId"), max_len=80)
+    if request_id:
+        metadata["request_id"] = request_id
+    return assistant_text, metadata
+
+
+def format_assistant_text_from_broker_json(data: dict[str, Any]) -> str:
+    """Build user-visible assistant text from broker JSON (only safe fields)."""
+    text, _metadata = build_broker_message_presentation(data, route_label="")
+    return text
 
 
 @dataclass(frozen=True)
 class BooneOpsBrokerTurnResult:
     assistant_text: str
     context_state: str
+    metadata: Optional[dict[str, Any]] = None
 
 
 def default_http_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float) -> Any:
@@ -264,6 +385,7 @@ def call_booneops_broker(
                 "Your message was saved. Try again shortly, or contact an operator if this persists."
             ),
             context_state="booneops_error",
+            metadata={"status_cards": [{"state": "Network issue", "detail": "BooneOps did not receive this turn."}]},
         )
 
     try:
@@ -278,6 +400,7 @@ def call_booneops_broker(
                 "Your message was saved; try again later."
             ),
             context_state="booneops_error",
+            metadata={"status_cards": [{"state": "Unexpected response", "detail": "BooneOps returned data Fetch could not read."}]},
         )
 
     if response.status_code == 401:
@@ -288,6 +411,7 @@ def call_booneops_broker(
                 "Your message was saved. This is a service configuration issue—contact an operator."
             ),
             context_state="booneops_error",
+            metadata={"status_cards": [{"state": "Configuration issue", "detail": "Fetch could not authenticate to BooneOps."}]},
         )
 
     if response.status_code >= 500:
@@ -307,12 +431,15 @@ def call_booneops_broker(
                 "Your message was saved; try again later."
             ),
             context_state="booneops_error",
+            metadata={"status_cards": [{"state": "BooneOps server error", "detail": "The broker or an upstream dependency failed."}]},
         )
 
     if response.status_code >= 400:
-        text = format_assistant_text_from_broker_json(data)
+        text, metadata = build_broker_message_presentation(data, route_label)
         if text.strip():
-            return BooneOpsBrokerTurnResult(assistant_text=text, context_state="booneops_error")
+            return BooneOpsBrokerTurnResult(
+                assistant_text=text, context_state="booneops_error", metadata=metadata
+            )
         return BooneOpsBrokerTurnResult(
             assistant_text=(
                 "BooneOps denied this request.\n\n"
@@ -321,7 +448,7 @@ def call_booneops_broker(
             context_state="booneops_error",
         )
 
-    text = format_assistant_text_from_broker_json(data)
+    text, metadata = build_broker_message_presentation(data, route_label)
     errs = data.get("errors") if isinstance(data.get("errors"), list) else []
     ok = bool(data.get("ok", True))
     policy = any(
@@ -329,4 +456,4 @@ def call_booneops_broker(
     )
     ctx = "booneops_error" if policy or ok is False else "booneops"
 
-    return BooneOpsBrokerTurnResult(assistant_text=text, context_state=ctx)
+    return BooneOpsBrokerTurnResult(assistant_text=text, context_state=ctx, metadata=metadata)

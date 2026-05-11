@@ -4,7 +4,13 @@
 {% block title %}Fetch{% endblock %}
 
 {% block content %}
-<section class="fetch-shell" aria-label="Fetch" data-fetch-shell>
+<section
+  class="fetch-shell"
+  aria-label="Fetch"
+  data-fetch-shell
+  data-fetch-focus-latest="{{ 'true' if fetch_focus_latest and last_user_message_id else 'false' }}"
+  data-fetch-last-user-id="{{ last_user_message_id or '' }}"
+>
   <aside class="fetch-conversation-sidebar" id="fetch-conversation-sidebar" aria-label="Fetch conversations">
     <div class="fetch-conversation-header">
       <form method="post" action="/fetch/conversations/new">
@@ -58,32 +64,73 @@
     </div>
     {% endif %}
 
-    <div class="fetch-thread" aria-label="Fetch conversation">
-      <section class="fetch-thread-reports-preview" aria-label="Thread reports preview">
-        <div>
-          <div class="fetch-thread-reports-title">Thread Reports</div>
-          <div class="fetch-thread-reports-subtitle">Latest Fetch report files will appear here.</div>
-          <div class="fetch-thread-reports-empty">No report files loaded yet.</div>
+    <div class="fetch-thread fetch-thread--scroll" data-fetch-scroll-root>
+      {% if active_conversation_id %}
+      <div class="fetch-message-list" id="fetch-message-list" data-fetch-message-list>
+        {% if not messages %}
+        <div class="fetch-thread-empty-placeholder" aria-hidden="false">
+          <div class="fetch-empty-state fetch-empty-state--inline">
+            <img class="fetch-empty-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
+            <div class="fetch-empty-title">No messages in this thread yet.</div>
+            <p class="fetch-empty-copy">{% if settings.fetch_enabled %}Ask Fetch when you are ready.{% else %}Messaging stays off until Fetch is enabled for this environment.{% endif %}</p>
+          </div>
         </div>
-        <button type="button" class="secondary" disabled>Refresh reports</button>
-      </section>
-
-      {% if active_conversation_id and messages %}
-      <div class="fetch-message-list" aria-label="Saved messages">
+        {% endif %}
         {% for m in messages %}
-        <div class="fetch-message-row {{ m.role }}">
+        <div class="fetch-message-row {{ m.role }}" id="fetch-msg-{{ m.message_id }}">
           <div class="fetch-message {{ m.role }}">
             <div class="fetch-message-role">{{ m.role }}</div>
+            {% if m.role == 'assistant' %}
+            <div class="fetch-message-body">{{ m.content | fetch_assistant_body }}</div>
+            <div class="fetch-assistant-status-line" aria-label="Answer status">{{ m | fetch_assistant_status(settings) }}</div>
+            {% else %}
             <p>{{ m.content }}</p>
+            {% endif %}
+            {% if m.metadata and (m.metadata.source_cards or m.metadata.artifacts or m.metadata.status_cards) %}
+            <div class="fetch-message-metadata" aria-label="Answer details">
+              {% if m.metadata.source_cards %}
+              <div class="fetch-source-cards" aria-label="Sources">
+                <div class="fetch-metadata-title">Sources</div>
+                {% for source in m.metadata.source_cards %}
+                <article class="fetch-source-card {{ source.kind|default('source') }}">
+                  <span class="source-badge {{ source.kind|default('source') }}">{{ source.kind|default('source') }}</span>
+                  {% if source.url %}
+                  <a href="{{ source.url }}" target="_blank" rel="noreferrer">{{ source.title }}</a>
+                  {% else %}
+                  <strong>{{ source.title }}</strong>
+                  {% endif %}
+                  {% if source.detail %}<p>{{ source.detail }}</p>{% endif %}
+                </article>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% if m.metadata.artifacts %}
+              <div class="fetch-artifact-cards" aria-label="Attachments">
+                <div class="fetch-metadata-title">Attachments</div>
+                {% for artifact in m.metadata.artifacts %}
+                <article class="fetch-artifact-card">
+                  <strong>{{ artifact.filename }}</strong>
+                  {% if artifact.description %}<p>{{ artifact.description }}</p>{% endif %}
+                  {% if artifact.artifactId %}<span class="fetch-artifact-id">Artifact: {{ artifact.artifactId }}</span>{% endif %}
+                </article>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% if m.metadata.status_cards %}
+              <div class="fetch-status-cards" aria-label="Status">
+                {% for status in m.metadata.status_cards %}
+                <article class="fetch-status-card">
+                  <strong>{{ status.state }}</strong>
+                  {% if status.detail %}<p>{{ status.detail }}</p>{% endif %}
+                </article>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
           </div>
         </div>
         {% endfor %}
-      </div>
-      {% elif active_conversation_id %}
-      <div class="fetch-empty-state">
-        <img class="fetch-empty-logo" src="/static/Retriever_Logo.svg" alt="" aria-hidden="true">
-        <div class="fetch-empty-title">No messages in this thread yet.</div>
-        <p class="fetch-empty-copy">{% if settings.fetch_enabled %}Ask Fetch when you are ready.{% else %}Messaging stays off until Fetch is enabled for this environment.{% endif %}</p>
       </div>
       {% else %}
       <div class="fetch-empty-state">
@@ -92,6 +139,8 @@
         <p class="fetch-empty-copy">{% if warn_no_db %}Connect the database to create conversations.{% elif not conversations %}Create a conversation from the left rail.{% else %}Select a conversation or start a new one.{% endif %}</p>
       </div>
       {% endif %}
+
+      <button type="button" class="fetch-scroll-more" data-fetch-scroll-more hidden aria-label="Scroll to latest messages">↓</button>
     </div>
 
     <form
@@ -110,14 +159,12 @@
       ></textarea>
       {% if not settings.fetch_enabled %}
       <p class="fetch-disabled-note">Composer is locked until Fetch is enabled in environment settings.</p>
-      {% elif fetch_can_use_composer %}
-      <p class="fetch-disabled-note muted">What runs depends on how this server is configured. Pilot setups may route some questions through BooneOps. Live PrintSmith data, documentation lookup, file uploads, and broad internet answers stay off until operators enable those paths; until then you may see stubs or offline wording.</p>
-      {% else %}
+      {% elif not fetch_can_use_composer %}
       <p class="fetch-disabled-note">{{ fetch_composer_disabled_reason }}</p>
       {% endif %}
       <div class="fetch-ask-working" id="fetch-ask-working" hidden role="status" aria-live="polite">
         <span class="fetch-ask-spinner" aria-hidden="true"></span>
-        <span>Fetch is working… This may take a moment on slow requests.</span>
+        <span>Fetch is working… slow requests may take a moment.</span>
       </div>
       <div class="fetch-composer-actions">
         <label class="fetch-upload-toggle" for="fetch-save-uploads">
@@ -138,36 +185,6 @@
       <button type="button" disabled>Draft a short customer email</button>
       <button type="button" disabled>Show a delayed report example</button>
     </div>
-
-    <details class="fetch-preview-details">
-      <summary>Preview trust states</summary>
-      <div class="fetch-preview-grid">
-        <article class="fetch-preview-card">
-          <strong>Delayed report</strong>
-          <span>Large PrintSmith or DSF requests will show progress before the chat feels stuck.</span>
-        </article>
-        <article class="fetch-preview-card">
-          <strong>Sources</strong>
-          <span>Answers will show whether they used live PrintSmith, docs, uploads, or local Fetch context.</span>
-        </article>
-        <article class="fetch-preview-card">
-          <strong>Unavailable route</strong>
-          <span>If a dependency is down, Fetch will say what failed and what is safe to try next.</span>
-        </article>
-      </div>
-    </details>
-
-    <footer class="fetch-status-footer" aria-label="Fetch status">
-      <span>Model: {{ fetch_model_label|replace("model ", "") }}</span>
-      <span aria-hidden="true">|</span>
-      <span>Routing: {{ fetch_routing_label }}</span>
-      <span aria-hidden="true">|</span>
-      <span>Context: {{ fetch_context_percent }}% {{ fetch_context_state }}</span>
-      <span aria-hidden="true">|</span>
-      <span>Path: {{ fetch_path_label }}</span>
-      <span aria-hidden="true">|</span>
-      <span>Mode: {{ fetch_mode_label }}</span>
-    </footer>
   </div>
 </section>
 <script>
@@ -195,6 +212,25 @@
     }
     syncToggle();
 
+    var scrollRoot = shell.querySelector("[data-fetch-scroll-root]");
+    var scrollMore = shell.querySelector("[data-fetch-scroll-more]");
+
+    function updateScrollMore() {
+      if (!scrollRoot || !scrollMore) return;
+      var tolerance = 56;
+      var gap = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
+      scrollMore.hidden = gap <= tolerance;
+    }
+
+    if (scrollRoot && scrollMore) {
+      scrollRoot.addEventListener("scroll", updateScrollMore);
+      window.addEventListener("resize", updateScrollMore);
+      scrollMore.addEventListener("click", function () {
+        scrollRoot.scrollTo({ top: scrollRoot.scrollHeight, behavior: "smooth" });
+      });
+      updateScrollMore();
+    }
+
     var askForm = shell.querySelector("[data-fetch-ask-form]");
     var askWorking = document.getElementById("fetch-ask-working");
     if (askForm && askWorking) {
@@ -208,6 +244,35 @@
         if (submitBtn && submitBtn.disabled) {
           return;
         }
+        var text = ta && ta.value ? ta.value.trim() : "";
+        if (!text) {
+          return;
+        }
+
+        var list = shell.querySelector("[data-fetch-message-list]");
+        if (list) {
+          var ph = list.querySelector(".fetch-thread-empty-placeholder");
+          if (ph) {
+            ph.setAttribute("hidden", "hidden");
+            ph.setAttribute("aria-hidden", "true");
+          }
+          var row = document.createElement("div");
+          row.className = "fetch-message-row user fetch-optimistic";
+          var wrap = document.createElement("div");
+          wrap.className = "fetch-message user";
+          var role = document.createElement("div");
+          role.className = "fetch-message-role";
+          role.textContent = "user";
+          var p = document.createElement("p");
+          p.textContent = text;
+          wrap.appendChild(role);
+          wrap.appendChild(p);
+          row.appendChild(wrap);
+          list.appendChild(row);
+          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          updateScrollMore();
+        }
+
         askWorking.hidden = false;
         askForm.classList.add("fetch-composer-submitting");
         askForm.setAttribute("aria-busy", "true");
@@ -216,8 +281,30 @@
         }
         if (ta && !ta.disabled) {
           ta.readOnly = true;
+          ta.value = "";
         }
       });
+    }
+
+    if (shell.getAttribute("data-fetch-focus-latest") === "true") {
+      var uid = shell.getAttribute("data-fetch-last-user-id") || "";
+      if (uid && scrollRoot) {
+        requestAnimationFrame(function () {
+          var el = document.getElementById("fetch-msg-" + uid);
+          if (el) {
+            el.scrollIntoView({ block: "start", behavior: "auto" });
+          }
+          try {
+            var u = new URL(window.location.href);
+            if (u.searchParams.get("focus") === "latest") {
+              u.searchParams.delete("focus");
+              var next = u.pathname + (u.search ? u.search : "") + u.hash;
+              window.history.replaceState({}, "", next);
+            }
+          } catch (e) {}
+          updateScrollMore();
+        });
+      }
     }
   })();
 </script>

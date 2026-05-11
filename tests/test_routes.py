@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 from fastapi.testclient import TestClient
 
@@ -107,8 +109,63 @@ def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     assert "Fetch is not enabled yet" in response.text
     assert "Connect MySQL to save conversations" in response.text
     assert "+ New Chat" in response.text
-    assert "Mode: no database" in response.text
-    assert "Routing: off" in response.text
+    assert "Preview trust states" not in response.text
+
+
+_FETCH_SHELL_REMOVED_PHRASES = (
+    "Thread Reports",
+    "What runs depends on how this server is configured",
+)
+
+_FETCH_SHELL_TEMPLATE = (
+    Path(__file__).resolve().parent.parent / "app" / "templates" / "fetch" / "shell.html"
+)
+
+
+def test_fetch_shell_excludes_thread_reports_and_configuration_disclaimer(
+    monkeypatch,
+) -> None:
+    """Regression: removed sidebar strip / long composer copy must stay out of shell template and GET /fetch HTML."""
+    template_text = _FETCH_SHELL_TEMPLATE.read_text(encoding="utf-8")
+    for phrase in _FETCH_SHELL_REMOVED_PHRASES:
+        assert phrase not in template_text
+
+    client = make_client(make_settings())
+    r_minimal = client.get("/fetch")
+    assert r_minimal.status_code == 200
+    for phrase in _FETCH_SHELL_REMOVED_PHRASES:
+        assert phrase not in r_minimal.text
+
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    repo = FetchRepository(db.connection)
+    repo.create_conversation(user_id=user_id, title="Listed thread")
+
+    settings = make_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client_db = make_client(settings)
+    r_db = client_db.get("/fetch")
+    assert r_db.status_code == 200
+    for phrase in _FETCH_SHELL_REMOVED_PHRASES:
+        assert phrase not in r_db.text
+
+    db2 = FakeDb()
+    db2.add_user("fetcher2@boonegraphics.net", "Fetcher Two", "active")
+    user_id2 = db2.users["fetcher2@boonegraphics.net"]["id"]
+    db2.modules_by_user.setdefault(user_id2, set()).add("fetch")
+    FetchRepository(db2.connection).create_conversation(user_id=user_id2, title="Lane")
+
+    settings_enabled = make_fetch_enabled_settings(email="fetcher2@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db2.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db2.connection())
+    client_enabled = make_client(settings_enabled)
+    r_enabled = client_enabled.get("/fetch")
+    assert r_enabled.status_code == 200
+    for phrase in _FETCH_SHELL_REMOVED_PHRASES:
+        assert phrase not in r_enabled.text
 
 
 def test_pending_user_forbidden_from_fetch() -> None:
@@ -275,7 +332,7 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}"
+    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}&focus=latest"
     assert len(db.fetch_messages) == 2
     assert db.fetch_messages[0]["role"] == "user"
     assert db.fetch_messages[0]["content"] == "What is DSF?"
@@ -288,6 +345,8 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     assert page.status_code == 200
     assert "What is DSF?" in page.text
     assert "stub" in page.text.lower()
+    assert "General Question: Off" in page.text
+    assert "Context: 0% stub" in page.text
 
 
 def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
@@ -376,7 +435,7 @@ def test_fetch_post_ask_route_like_prompt_no_http(monkeypatch) -> None:
     assert "stub" in db.fetch_messages[-1]["content"].lower()
 
 
-def test_fetch_shell_shows_routing_not_connected_when_fetch_enabled(monkeypatch) -> None:
+def test_fetch_shell_has_no_global_routing_footer_when_fetch_enabled(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -391,10 +450,11 @@ def test_fetch_shell_shows_routing_not_connected_when_fetch_enabled(monkeypatch)
     response = client.get("/fetch")
 
     assert response.status_code == 200
-    assert "Routing: not connected" in response.text
+    assert "Routing: not connected" not in response.text
+    assert "Path: local" not in response.text
 
 
-def test_fetch_shell_shows_booneops_when_broker_enabled(monkeypatch) -> None:
+def test_fetch_shell_has_no_global_broker_footer_when_broker_enabled(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -409,8 +469,8 @@ def test_fetch_shell_shows_booneops_when_broker_enabled(monkeypatch) -> None:
     response = client.get("/fetch")
 
     assert response.status_code == 200
-    assert "Routing: BooneOps broker" in response.text
-    assert "Path: booneops" in response.text
+    assert "Routing: BooneOps broker" not in response.text
+    assert "Path: booneops" not in response.text
 
 
 def test_fetch_post_ask_printsmith_calls_broker_when_enabled(monkeypatch) -> None:
@@ -449,6 +509,55 @@ def test_fetch_post_ask_printsmith_calls_broker_when_enabled(monkeypatch) -> Non
     assert db.fetch_messages[1]["content"] == "Anchored BooneOps reply text."
     assert db.fetch_messages[1]["context_state"] == "booneops"
     assert "stub" not in db.fetch_messages[1]["content"].lower()
+
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert "Context: 0% ready" in page.text
+    assert "Anchored BooneOps reply text." in page.text
+
+
+def test_fetch_post_ask_docs_renders_broker_source_cards(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Docs lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult(
+            "Summary\nUse the Switch scripting guide.\n\nDetails\nLong answer.",
+            "booneops",
+            {
+                "source_cards": [
+                    {
+                        "kind": "docs",
+                        "title": "Switch Scripting Guide",
+                        "detail": "Script element reference",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "Where is the Switch manual?"},
+    )
+
+    assert response.status_code == 303
+    assert db.fetch_messages[1]["metadata_json"] is not None
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert "Sources" in page.text
+    assert "Switch Scripting Guide" in page.text
+    assert "Script element reference" in page.text
 
 
 def test_fetch_post_ask_broker_failure_keeps_conversation_usable(monkeypatch) -> None:

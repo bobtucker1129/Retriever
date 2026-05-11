@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -20,6 +21,7 @@ from app.config import AppSettings
 from app.db.connection import create_connection
 from app.db.repositories.fetch import FetchRepository
 from app.dependencies import settings_dependency
+from app.fetch.answer_render import assistant_body_html, build_assistant_status_line
 from app.fetch.booneops_broker import (
     BooneOpsBrokerTurnResult,
     call_booneops_broker,
@@ -33,6 +35,15 @@ from app.fetch.local_routing import (
 
 router = APIRouter(prefix="/fetch", tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
+templates.env.filters["fetch_assistant_body"] = assistant_body_html
+templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
+
+
+def _last_user_message_id(messages: list) -> Optional[str]:
+    for record in reversed(messages):
+        if getattr(record, "role", None) == "user":
+            return str(getattr(record, "message_id", "") or "") or None
+    return None
 
 _FETCH_ACCESS_MSG = "Fetch access is required"
 _NO_DB_MSG = "Conversation storage requires a configured database"
@@ -61,6 +72,7 @@ async def fetch_shell(
     settings: AppSettings = Depends(settings_dependency),
     c: Optional[str] = None,
     rename: Optional[str] = None,
+    focus: Optional[str] = None,
 ):
     identity = get_identity_from_request(request, settings)
     user = current_user_from_identity(identity, settings)
@@ -131,15 +143,7 @@ async def fetch_shell(
                 "Ask Fetch requires active Fetch module or Fetch access permission."
             )
 
-    if not settings.fetch_enabled:
-        fetch_routing_label = "off"
-        fetch_path_label = "disabled"
-    elif settings.booneops_broker_enabled:
-        fetch_routing_label = "BooneOps broker"
-        fetch_path_label = "booneops"
-    else:
-        fetch_routing_label = "not connected"
-        fetch_path_label = "local"
+    last_user_mid = _last_user_message_id(messages) if active_id else None
 
     response = templates.TemplateResponse(
         request,
@@ -152,15 +156,11 @@ async def fetch_shell(
             "active_conversation_id": active_id,
             "rename_conversation_id": rename,
             "messages": messages,
-            "fetch_model_label": settings.model_default or "model not connected",
-            "fetch_context_percent": 0,
-            "fetch_context_state": "ready",
-            "fetch_path_label": fetch_path_label,
-            "fetch_routing_label": fetch_routing_label,
-            "fetch_mode_label": "conversations" if not warn_no_db else "no database",
             "fetch_can_use_composer": fetch_can_use_composer,
             "fetch_composer_disabled_reason": fetch_composer_disabled_reason,
             "warn_no_db": warn_no_db,
+            "fetch_focus_latest": focus == "latest",
+            "last_user_message_id": last_user_mid,
         },
     )
     ensure_session_cookie(request, response, user, settings)
@@ -268,10 +268,12 @@ async def ask_in_conversation(
         assistant_text = broker_result.assistant_text
         context_state = broker_result.context_state
         model_label = settings.model_default
+        assistant_metadata = broker_result.metadata
     else:
         assistant_text = build_fetch_stub_reply(route)
         context_state = "stub"
         model_label = settings.model_default
+        assistant_metadata = None
 
     repo.append_message(
         user.id,
@@ -282,7 +284,11 @@ async def ask_in_conversation(
         model_label=model_label,
         context_percent=0,
         context_state=context_state,
+        metadata=assistant_metadata,
     )
-    response = RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    response = RedirectResponse(
+        url="/fetch?" + urlencode({"c": conversation_id, "focus": "latest"}),
+        status_code=303,
+    )
     ensure_session_cookie(request, response, user, settings)
     return response

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Callable, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
 
 
@@ -53,6 +54,7 @@ class FetchMessageRecord:
     model_label: Optional[str] = None
     context_percent: Optional[int] = None
     context_state: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 class FetchRepository:
@@ -187,6 +189,7 @@ class FetchRepository:
         model_label: Optional[str] = None,
         context_percent: Optional[int] = None,
         context_state: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> FetchMessageRecord:
         if role not in {"user", "assistant", "system"}:
             raise ValueError("Invalid Fetch message role")
@@ -198,8 +201,8 @@ class FetchRepository:
                 """
                 INSERT INTO fetch_messages
                   (message_id, conversation_id, user_id, role, content, route_key,
-                   model_label, context_percent, context_state)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   model_label, context_percent, context_state, metadata_json)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     message_id,
@@ -211,6 +214,7 @@ class FetchRepository:
                     model_label,
                     context_percent,
                     context_state,
+                    json.dumps(metadata, separators=(",", ":")) if metadata else None,
                 ),
             )
             cursor.execute(
@@ -237,6 +241,7 @@ class FetchRepository:
             model_label=model_label,
             context_percent=context_percent,
             context_state=context_state,
+            metadata=metadata,
         )
 
     def list_messages(self, user_id: int, conversation_id: str) -> list[FetchMessageRecord]:
@@ -246,7 +251,7 @@ class FetchRepository:
             cursor.execute(
                 """
                 SELECT message_id, conversation_id, user_id, role, content, route_key,
-                       model_label, context_percent, context_state
+                       model_label, context_percent, context_state, metadata_json
                 FROM fetch_messages
                 WHERE user_id = %s
                   AND conversation_id = %s
@@ -285,4 +290,20 @@ class FetchRepository:
             model_label=row.get("model_label"),
             context_percent=row.get("context_percent"),
             context_state=row.get("context_state"),
+            metadata=self._metadata_from_row(row.get("metadata_json")),
         )
+
+    def _metadata_from_row(self, raw: object) -> Optional[dict[str, Any]]:
+        if raw is None:
+            return None
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8")
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None

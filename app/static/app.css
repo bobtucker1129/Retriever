@@ -238,8 +238,8 @@ select:focus-visible,
   border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
-  min-height: 5.5rem;
-  padding: var(--space-lg) var(--space-xl);
+  min-height: 4.25rem;
+  padding: var(--space-sm) var(--space-xl);
 }
 
 .topbar-title {
@@ -518,7 +518,7 @@ label {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   display: flex;
-  height: calc(100vh - 10rem);
+  height: calc(100vh - 8.5rem);
   min-height: 34rem;
   overflow: hidden;
 }
@@ -748,6 +748,11 @@ a.fetch-row-action:hover {
   min-height: 0;
   overflow: auto;
   padding: var(--space-md);
+  position: relative;
+}
+
+.fetch-thread--scroll {
+  scroll-behavior: smooth;
 }
 
 .fetch-thread-reports-preview {
@@ -838,8 +843,89 @@ a.fetch-row-action:hover {
   padding: 0.8rem 1rem;
 }
 
-.fetch-message p {
+.fetch-message.user p {
   margin: 0;
+  white-space: pre-line;
+}
+
+.fetch-message-body {
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.fetch-message-body p {
+  margin: 0 0 0.5rem;
+  white-space: normal;
+}
+
+.fetch-message-body p:last-child {
+  margin-bottom: 0;
+}
+
+.fetch-message-body ul,
+.fetch-message-body ol {
+  margin: 0.35rem 0 0.5rem;
+  padding-left: 1.2rem;
+}
+
+.fetch-message-body li {
+  margin: 0.15rem 0;
+}
+
+.fetch-message-body li > p {
+  margin: 0;
+}
+
+.fetch-assistant-status-line {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  margin-top: 0.55rem;
+  padding-top: 0.45rem;
+}
+
+.fetch-message-row.fetch-optimistic {
+  opacity: 0.88;
+}
+
+.fetch-scroll-more {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--brand-blue));
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  bottom: 0.5rem;
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 1rem;
+  height: 2.25rem;
+  line-height: 1;
+  position: absolute;
+  right: 0.75rem;
+  width: 2.25rem;
+  z-index: 2;
+}
+
+.fetch-scroll-more:hover {
+  background: var(--color-surface-2);
+}
+
+.fetch-empty-state--inline {
+  margin: 0 auto 0.5rem;
+  max-width: 22rem;
+  min-height: 8rem;
+  padding: var(--space-sm) 0;
+}
+
+.fetch-empty-state--inline .fetch-empty-logo {
+  height: 3.5rem;
+  margin-bottom: var(--space-xs);
+  width: 3.5rem;
+}
+
+.fetch-thread-empty-placeholder {
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .fetch-message.user {
@@ -867,6 +953,66 @@ a.fetch-row-action:hover {
 .fetch-message.user .fetch-message-role {
   color: oklch(22% 0.02 248 / 0.72);
   text-align: right;
+}
+
+.fetch-message-metadata {
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+}
+
+.fetch-metadata-title {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.fetch-source-cards,
+.fetch-artifact-cards,
+.fetch-status-cards {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.fetch-source-card,
+.fetch-artifact-card,
+.fetch-status-card {
+  background: color-mix(in srgb, var(--color-surface-2) 92%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-border) 92%, var(--color-surface));
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 0 oklch(24% 0.02 248 / 0.04);
+  font-size: 0.82rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.fetch-source-card strong,
+.fetch-artifact-card strong,
+.fetch-status-card strong {
+  display: block;
+}
+
+.fetch-source-card p,
+.fetch-artifact-card p,
+.fetch-status-card p {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+  white-space: normal;
+}
+
+.fetch-artifact-card .fetch-artifact-id {
+  color: var(--color-muted);
+  display: block;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
 }
 
 .fetch-sources {
@@ -1038,8 +1184,7 @@ a.fetch-row-action:hover {
 }
 
 .fetch-composer-buttons,
-.fetch-suggestions,
-.fetch-status-footer {
+.fetch-suggestions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -1097,21 +1242,6 @@ a.fetch-row-action:hover {
   font-size: 0.76rem;
   line-height: 1.35;
   margin-top: 0.15rem;
-}
-
-.fetch-status-footer {
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  color: var(--color-muted);
-  flex-wrap: nowrap;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.72rem;
-  margin-top: var(--space-xs);
-  min-height: 1.6rem;
-  overflow-x: auto;
-  padding: 0.3rem 0.75rem;
-  user-select: text;
-  white-space: nowrap;
 }
 
 @media (max-width: 760px) {

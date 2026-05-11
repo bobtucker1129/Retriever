@@ -198,6 +198,7 @@ class FakeCursor:
                 model_label,
                 context_percent,
                 context_state,
+                metadata_json,
             ) = params
             self.db.fetch_messages.append(
                 {
@@ -210,6 +211,7 @@ class FakeCursor:
                     "model_label": model_label,
                     "context_percent": context_percent,
                     "context_state": context_state,
+                    "metadata_json": metadata_json,
                 }
             )
             return

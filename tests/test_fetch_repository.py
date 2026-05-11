@@ -63,6 +63,7 @@ def test_fetch_repository_appends_and_lists_messages() -> None:
         model_label="model not connected",
         context_percent=0,
         context_state="ready",
+        metadata={"source_cards": [{"kind": "docs", "title": "Switch Manual"}]},
     )
 
     messages = repo.list_messages(user_id=1, conversation_id=conversation.conversation_id)
@@ -71,6 +72,7 @@ def test_fetch_repository_appends_and_lists_messages() -> None:
     assert [message.role for message in messages] == ["user", "assistant"]
     assert messages[1].route_key == "disabled"
     assert messages[1].model_label == "model not connected"
+    assert messages[1].metadata == {"source_cards": [{"kind": "docs", "title": "Switch Manual"}]}
     assert conversations[0].message_count == 2
     assert conversations[0].route_state == "disabled"
 
