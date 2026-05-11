@@ -166,6 +166,7 @@
         <span class="fetch-ask-spinner" aria-hidden="true"></span>
         <span>Fetch is working… slow requests may take a moment.</span>
       </div>
+      <p class="fetch-ask-error" id="fetch-ask-error" hidden role="alert"></p>
       <div class="fetch-composer-actions">
         <label class="fetch-upload-toggle" for="fetch-save-uploads">
           <input id="fetch-save-uploads" name="save_uploads" type="checkbox" disabled>
@@ -222,6 +223,16 @@
       scrollMore.hidden = gap <= tolerance;
     }
 
+    /** Keeps alignment within [data-fetch-scroll-root] instead of the page scroller. */
+    function scrollElementIntoScrollRoot(root, el, marginTop) {
+      if (!root || !el) return;
+      var mt = marginTop == null ? 8 : marginTop;
+      var rootRect = root.getBoundingClientRect();
+      var elRect = el.getBoundingClientRect();
+      var delta = elRect.top - rootRect.top + root.scrollTop;
+      root.scrollTo({ top: Math.max(0, delta - mt), behavior: "auto" });
+    }
+
     if (scrollRoot && scrollMore) {
       scrollRoot.addEventListener("scroll", updateScrollMore);
       window.addEventListener("resize", updateScrollMore);
@@ -233,8 +244,9 @@
 
     var askForm = shell.querySelector("[data-fetch-ask-form]");
     var askWorking = document.getElementById("fetch-ask-working");
+    var askError = document.getElementById("fetch-ask-error");
     if (askForm && askWorking) {
-      askForm.addEventListener("submit", function () {
+      askForm.addEventListener("submit", function (e) {
         var action = askForm.getAttribute("action") || "";
         if (action === "#" || action.indexOf("/ask") === -1) {
           return;
@@ -249,6 +261,9 @@
           return;
         }
 
+        e.preventDefault();
+
+        var optimisticRow = null;
         var list = shell.querySelector("[data-fetch-message-list]");
         if (list) {
           var ph = list.querySelector(".fetch-thread-empty-placeholder");
@@ -256,8 +271,9 @@
             ph.setAttribute("hidden", "hidden");
             ph.setAttribute("aria-hidden", "true");
           }
-          var row = document.createElement("div");
-          row.className = "fetch-message-row user fetch-optimistic";
+          optimisticRow = document.createElement("div");
+          optimisticRow.className = "fetch-message-row user fetch-optimistic";
+          optimisticRow.setAttribute("data-fetch-optimistic", "true");
           var wrap = document.createElement("div");
           wrap.className = "fetch-message user";
           var role = document.createElement("div");
@@ -267,12 +283,22 @@
           p.textContent = text;
           wrap.appendChild(role);
           wrap.appendChild(p);
-          row.appendChild(wrap);
-          list.appendChild(row);
-          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          updateScrollMore();
+          optimisticRow.appendChild(wrap);
+          list.appendChild(optimisticRow);
+          requestAnimationFrame(function () {
+            if (scrollRoot) {
+              scrollElementIntoScrollRoot(scrollRoot, optimisticRow, 8);
+            } else {
+              optimisticRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+            updateScrollMore();
+          });
         }
 
+        if (askError) {
+          askError.hidden = true;
+          askError.textContent = "";
+        }
         askWorking.hidden = false;
         askForm.classList.add("fetch-composer-submitting");
         askForm.setAttribute("aria-busy", "true");
@@ -283,6 +309,49 @@
           ta.readOnly = true;
           ta.value = "";
         }
+
+        function unlockFromError() {
+          askWorking.hidden = true;
+          askForm.classList.remove("fetch-composer-submitting");
+          askForm.removeAttribute("aria-busy");
+          if (submitBtn) {
+            submitBtn.disabled = false;
+          }
+          if (ta && !ta.disabled) {
+            ta.readOnly = false;
+            ta.value = text;
+          }
+          if (optimisticRow && optimisticRow.parentNode) {
+            optimisticRow.parentNode.removeChild(optimisticRow);
+          }
+        }
+
+        fetch(action, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "text/html",
+          },
+          body: new URLSearchParams({ question: text }),
+          redirect: "follow",
+        })
+          .then(function (res) {
+            if (res.ok) {
+              window.location.assign(res.url);
+              return;
+            }
+            unlockFromError();
+            if (askError) {
+              askError.textContent =
+                "Could not complete that request. Fix your connection or permissions, then try again.";
+              askError.hidden = false;
+            }
+          })
+          .catch(function () {
+            unlockFromError();
+            askForm.submit();
+          });
       });
     }
 
@@ -292,7 +361,7 @@
         requestAnimationFrame(function () {
           var el = document.getElementById("fetch-msg-" + uid);
           if (el) {
-            el.scrollIntoView({ block: "start", behavior: "auto" });
+            scrollElementIntoScrollRoot(scrollRoot, el, 8);
           }
           try {
             var u = new URL(window.location.href);
@@ -301,7 +370,7 @@
               var next = u.pathname + (u.search ? u.search : "") + u.hash;
               window.history.replaceState({}, "", next);
             }
-          } catch (e) {}
+          } catch (err) {}
           updateScrollMore();
         });
       }

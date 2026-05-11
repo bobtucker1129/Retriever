@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import httpx
 from fastapi.testclient import TestClient
@@ -120,6 +121,70 @@ _FETCH_SHELL_REMOVED_PHRASES = (
 _FETCH_SHELL_TEMPLATE = (
     Path(__file__).resolve().parent.parent / "app" / "templates" / "fetch" / "shell.html"
 )
+
+_APP_CSS = Path(__file__).resolve().parent.parent / "app" / "static" / "app.css"
+
+
+def test_fetch_shell_css_message_list_not_nested_scroll_container() -> None:
+    """Conversation list carries content height; only `.fetch-thread` scrolls."""
+    css = _APP_CSS.read_text(encoding="utf-8")
+    match = re.search(r"\.fetch-message-list\s*\{([^}]*)\}", css, re.DOTALL)
+    assert match is not None, "expected .fetch-message-list block in app.css"
+    block = match.group(1)
+    assert "overflow: auto" not in block
+
+
+def test_fetch_shell_template_script_and_scroll_hooks() -> None:
+    """Static contract for Fetch JS: optimistic ask, single scroller, focus=latest."""
+    template_text = _FETCH_SHELL_TEMPLATE.read_text(encoding="utf-8")
+    assert "<footer" not in template_text.lower()
+    assert 'data-fetch-scroll-root' in template_text
+    assert 'data-fetch-scroll-more' in template_text
+    assert 'data-fetch-focus-latest' in template_text
+    assert "preventDefault" in template_text
+    assert "fetch(" in template_text
+    assert "location.assign" in template_text
+    assert "scrollElementIntoScrollRoot" in template_text
+    assert "URLSearchParams" in template_text
+
+
+def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
+    """Landing page from ask redirect exposes focus=latest + last user id for scroll UX."""
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Stub lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("fetch ask must not perform HTTP calls")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    client = make_client(settings)
+
+    post = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What is DSF?"},
+    )
+    assert post.status_code == 303
+
+    page = client.get(post.headers["location"])
+    assert page.status_code == 200
+    body = page.text
+    assert 'data-fetch-focus-latest="true"' in body
+    assert "data-fetch-scroll-root" in body
+    assert "data-fetch-scroll-more" in body
+    assert "fetch-msg-" in body
+    assert 'data-fetch-last-user-id=""' not in body
+    assert "What is DSF?" in body
 
 
 def test_fetch_shell_excludes_thread_reports_and_configuration_disclaimer(
