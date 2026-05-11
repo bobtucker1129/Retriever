@@ -1,6 +1,5 @@
 {% extends "layout.html" %}
 
-{% block eyebrow %}Fetch{% endblock %}
 {% block title %}Fetch{% endblock %}
 
 {% block content %}
@@ -223,14 +222,10 @@
       scrollMore.hidden = gap <= tolerance;
     }
 
-    /** Keeps alignment within [data-fetch-scroll-root] instead of the page scroller. */
-    function scrollElementIntoScrollRoot(root, el, marginTop) {
-      if (!root || !el) return;
-      var mt = marginTop == null ? 8 : marginTop;
-      var rootRect = root.getBoundingClientRect();
-      var elRect = el.getBoundingClientRect();
-      var delta = elRect.top - rootRect.top + root.scrollTop;
-      root.scrollTo({ top: Math.max(0, delta - mt), behavior: "auto" });
+    /** Pin the conversation scroller to the latest turn (bottom), not a row's block-start. */
+    function scrollScrollRootToBottom(root) {
+      if (!root) return;
+      root.scrollTop = root.scrollHeight;
     }
 
     if (scrollRoot && scrollMore) {
@@ -286,12 +281,14 @@
           optimisticRow.appendChild(wrap);
           list.appendChild(optimisticRow);
           requestAnimationFrame(function () {
-            if (scrollRoot) {
-              scrollElementIntoScrollRoot(scrollRoot, optimisticRow, 8);
-            } else {
-              optimisticRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
-            }
-            updateScrollMore();
+            requestAnimationFrame(function () {
+              if (scrollRoot) {
+                scrollScrollRootToBottom(scrollRoot);
+              } else {
+                optimisticRow.scrollIntoView({ block: "end", behavior: "auto" });
+              }
+              updateScrollMore();
+            });
           });
         }
 
@@ -356,22 +353,20 @@
     }
 
     if (shell.getAttribute("data-fetch-focus-latest") === "true") {
-      var uid = shell.getAttribute("data-fetch-last-user-id") || "";
-      if (uid && scrollRoot) {
+      if (scrollRoot) {
         requestAnimationFrame(function () {
-          var el = document.getElementById("fetch-msg-" + uid);
-          if (el) {
-            scrollElementIntoScrollRoot(scrollRoot, el, 8);
-          }
-          try {
-            var u = new URL(window.location.href);
-            if (u.searchParams.get("focus") === "latest") {
-              u.searchParams.delete("focus");
-              var next = u.pathname + (u.search ? u.search : "") + u.hash;
-              window.history.replaceState({}, "", next);
-            }
-          } catch (err) {}
-          updateScrollMore();
+          requestAnimationFrame(function () {
+            scrollScrollRootToBottom(scrollRoot);
+            try {
+              var u = new URL(window.location.href);
+              if (u.searchParams.get("focus") === "latest") {
+                u.searchParams.delete("focus");
+                var next = u.pathname + (u.search ? u.search : "") + u.hash;
+                window.history.replaceState({}, "", next);
+              }
+            } catch (err) {}
+            updateScrollMore();
+          });
         });
       }
     }

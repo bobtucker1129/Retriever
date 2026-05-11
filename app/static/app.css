@@ -242,6 +242,17 @@ select:focus-visible,
   padding: 0.15rem var(--space-xl);
 }
 
+/* Hide empty eyebrow slot (e.g. Fetch uses h1 only). */
+.topbar-title .eyebrow:empty {
+  display: none;
+}
+
+/* Fetch: tighter top bar without shrinking the logo. */
+.main-column:has(.fetch-shell) .topbar {
+  min-height: 0;
+  padding-block: 0.2rem;
+}
+
 .topbar-title {
   align-items: center;
   display: flex;
@@ -1273,6 +1284,11 @@ a.fetch-row-action:hover {
   .topbar,
   .content {
     padding: var(--space-lg);
+  }
+
+  .main-column:has(.fetch-shell) .topbar {
+    padding-block: var(--space-xs);
+    padding-inline: var(--space-lg);
   }
 
   .user-row,

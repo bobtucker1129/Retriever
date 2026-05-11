@@ -144,7 +144,8 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     assert "preventDefault" in template_text
     assert "fetch(" in template_text
     assert "location.assign" in template_text
-    assert "scrollElementIntoScrollRoot" in template_text
+    assert "scrollScrollRootToBottom" in template_text
+    assert "scrollHeight" in template_text
     assert "URLSearchParams" in template_text
 
 

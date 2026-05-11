@@ -35,6 +35,26 @@ _PRINTSMITH_HINTS: Final[tuple[str, ...]] = (
     "estimate number",
 )
 
+# Spaced or punctuated typos collapse to these letter runs (see _collapsed_printsmith_hint).
+_COLLAPSED_PRINTSMITH_FRAGMENTS: Final[tuple[str, ...]] = (
+    "printsmith",
+    "prinsmith",
+    "printsmit",
+    "printsmth",
+    "prinsmit",
+)
+
+# Natural-language estimate volume / entry questions (shop data lane).
+_ESTIMATE_ENTRY_HINTS: Final[tuple[str, ...]] = (
+    "how many estimates",
+    "estimates did",
+    "estimates were",
+    "number of estimates",
+    "entered estimates",
+    "estimates entered",
+    "estimate entry",
+)
+
 _DOCS_HINTS: Final[tuple[str, ...]] = (
     "documentation",
     "vendor doc",
@@ -77,6 +97,14 @@ _GENERAL_START_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_NON_ALNUM_PRINTSMITH_COLLAPSE: Final[re.Pattern[str]] = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
+
+
+def _collapsed_printsmith_hint(low: str) -> bool:
+    """Match PrintSmith mentions with spaces, hyphens, or common misspellings."""
+    collapsed = _NON_ALNUM_PRINTSMITH_COLLAPSE.sub("", low)
+    return any(fragment in collapsed for fragment in _COLLAPSED_PRINTSMITH_FRAGMENTS)
+
 
 def normalize_user_text(text: str) -> str:
     """Collapse whitespace; preserves leading slash commands."""
@@ -101,6 +129,13 @@ def classify_fetch_intent(text: str) -> str:
     for hint in _EMAIL_CLEANUP_HINTS:
         if hint in low:
             return "email_cleanup"
+
+    if _collapsed_printsmith_hint(low):
+        return "printsmith_candidate"
+
+    for hint in _ESTIMATE_ENTRY_HINTS:
+        if hint in low:
+            return "printsmith_candidate"
 
     for hint in _PRINTSMITH_HINTS:
         if hint in low:
