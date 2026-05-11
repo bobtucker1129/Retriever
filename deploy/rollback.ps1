@@ -3,13 +3,17 @@
 # Run as Administrator:
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\rollback.ps1
 #   powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\rollback.ps1 -Reason "health check failure"
+#   powershell ... -File ...\rollback.ps1 -InvokedByDeploy -Reason "..."   # internal: called from deploy.ps1 while deploy.lock is held
 #
 # Does NOT require GitHub or pip. Works from releases already on disk.
 # Restarts ONLY service RetrieverRebuild; never legacy "Retriever" on port 8000.
 
 param(
     [string]$Reason = "manual rollback",
-    [string]$AppBase = "D:\retriever-rebuild"
+    [string]$AppBase = "D:\retriever-rebuild",
+    # When deploy.ps1 calls rollback mid-flight, deploy.lock is already held.
+    # Skip lock acquire so rollback can swap junctions and restart the service.
+    [switch]$InvokedByDeploy
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,13 +43,19 @@ function Set-Junction {
 }
 
 # ---------------------------------------------------------------------------
-# Lock
+# Lock (standalone only; deploy already holds deploy.lock when InvokedByDeploy)
 # ---------------------------------------------------------------------------
-if (Test-Path $LockFile) {
-    Write-Log "ERROR: Deploy lock exists. Another operation may be running."
-    exit 1
+$rollbackOwnsLock = $false
+if (-not $InvokedByDeploy) {
+    if (Test-Path $LockFile) {
+        Write-Log "ERROR: Deploy lock exists. Another operation may be running."
+        exit 1
+    }
+    "$env:USERNAME $(Get-Date -Format 'o') rollback" | Out-File $LockFile -Encoding utf8
+    $rollbackOwnsLock = $true
+} else {
+    Write-Log "InvokedByDeploy: skipping deploy.lock (caller holds lock)."
 }
-"$env:USERNAME $(Get-Date -Format 'o') rollback" | Out-File $LockFile -Encoding utf8
 
 try {
 
@@ -117,5 +127,5 @@ status: success
 Write-Log "=== Rollback complete: restored $previousSha ==="
 
 } finally {
-    if (Test-Path $LockFile) { Remove-Item $LockFile -Force }
+    if ($rollbackOwnsLock -and (Test-Path $LockFile)) { Remove-Item $LockFile -Force }
 }

@@ -9,12 +9,15 @@
 #   have migration 0002_fetch_conversations applied (read-only check; fails before swap).
 #
 # GUARDRAILS (do not regress):
-# - Before RetrieverRebuild restart: stops only processes listening on 8810 whose
-#   command line includes the app root (D:\retriever-rebuild) and --port 8810 (or
-#   --port=8810), and never if --port 8000 appears — clears orphaned uvicorn after
-#   junction swap. Does not touch legacy service or port 8000.
+# - RetrieverRebuild recycle uses controlled Stop-Service / guarded 8810 cleanup /
+#   Start-Service with explicit Running confirmation — not blind Restart-Service.
+#   Stale listeners: only processes on 8810 whose command line includes the app
+#   root (D:\retriever-rebuild) and --port 8810 (or --port=8810), and never if
+#   --port 8000 appears — clears orphaned uvicorn after junction swap or failed
+#   NSSM stop. Does not touch legacy service or port 8000.
 # - After restart: requires GET /version JSON field gitSha to equal the resolved
 #   full deploy SHA before health/smoke; mismatch fails deploy and triggers rollback.
+# - Auto-rollback calls rollback.ps1 -InvokedByDeploy so deploy.lock does not block.
 # - If RetrieverRebuild is not installed after the junction swap, deploy fails (no
 #   success without restart + live /version SHA proof).
 
@@ -187,7 +190,7 @@ function Stop-StaleRetrieverRebuild8810Listeners {
     param([string]$AppRootPath)
     $pids = Get-ListeningPidsOnPort -Port $RetrieverRebuildPort
     if ($pids.Count -eq 0) {
-        Write-Log "No process listening on port $RetrieverRebuildPort before service restart (clean)."
+        Write-Log "No process listening on port $RetrieverRebuildPort (guarded cleanup: nothing to do)."
         return
     }
     foreach ($procId in $pids) {
@@ -205,6 +208,153 @@ function Stop-StaleRetrieverRebuild8810Listeners {
             Write-Log "WARNING: Stop-Process failed for PID ${procId}: $($_.Exception.Message)"
         }
     }
+}
+
+function Test-HasStaleRetrieverRebuild8810Listener {
+    param([string]$AppRootPath)
+    $pids = Get-ListeningPidsOnPort -Port $RetrieverRebuildPort
+    foreach ($procId in $pids) {
+        $cmd = Get-ProcessCommandLine -ProcessId $procId
+        if (Test-StaleRetrieverRebuild8810CommandLine -CommandLine $cmd -AppRootPath $AppRootPath) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Wait-ServiceReachStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Stopped', 'Running')]
+        [string]$DesiredStatus,
+        [int]$TimeoutSec = 120
+    )
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    # PS 5.1: avoid [Type]::$variable static access; parse enum by name.
+    $want = [System.ServiceProcess.ServiceControllerStatus] [Enum]::Parse(
+        [System.ServiceProcess.ServiceControllerStatus],
+        $DesiredStatus,
+        $true)
+    while ((Get-Date) -lt $deadline) {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            Start-Sleep -Milliseconds 400
+            continue
+        }
+        try { $svc.Refresh() } catch { }
+        if ($svc.Status -eq $want) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $false
+}
+
+function Restart-RetrieverRebuildForDeploy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SvcName,
+        [Parameter(Mandatory = $true)]
+        [string]$AppRootPath
+    )
+    Assert-NonLegacyServiceName -Name $SvcName
+
+    Write-Log "=== Controlled service recycle: $SvcName (port $RetrieverRebuildPort; no Restart-Service shortcut) ==="
+
+    if (Test-HasStaleRetrieverRebuild8810Listener -AppRootPath $AppRootPath) {
+        Write-Log "Pre-stop: guarded stale listener on port $RetrieverRebuildPort; clearing before Stop-Service ..."
+        Stop-StaleRetrieverRebuild8810Listeners -AppRootPath $AppRootPath
+        Start-Sleep -Seconds 1
+    }
+
+    Write-Log "Stop step: Stop-Service -Force -ErrorAction Stop ..."
+    try {
+        Stop-Service -Name $SvcName -Force -ErrorAction Stop
+        Write-Log "Stop-Service returned without throwing."
+    } catch {
+        Write-Log "Stop-Service threw (will still wait for Stopped / run guarded cleanup): $($_.Exception.Message)"
+    }
+
+    Write-Log "Waiting for service to reach Stopped (up to 90s) ..."
+    $stoppedOk = Wait-ServiceReachStatus -Name $SvcName -DesiredStatus Stopped -TimeoutSec 90
+    $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+    if ($svc) { try { $svc.Refresh() } catch { } }
+    $statusAfterWait = if ($svc) { [string]$svc.Status } else { '<missing>' }
+    Write-Log "After initial stop wait: status=$statusAfterWait (reachedStopped=$stoppedOk)."
+
+    $staleOnPort = Test-HasStaleRetrieverRebuild8810Listener -AppRootPath $AppRootPath
+    $needIntervention = ($svc -and $svc.Status -ne 'Stopped') -or $staleOnPort
+
+    if ($needIntervention) {
+        Write-Log "Intervention: service not Stopped and/or guarded listener still on $RetrieverRebuildPort (staleOnPort=$staleOnPort). Running guarded 8810 cleanup ..."
+        Stop-StaleRetrieverRebuild8810Listeners -AppRootPath $AppRootPath
+        Start-Sleep -Seconds 2
+        if ($svc -and $svc.Status -ne 'Stopped') {
+            Write-Log "Follow-up Stop-Service -Force after cleanup ..."
+            try {
+                Stop-Service -Name $SvcName -Force -ErrorAction Stop
+                Write-Log "Follow-up Stop-Service returned without throwing."
+            } catch {
+                Write-Log "Follow-up Stop-Service threw: $($_.Exception.Message)"
+            }
+        }
+        Write-Log "Waiting again for Stopped (up to 60s) ..."
+        $stoppedOk = Wait-ServiceReachStatus -Name $SvcName -DesiredStatus Stopped -TimeoutSec 60
+        $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+        if ($svc) { try { $svc.Refresh() } catch { } }
+        Write-Log "After intervention wait: status=$(if ($svc) { $svc.Status } else { '<missing>' }); reachedStopped=$stoppedOk."
+    }
+
+    if (-not $svc -or $svc.Status -ne 'Stopped') {
+        Write-Log "ERROR: Service did not reach Stopped (final status: $(if ($svc) { $svc.Status } else { 'missing' }))."
+        return $false
+    }
+
+    if (Test-HasStaleRetrieverRebuild8810Listener -AppRootPath $AppRootPath) {
+        Write-Log "Pre-start: residual guarded listener on $RetrieverRebuildPort; clearing before Start-Service ..."
+        Stop-StaleRetrieverRebuild8810Listeners -AppRootPath $AppRootPath
+        Start-Sleep -Seconds 1
+    }
+
+    Write-Log "Start step: Start-Service -ErrorAction Stop ..."
+    try {
+        Start-Service -Name $SvcName -ErrorAction Stop
+        Write-Log "Start-Service returned without throwing."
+    } catch {
+        Write-Log "ERROR: Start-Service failed: $($_.Exception.Message)"
+        return $false
+    }
+
+    Write-Log "Waiting for service to reach Running (up to 120s) ..."
+    $runningOk = Wait-ServiceReachStatus -Name $SvcName -DesiredStatus Running -TimeoutSec 120
+    $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+    if ($svc) { try { $svc.Refresh() } catch { } }
+    if (-not $runningOk -or -not $svc -or $svc.Status -ne 'Running') {
+        Write-Log "ERROR: Service did not reach Running (status: $(if ($svc) { $svc.Status } else { 'missing' }))."
+        return $false
+    }
+
+    Write-Log "=== Controlled service recycle complete: Running ==="
+    return $true
+}
+
+function Invoke-DeployAutoRollback {
+    param([Parameter(Mandatory = $true)] [string]$Reason)
+    Write-Log "Auto-rollback: invoking rollback.ps1 -InvokedByDeploy ..."
+    try {
+        & "$AppBin\rollback.ps1" -InvokedByDeploy -Reason $Reason
+    } catch {
+        Write-Log "ERROR: rollback.ps1 threw or failed terminating: $($_.Exception.Message)"
+        return $false
+    }
+    if (-not $?) {
+        Write-Log "ERROR: rollback.ps1 returned with `$?=$false."
+        return $false
+    }
+    Write-Log "Auto-rollback: rollback.ps1 completed (`$?=$true)."
+    return $true
 }
 
 function Assert-VersionGitShaMatches {
@@ -598,23 +748,20 @@ Write-Log "Updated $releaseDir\.release-meta (full stamp for current release)."
 # Restart service (RetrieverRebuild only; never legacy Retriever)
 # ---------------------------------------------------------------------------
 Assert-NonLegacyServiceName -Name $ServiceName
-Write-Log "Restarting $ServiceName (localhost:$RetrieverRebuildPort) ..."
+Write-Log "Restarting $ServiceName (localhost:$RetrieverRebuildPort) via controlled stop/start ..."
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $svc) {
     Write-DeployRecord -Status "service-not-installed" -Sha $fullSha -Prev $prevSha
     Write-Error "Deploy failed: Windows service '$ServiceName' is not installed. The release junction was swapped; run install-service.ps1, then deploy again so restart and GET /version can prove the target SHA is live."; exit 1
 }
 
-Write-Log "Pre-restart: clearing any stale process still listening on $RetrieverRebuildPort under $AppBase (guarded Stop-Process) ..."
-Stop-StaleRetrieverRebuild8810Listeners -AppRootPath $AppBase
-Restart-Service -Name $ServiceName -Force
-Start-Sleep -Seconds 4
-$svc.Refresh()
-if ($svc.Status -ne 'Running') {
-    Write-DeployRecord -Status "service-not-running" -Sha $fullSha -Prev $prevSha
-    Write-Error "Service is not running after restart."; exit 1
+$restartOk = Restart-RetrieverRebuildForDeploy -SvcName $ServiceName -AppRootPath $AppBase
+if (-not $restartOk) {
+    Write-DeployRecord -Status "service-restart-failed" -Sha $fullSha -Prev $prevSha
+    Write-Error "Deploy failed: could not stop/start '$ServiceName' cleanly (see steps above in $DeployLog). Junction already points at $fullSha; fix the service or port $RetrieverRebuildPort listeners, then redeploy or run rollback manually."
+    exit 1
 }
-Write-Log "Service restarted and running."
+Start-Sleep -Seconds 2
 
 # ---------------------------------------------------------------------------
 # Live SHA gate, then health and smoke (required for deploy success)
@@ -622,9 +769,12 @@ Write-Log "Service restarted and running."
 Write-Log "Verifying running code matches deploy target (GET /version gitSha == $fullSha) ..."
 if (-not (Assert-VersionGitShaMatches -ExpectedFullSha $fullSha)) {
     Write-DeployRecord -Status "version-sha-mismatch" -Sha $fullSha -Prev $prevSha
-    Write-Log "/version.gitSha mismatch after restart. Attempting auto-rollback ..."
-    & "$AppBin\rollback.ps1" -Reason "auto-rollback: /version.gitSha did not match $fullSha after deploy"
-    Write-Error "Deployment failed: /version.gitSha did not match deployed commit $fullSha. Auto-rollback attempted. Check $DeployLog"; exit 1
+    Write-Log "/version.gitSha mismatch after controlled restart. Attempting auto-rollback ..."
+    $rbOk = Invoke-DeployAutoRollback -Reason "auto-rollback: /version.gitSha did not match $fullSha after deploy"
+    if ($rbOk) {
+        Write-Error "Deployment failed: /version.gitSha did not match deployed commit $fullSha. Auto-rollback finished. Check $DeployLog"; exit 1
+    }
+    Write-Error "Deployment failed: /version.gitSha did not match deployed commit $fullSha. Auto-rollback did not complete successfully. Check $DeployLog"; exit 1
 }
 
 Write-Log "Running health check ..."
@@ -632,8 +782,11 @@ Write-Log "Running health check ..."
 if ($LASTEXITCODE -ne 0) {
     Write-DeployRecord -Status "healthcheck-failed" -Sha $fullSha -Prev $prevSha
     Write-Log "Health check failed. Attempting auto-rollback ..."
-    & "$AppBin\rollback.ps1" -Reason "auto-rollback: healthcheck failed on $fullSha"
-    Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
+    $rbOk = Invoke-DeployAutoRollback -Reason "auto-rollback: healthcheck failed on $fullSha"
+    if ($rbOk) {
+        Write-Error "Deployment failed: health check failed after deploy. Auto-rollback finished. Check $DeployLog"; exit 1
+    }
+    Write-Error "Deployment failed: health check failed after deploy. Auto-rollback did not complete successfully. Check $DeployLog"; exit 1
 }
 
 Write-Log "Running smoke check ..."
@@ -641,8 +794,11 @@ Write-Log "Running smoke check ..."
 if ($LASTEXITCODE -ne 0) {
     Write-DeployRecord -Status "smoke-failed" -Sha $fullSha -Prev $prevSha
     Write-Log "Smoke check failed. Attempting auto-rollback ..."
-    & "$AppBin\rollback.ps1" -Reason "auto-rollback: smoke failed on $fullSha"
-    Write-Error "Deployment failed. Auto-rollback attempted. Check $DeployLog"; exit 1
+    $rbOk = Invoke-DeployAutoRollback -Reason "auto-rollback: smoke failed on $fullSha"
+    if ($rbOk) {
+        Write-Error "Deployment failed: smoke check failed after deploy. Auto-rollback finished. Check $DeployLog"; exit 1
+    }
+    Write-Error "Deployment failed: smoke check failed after deploy. Auto-rollback did not complete successfully. Check $DeployLog"; exit 1
 }
 
 # ---------------------------------------------------------------------------
