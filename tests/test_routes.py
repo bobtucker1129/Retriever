@@ -162,10 +162,11 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     assert "getBoundingClientRect" in template_text
     assert "scrollHeight" in template_text
     assert "URLSearchParams" in template_text
+    assert "scrollRestoration" in template_text
 
 
 def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
-    """Landing page from ask redirect exposes focus=latest + last user id for scroll UX."""
+    """After ask redirect (no focus query needed), anchor flags show last-user id + focus-latest."""
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -191,6 +192,7 @@ def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
         data={"question": "What is DSF?"},
     )
     assert post.status_code == 303
+    assert post.headers["location"] == f"/fetch?c={conv.conversation_id}"
 
     page = client.get(post.headers["location"])
     assert page.status_code == 200
@@ -201,6 +203,73 @@ def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
     assert "fetch-msg-" in body
     assert 'data-fetch-last-user-id=""' not in body
     assert "What is DSF?" in body
+
+
+def test_fetch_get_existing_conversation_defaults_focus_latest(monkeypatch) -> None:
+    """GET /fetch?c=… with stored turns enables bottom anchor without ?focus."""
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Scroll lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("fetch ask must not perform HTTP calls")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    client = make_client(settings)
+
+    created = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What is DSF?"},
+    )
+    assert created.status_code == 303
+
+    direct = client.get(f"/fetch?c={conv.conversation_id}")
+    assert direct.status_code == 200
+    assert 'data-fetch-focus-latest="true"' in direct.text
+    assert 'data-fetch-last-user-id=""' not in direct.text
+
+
+def test_fetch_get_focus_history_opt_out(monkeypatch) -> None:
+    """focus=history leaves the transcript at default scroll position (no bottom anchor attr)."""
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="History lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("fetch ask must not perform HTTP calls")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    client = make_client(settings)
+
+    post = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What is DSF?"},
+    )
+    assert post.status_code == 303
+
+    page = client.get(f"/fetch?c={conv.conversation_id}&focus=history")
+    assert page.status_code == 200
+    assert 'data-fetch-focus-latest="false"' in page.text
 
 
 def test_fetch_shell_excludes_thread_reports_and_configuration_disclaimer(
@@ -413,7 +482,7 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}&focus=latest"
+    assert response.headers["location"] == f"/fetch?c={conv.conversation_id}"
     assert len(db.fetch_messages) == 2
     assert db.fetch_messages[0]["role"] == "user"
     assert db.fetch_messages[0]["content"] == "What is DSF?"

@@ -31,8 +31,19 @@ from app.fetch.local_routing import (
         ("printsmth invoice search", "printsmith_candidate"),
         ("prinsmit ticket 12", "printsmith_candidate"),
         ("How many estimates did we log in January?", "printsmith_candidate"),
+        (
+            "Who opened more invoices in the month of Dec 2025, Ellie or Shelley?",
+            "printsmith_candidate",
+        ),
+        ("How many invoices were posted during FY2024?", "printsmith_candidate"),
+        ("Were more invoices entered in Sep 2026 or Nov 2026?", "printsmith_candidate"),
         ("read the xmpie manual for uproduce", "docs_candidate"),
         ("documentation for Switch", "docs_candidate"),
+        (
+            # Invoice wording but no verb/volume/time — keep out of PrintSmith lane.
+            "Who invented invoices?",
+            "general_candidate",
+        ),
         ("What is the meaning of life?", "general_candidate"),
         ("Could you summarize the policy?", "general_candidate"),
         ("hi", "local"),

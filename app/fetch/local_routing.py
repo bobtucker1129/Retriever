@@ -99,6 +99,45 @@ _GENERAL_START_RE: Final[re.Pattern[str]] = re.compile(
 
 _NON_ALNUM_PRINTSMITH_COLLAPSE: Final[re.Pattern[str]] = re.compile(r"[^a-z0-9]+", re.IGNORECASE)
 
+_INVOICE_NOUN_RE: Final[re.Pattern[str]] = re.compile(r"\binvoices?\b", re.IGNORECASE)
+_INVOICE_VERB_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(opened|opens|opening|closed|closes|closing|entered|enters|entering"
+    r"|posted|posts|posting)\b",
+    re.IGNORECASE,
+)
+_INVOICE_VOLUME_OR_COMPARE_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b("
+    r"how\s+many\s+invoices?"
+    r"|(?:more|fewer|most)\s+invoices?"
+    r"|invoice\s+count"
+    r"|number\s+of\s+invoices?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Month names, numeric years, and coarse calendar buckets for shop-report questions.
+_PRINTSMITH_OPS_TIME_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(month|months|year|years|quarter|quarters|fiscal\b|weekly|daily)"
+    r"|\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may\b|jun(?:e)?"
+    r"|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b"
+    r"|\bfy[-\s]?\d{2,4}\b"
+    r"|\b(?:19|20)\d{2}\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_printsmith_invoice_shop_query(low: str) -> bool:
+    """Operational invoice activity + calendar window — Boone PrintSmith-shaped; before general_candidate."""
+    has_invoice_story = (
+        _INVOICE_VOLUME_OR_COMPARE_RE.search(low) is not None
+        or (
+            _INVOICE_NOUN_RE.search(low) is not None and _INVOICE_VERB_RE.search(low) is not None
+        )
+    )
+    if not has_invoice_story:
+        return False
+    return _PRINTSMITH_OPS_TIME_RE.search(low) is not None
+
 
 def _collapsed_printsmith_hint(low: str) -> bool:
     """Match PrintSmith mentions with spaces, hyphens, or common misspellings."""
@@ -144,6 +183,9 @@ def classify_fetch_intent(text: str) -> str:
     for hint in _DOCS_HINTS:
         if hint in low:
             return "docs_candidate"
+
+    if _looks_printsmith_invoice_shop_query(low):
+        return "printsmith_candidate"
 
     if "?" in cleaned or _GENERAL_START_RE.match(cleaned):
         return "general_candidate"

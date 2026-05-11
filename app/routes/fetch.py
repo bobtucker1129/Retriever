@@ -144,6 +144,11 @@ async def fetch_shell(
             )
 
     last_user_mid = _last_user_message_id(messages) if active_id else None
+    # Anchor to newest turn whenever this thread already has turns; refresh without ?focus stays at bottom.
+    # Opt-out: ?focus=history (read transcript from the top).
+    fetch_focus_latest = bool(
+        active_id and messages and focus != "history"
+    )
 
     response = templates.TemplateResponse(
         request,
@@ -159,7 +164,7 @@ async def fetch_shell(
             "fetch_can_use_composer": fetch_can_use_composer,
             "fetch_composer_disabled_reason": fetch_composer_disabled_reason,
             "warn_no_db": warn_no_db,
-            "fetch_focus_latest": focus == "latest",
+            "fetch_focus_latest": fetch_focus_latest,
             "last_user_message_id": last_user_mid,
         },
     )
@@ -287,7 +292,7 @@ async def ask_in_conversation(
         metadata=assistant_metadata,
     )
     response = RedirectResponse(
-        url="/fetch?" + urlencode({"c": conversation_id, "focus": "latest"}),
+        url="/fetch?" + urlencode({"c": conversation_id}),
         status_code=303,
     )
     ensure_session_cookie(request, response, user, settings)

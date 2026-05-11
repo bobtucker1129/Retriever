@@ -7,7 +7,7 @@
   class="fetch-shell"
   aria-label="Fetch"
   data-fetch-shell
-  data-fetch-focus-latest="{{ 'true' if fetch_focus_latest and last_user_message_id else 'false' }}"
+  data-fetch-focus-latest="{{ 'true' if fetch_focus_latest else 'false' }}"
   data-fetch-last-user-id="{{ last_user_message_id or '' }}"
 >
   <aside class="fetch-conversation-sidebar" id="fetch-conversation-sidebar" aria-label="Fetch conversations">
@@ -191,6 +191,11 @@
   (function () {
     var shell = document.querySelector("[data-fetch-shell]");
     if (!shell) return;
+    try {
+      if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+      }
+    } catch (ignored) {}
     var toggle = shell.querySelector("[data-fetch-sidebar-toggle]");
     var aside = shell.querySelector("#fetch-conversation-sidebar");
     var storageKey = "fetchConversationSidebarCollapsed";
@@ -268,7 +273,7 @@
     }
 
     /**
-     * After reload with focus=latest: show last user turn with assistant header in view when possible.
+     * When anchored to newest turn (data-fetch-focus-latest): last user plus assistant visible when feasible.
      * Picks the largest feasible scrollTop in [asstTop-H, userTop] so both tops stay visible — stays near bottom, not old history.
      */
     function scrollFetchFocusLatestPair(root, lastUserMessageId) {
@@ -457,6 +462,7 @@
 
     if (shell.getAttribute("data-fetch-focus-latest") === "true" && scrollRoot) {
       var lastUserMid = shell.getAttribute("data-fetch-last-user-id") || "";
+      scrollFetchFocusLatestPair(scrollRoot, lastUserMid);
       runFetchScrollAfterLayout(scrollRoot, function () {
         scrollFetchFocusLatestPair(scrollRoot, lastUserMid);
       });
