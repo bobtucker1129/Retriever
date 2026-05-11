@@ -113,7 +113,7 @@ Resolved:
 - `projects/Retriever/` is the old LAN repo reference copy, not the rebuild workspace.
 - `projects/retriever-rebuild/` is the planning/build home for the new Retriever.
 - Old Fetch on `bggol-vesko01` should be turned off via a feature flag. Nobody uses it, and disabling it clears the way for the new Fetch without confusing users.
-- Automated CI/CD deployments and staging validations are a core goal. We will establish a staging pipeline (`retriever-next.boonegraphics.net`) that runs tests before promoting code to `retriever.boonegraphics.net`. This will follow stabilizing the first manual deploy scripts.
+- Automated CI/CD deployments and staging validations are a core goal. We have established an automated pipeline that pushes directly to `RetrieverRebuild` (`retriever.boonegraphics.net`) on commits to `main`. (A dedicated staging site will follow later if needed).
 - Cloudflare Access should protect `retriever.boonegraphics.net` for everyone.
 - New Retriever should not expose old LAN modules through the new domain until they are rebuilt.
 - Fetch comes first, but auth comes before Fetch.
@@ -190,7 +190,6 @@ Recommended scope:
 
 ## Later Work
 
-- Establish an automated CI/CD deployment pipeline to deploy to staging, run automated smoke tests, and safely promote to **`retriever.boonegraphics.net`** (a dedicated staging hostname remains optional per current host decisions).
 - Produce migration planning before production build-out, focused on real modules/data that matter; old Fetch data can be ignored or archived unless explicitly requested.
 - Expand `SECRETS_HANDLING.md`, `AUDIT_LOG_DESIGN.md`, `WEBHOOK_AND_BROKER_AUTH.md`, and `BUILD_CODE_LAYOUT.md` as implementation choices become concrete.
 - Produce a DSF action-service design after Fetch/auth are stable.
