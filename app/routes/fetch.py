@@ -25,8 +25,11 @@ from app.fetch.answer_render import assistant_body_html, build_assistant_status_
 from app.fetch.safe_links import safe_fetch_download_href
 from app.fetch.booneops_broker import (
     BooneOpsBrokerTurnResult,
+    BrokerArtifactProxyFailure,
     call_booneops_broker,
+    normalize_and_validate_booneops_artifact_id,
     prior_messages_from_history,
+    proxy_booneops_artifact_download_response,
 )
 from app.fetch.followup_routing import (
     html_export_prior_assistant,
@@ -47,6 +50,7 @@ from app.fetch.local_routing import (
 )
 
 router = APIRouter(prefix="/fetch", tags=["fetch"])
+booneops_artifact_compat_router = APIRouter(tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["fetch_assistant_body"] = assistant_body_html
 templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
@@ -237,6 +241,43 @@ async def delete_conversation_route(
         raise HTTPException(status_code=404, detail="Conversation not found")
     repo.soft_delete_conversation(user.id, conversation_id)
     return RedirectResponse(url="/fetch", status_code=303)
+
+
+def _serve_booneops_broker_artifact_download(
+    artifact_id: str,
+    request: Request,
+    settings: AppSettings,
+):
+    validated = normalize_and_validate_booneops_artifact_id(artifact_id)
+    if not validated:
+        raise HTTPException(status_code=400, detail="Invalid artifact id")
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    try:
+        return proxy_booneops_artifact_download_response(settings, validated)
+    except BrokerArtifactProxyFailure as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@router.get("/artifacts/broker/{artifact_id}")
+def download_booneops_broker_artifact(
+    artifact_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+):
+    """Stream a BooneOps-generated artifact; browser never sees broker credentials."""
+    return _serve_booneops_broker_artifact_download(artifact_id, request, settings)
+
+
+@booneops_artifact_compat_router.get("/v1/booneops/artifacts/{artifact_id}")
+def download_booneops_broker_artifact_compat_route(
+    artifact_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+):
+    """Compatibility path for artifact links saved before canonical ``/fetch/artifacts/broker/``."""
+    return _serve_booneops_broker_artifact_download(artifact_id, request, settings)
 
 
 @router.get("/artifacts/html/{stem}.html")

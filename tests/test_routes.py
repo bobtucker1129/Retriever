@@ -12,7 +12,7 @@ import app.routes.fetch as fetch_routes
 from app.config import AppSettings
 from app.dependencies import settings_dependency
 from app.db.repositories.fetch import FetchRepository
-from app.fetch.booneops_broker import BooneOpsBrokerTurnResult
+from app.fetch.booneops_broker import BooneOpsBrokerTurnResult, build_broker_message_presentation
 from app.fetch.safe_links import safe_fetch_download_href
 from app.main import create_app
 from tests.fakes import FakeDb
@@ -76,6 +76,11 @@ def make_fetch_broker_enabled_settings(
             "booneops_broker_hmac_secret": "test-hmac-secret-value",
         }
     )
+
+
+def make_fetch_broker_proxy_test_settings(email: str = "state@boonegraphics.net") -> AppSettings:
+    """Broker + Fetch without MySQL so tests use scaffold identity (seed admin bypasses DB)."""
+    return make_fetch_broker_enabled_settings(email=email, with_db=False)
 
 
 def make_client(settings: AppSettings) -> TestClient:
@@ -936,6 +941,186 @@ def test_fetch_post_ask_renders_safe_artifact_download_link(monkeypatch) -> None
     assert 'class="fetch-artifact-dl"' in page.text
     assert 'href="/fetch/artifacts/q1.xlsx"' in page.text
     assert "Quarterly.xlsx" in page.text
+
+
+def test_fetch_post_ask_rewrites_broker_artifact_id_to_canonical_proxy_path(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Artifacts")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        text, md = build_broker_message_presentation(
+            {
+                "ok": True,
+                "message": "Report is ready.",
+                "artifacts": [
+                    {
+                        "filename": "Quarterly.pdf",
+                        "description": "Q1 PDF",
+                        "artifactId": aid,
+                        "downloadPath": f"/v1/booneops/artifacts/{aid}",
+                    }
+                ],
+            },
+            "printsmith_candidate",
+        )
+        return BooneOpsBrokerTurnResult(text, "booneops", md)
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "PrintSmith DSF PDF export"},
+    )
+
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    canonical = f"/fetch/artifacts/broker/{aid}"
+    assert f'href="{canonical}"' in page.text
+    assert "/v1/booneops/artifacts/" not in page.text
+
+
+def test_fetch_broker_artifact_proxy_streams_pdf(monkeypatch) -> None:
+    settings = make_fetch_broker_proxy_test_settings()
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+
+    def fake_get(url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
+        assert str(aid) in url
+        assert "/v1/booneops/artifacts/" in url
+        assert bearer_token == settings.booneops_broker_bearer_token
+        return httpx.Response(
+            200,
+            content=b"%PDF-1.4 artifact-bytes-here\n",
+            headers={
+                "Content-Type": "application/pdf",
+                "Content-Disposition": 'attachment; filename="Quarterly-report.pdf"',
+            },
+        )
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", fake_get)
+
+    resp = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"%PDF")
+    assert resp.headers["content-type"].startswith("application/pdf")
+    cd = resp.headers.get("content-disposition", "").lower()
+    assert "attachment" in cd
+    assert "quarterly-report.pdf" in cd
+    assert resp.headers.get("cache-control") == "no-store"
+    assert resp.headers.get("pragma") == "no-cache"
+
+
+def test_fetch_broker_artifact_proxy_forbidden_without_fetch_shell_access(monkeypatch) -> None:
+    """Active non-admin without Fetch module must not reach broker artifact upstream."""
+    db = FakeDb()
+    db.add_user("plain@boonegraphics.net", "Plain User", "active")
+    settings = make_fetch_broker_enabled_settings(email="plain@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def boom_get(*_a: object, **_k: object) -> None:
+        raise AssertionError("broker artifact upstream must not be called without fetch shell access")
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", boom_get)
+
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+    resp = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert resp.status_code == 403
+
+
+def test_fetch_broker_artifact_compat_route_streams(monkeypatch) -> None:
+    settings = make_fetch_broker_proxy_test_settings()
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+
+    def fake_get(url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
+        assert bearer_token == settings.booneops_broker_bearer_token
+        return httpx.Response(
+            200,
+            content=b"fake-xlsx-binary",
+            headers={
+                "Content-Type": (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ),
+                "Content-Disposition": 'attachment; filename="Workbook.xlsx"',
+            },
+        )
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", fake_get)
+
+    resp = client.get(f"/v1/booneops/artifacts/{aid}")
+    assert resp.status_code == 200
+    assert resp.content == b"fake-xlsx-binary"
+    ct = resp.headers["content-type"]
+    assert "spreadsheetml" in ct
+    cd = resp.headers.get("content-disposition", "").lower()
+    assert "attachment" in cd
+    assert "workbook.xlsx" in cd
+    assert resp.headers.get("pragma") == "no-cache"
+
+
+def test_fetch_broker_artifact_proxy_rejects_bad_artifact_tokens() -> None:
+    settings = make_fetch_broker_proxy_test_settings()
+    client = make_client(settings)
+    assert client.get("/fetch/artifacts/broker/ab").status_code == 400
+
+
+def test_fetch_broker_artifact_proxy_json_body_returns_error_not_download(monkeypatch) -> None:
+    settings = make_fetch_broker_proxy_test_settings()
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+
+    def fake_get(_url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b'{"ok":false,"errors":[{"message":"gone"}]}',
+            headers={"Content-Type": "application/json"},
+        )
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", fake_get)
+    resp = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert resp.status_code == 503
+    assert "detail" in resp.json()
+    assert not resp.content.startswith(b"%PDF")
+    cd = resp.headers.get("content-disposition") or ""
+    assert "attachment" not in cd.lower()
+
+
+def test_fetch_broker_artifact_proxy_octet_sniff_detects_small_json(monkeypatch) -> None:
+    settings = make_fetch_broker_proxy_test_settings()
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+
+    def fake_get(_url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b'{"artifact":"gone"} ',
+            headers={"Content-Type": "application/octet-stream"},
+        )
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", fake_get)
+    assert client.get(f"/fetch/artifacts/broker/{aid}").status_code == 503
+
+
+def test_fetch_broker_artifact_proxy_503_without_broker_config() -> None:
+    settings = make_fetch_enabled_settings(email="state@boonegraphics.net", with_db=False)
+    client = make_client(settings)
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+    r = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert r.status_code == 503
 
 
 def test_fetch_post_ask_skips_external_artifact_href(monkeypatch) -> None:

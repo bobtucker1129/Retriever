@@ -20,6 +20,7 @@ from app.fetch.booneops_broker import (
     call_booneops_broker,
     format_assistant_text_from_broker_json,
     map_user_to_broker_principal,
+    normalize_and_validate_booneops_artifact_id,
     sanitized_broker_error_summary,
     sign_body_hmac_sha256,
 )
@@ -448,3 +449,26 @@ def test_safe_fetch_download_href_accepts_root_paths_only() -> None:
     assert safe_fetch_download_href("/ok\\windows") is None
     assert safe_fetch_download_href("/ok\tbad") is None
     assert safe_fetch_download_href("/ok\x0bbad") is None
+
+
+def test_normalize_and_validate_booneops_artifact_id() -> None:
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    assert normalize_and_validate_booneops_artifact_id(uid) == uid
+    assert normalize_and_validate_booneops_artifact_id("art-12345") == "art-12345"
+    assert normalize_and_validate_booneops_artifact_id("ab") is None
+    assert normalize_and_validate_booneops_artifact_id("x/y") is None
+    assert normalize_and_validate_booneops_artifact_id("../x") is None
+
+
+def test_build_broker_message_presentation_canonical_download_path_for_artifacts() -> None:
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    _text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": "Attached.",
+            "artifacts": [{"filename": "q.pdf", "artifactId": uid, "downloadPath": f"/v1/booneops/artifacts/{uid}"}],
+        },
+        "printsmith_candidate",
+    )
+    expect = f"/fetch/artifacts/broker/{uid}"
+    assert metadata["artifacts"][0]["downloadPath"] == expect

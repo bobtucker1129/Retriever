@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_shell.router)
     app.include_router(admin.router)
     app.include_router(fetch.router)
+    app.include_router(fetch.booneops_artifact_compat_router)
     return app
 
 
