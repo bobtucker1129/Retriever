@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Optional, Protocol
 from uuid import uuid4
 
@@ -55,6 +56,7 @@ class FetchMessageRecord:
     context_percent: Optional[int] = None
     context_state: Optional[str] = None
     metadata: Optional[dict[str, Any]] = None
+    created_at: Optional[datetime] = None
 
 
 class FetchRepository:
@@ -242,6 +244,7 @@ class FetchRepository:
             context_percent=context_percent,
             context_state=context_state,
             metadata=metadata,
+            created_at=None,
         )
 
     def list_messages(self, user_id: int, conversation_id: str) -> list[FetchMessageRecord]:
@@ -251,7 +254,8 @@ class FetchRepository:
             cursor.execute(
                 """
                 SELECT message_id, conversation_id, user_id, role, content, route_key,
-                       model_label, context_percent, context_state, metadata_json
+                       model_label, context_percent, context_state, metadata_json,
+                       created_at
                 FROM fetch_messages
                 WHERE user_id = %s
                   AND conversation_id = %s
@@ -280,6 +284,10 @@ class FetchRepository:
         )
 
     def _message_from_row(self, row) -> FetchMessageRecord:
+        raw_created = row.get("created_at")
+        created_at: Optional[datetime] = None
+        if isinstance(raw_created, datetime):
+            created_at = raw_created
         return FetchMessageRecord(
             message_id=row["message_id"],
             conversation_id=row["conversation_id"],
@@ -291,6 +299,7 @@ class FetchRepository:
             context_percent=row.get("context_percent"),
             context_state=row.get("context_state"),
             metadata=self._metadata_from_row(row.get("metadata_json")),
+            created_at=created_at,
         )
 
     def _metadata_from_row(self, raw: object) -> Optional[dict[str, Any]]:

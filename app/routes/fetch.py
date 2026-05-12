@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
+from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -33,15 +35,28 @@ from app.fetch.booneops_broker import (
 )
 from app.fetch.followup_routing import (
     html_export_prior_assistant,
+    is_answer_snapshot_pdf_followup_text,
     is_html_export_followup_text,
+    pdf_export_prior_assistant,
     resolve_fetch_ask_route,
+)
+from app.fetch.artifact_retention import (
+    filter_message_metadata_for_local_retention,
+    prune_expired_local_html_exports,
 )
 from app.fetch.html_export import (
     HTML_EXPORT_NEED_PRIOR_REPLY,
+    PDF_EXPORT_NEED_PRIOR_REPLY,
+    build_local_html_export_artifact_entry,
+    build_local_pdf_export_artifact_entry,
     build_standalone_html_export_document,
+    convert_html_export_document_to_pdf,
     resolve_export_disk_path,
+    resolve_pdf_export_disk_path,
     short_html_export_confirmation,
+    short_pdf_export_confirmation,
     write_html_export_file,
+    write_pdf_export_file,
 )
 from app.fetch.local_routing import (
     build_fetch_stub_reply,
@@ -82,6 +97,26 @@ def _require_fetch_shell_user(user: CurrentUser) -> None:
     require_active_user(user)
     if not user.can_open_fetch_shell():
         raise HTTPException(status_code=403, detail=_FETCH_ACCESS_MSG)
+
+
+def _prepare_fetch_shell_messages(messages: list, settings: AppSettings) -> list:
+    """Drop expired / missing local HTML/PDF snapshot cards; broker cards unchanged."""
+    if not messages:
+        return messages
+    now = datetime.now(timezone.utc)
+    out: list = []
+    for record in messages:
+        filtered = filter_message_metadata_for_local_retention(
+            record.metadata,
+            settings,
+            now_utc=now,
+            message_created_at=record.created_at,
+        )
+        if filtered is record.metadata:
+            out.append(record)
+        else:
+            out.append(replace(record, metadata=filtered))
+    return out
 
 
 @router.get("", response_class=HTMLResponse)
@@ -143,6 +178,7 @@ async def fetch_shell(
 
         if active_id:
             messages = repo.list_messages(user.id, active_id)
+            messages = _prepare_fetch_shell_messages(messages, settings)
 
     fetch_can_use_composer = bool(
         settings.fetch_enabled
@@ -301,6 +337,27 @@ async def download_fetch_html_export(
     )
 
 
+@router.get("/artifacts/pdf/{stem}.pdf")
+async def download_fetch_pdf_export(
+    stem: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+):
+    """Serve locally generated answer snapshots as PDF (uuid stem only under report directory)."""
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+
+    path_obj = resolve_pdf_export_disk_path(settings, stem)
+    if path_obj is None or not path_obj.is_file():
+        raise HTTPException(status_code=404, detail="Export not found")
+    return FileResponse(
+        path=str(path_obj),
+        media_type="application/pdf",
+        filename="fetch-answer-export.pdf",
+    )
+
+
 @router.post("/conversations/{conversation_id}/ask", response_class=RedirectResponse)
 async def ask_in_conversation(
     conversation_id: str,
@@ -326,9 +383,13 @@ async def ask_in_conversation(
     base_route = classify_fetch_intent(cleaned)
     prior_records = repo.list_messages(user.id, conversation_id)
     html_prior = html_export_prior_assistant(prior_records, cleaned)
+    pdf_prior = pdf_export_prior_assistant(prior_records, cleaned)
     route, session_metadata_extra = resolve_fetch_ask_route(cleaned, base_route, prior_records)
     if is_html_export_followup_text(cleaned):
         route = "fetch_html_export"
+        session_metadata_extra = {}
+    elif is_answer_snapshot_pdf_followup_text(cleaned):
+        route = "fetch_pdf_export"
         session_metadata_extra = {}
     repo.append_message(
         user.id,
@@ -347,20 +408,49 @@ async def ask_in_conversation(
                 source_route_label=(html_prior.route_key or "prior").strip(),
             )
             download_path, _disk = write_html_export_file(settings, doc)
+            prune_expired_local_html_exports(settings)
             assistant_text = short_html_export_confirmation()
             context_state = "ready"
             model_label = settings.model_default
             assistant_metadata = {
                 "artifacts": [
-                    {
-                        "filename": "fetch-answer-export.html",
-                        "description": "Sanitized standalone HTML snapshot of the prior answer.",
-                        "downloadPath": download_path,
-                    }
+                    build_local_html_export_artifact_entry(download_path, settings),
                 ]
             }
         else:
             assistant_text = HTML_EXPORT_NEED_PRIOR_REPLY
+            context_state = "stub"
+            model_label = settings.model_default
+            assistant_metadata = None
+    elif route == "fetch_pdf_export":
+        if pdf_prior is not None:
+            doc = build_standalone_html_export_document(
+                pdf_prior.content,
+                source_route_label=(pdf_prior.route_key or "prior").strip(),
+            )
+            pdf_bytes, pdf_err = convert_html_export_document_to_pdf(doc)
+            if pdf_bytes is None:
+                lead = pdf_err or "PDF export failed on this server."
+                assistant_text = f"{lead}\n\nNothing was saved as a downloadable file.\n\n"
+                assistant_text += (
+                    "You can still export the same answer as HTML from Fetch when that path is enabled."
+                )
+                context_state = "stub"
+                model_label = settings.model_default
+                assistant_metadata = None
+            else:
+                download_path, _disk_pdf = write_pdf_export_file(settings, pdf_bytes)
+                prune_expired_local_html_exports(settings)
+                assistant_text = short_pdf_export_confirmation()
+                context_state = "ready"
+                model_label = settings.model_default
+                assistant_metadata = {
+                    "artifacts": [
+                        build_local_pdf_export_artifact_entry(download_path, settings),
+                    ]
+                }
+        else:
+            assistant_text = PDF_EXPORT_NEED_PRIOR_REPLY
             context_state = "stub"
             model_label = settings.model_default
             assistant_metadata = None

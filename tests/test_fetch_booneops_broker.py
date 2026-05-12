@@ -131,14 +131,12 @@ def test_format_assistant_only_uses_safe_fields(payload: dict, expect_substr: st
     assert "Bearer" not in text
 
 
-def test_build_broker_message_presentation_adds_docs_summary_and_source_cards() -> None:
-    raw = "\n".join(
-        [
-            "Switch flow elements process jobs from left to right.",
-            "Use connections to pass jobs between elements.",
-            "Check private data keys when a script needs state.",
-            "Detailed paragraph " * 40,
-        ]
+def test_build_broker_message_presentation_adds_docs_summary_steps_and_source_cards() -> None:
+    raw = (
+        "Switch flow elements process jobs from left to right.\n\n"
+        "1. Open Switch Designer.\n"
+        "2. Connect flow elements left to right.\n"
+        "3. Use private data keys when scripts need state.\n\n" + ("Detailed paragraph " * 40)
     )
     text, metadata = build_broker_message_presentation(
         {
@@ -158,10 +156,12 @@ def test_build_broker_message_presentation_adds_docs_summary_and_source_cards() 
     )
 
     assert text.startswith("Summary\n")
-    assert "Details\n" in text
+    assert "\nSteps\n" in text
+    assert "\nDetails\n" in text
     assert metadata["request_id"] == "req-docs"
     assert metadata["source_cards"][0]["title"] == "Switch Scripting Guide"
     assert metadata["source_cards"][0]["url"] == "/docs/switch-script-guide"
+    assert "detail" not in metadata["source_cards"][0]
 
 
 def test_build_broker_message_presentation_docs_route_has_no_synthetic_source_cards() -> None:
@@ -281,21 +281,19 @@ def test_augment_fetch_broker_user_message_wraps_basic_styled_excel_followups() 
         "docs_candidate",
         {"reportStyle": "basic_styled_excel"},
     )
-    assert "[Retriever docs route]" in docs
+    assert "[Retriever follow-up: basic styled Excel]" in docs
+    assert "[Retriever docs route]" not in docs
+    assert "sourceCards" not in docs
+    assert "Lead with a short Summary" not in docs
 
 
-def test_augment_broker_user_message_adds_docs_instructions_only() -> None:
+def test_augment_broker_user_message_leaves_user_text_untouched_by_route() -> None:
     q = "How does uPlan proofing work?"
     assert augment_broker_user_message_for_route(q, "printsmith_candidate") == q
-    assert augment_broker_user_message_for_route(q, "docs_candidate").startswith(q)
-    augmented = augment_broker_user_message_for_route(q, "docs_candidate")
-    assert "[Retriever docs route]" in augmented
-    assert "short summary first" in augmented
-    assert "sourceCards" in augmented
+    assert augment_broker_user_message_for_route(q, "docs_candidate") == q
 
 
-def test_build_broker_message_presentation_truncates_long_source_metadata() -> None:
-    long_desc = "word " * 30
+def test_build_broker_message_presentation_truncates_long_source_title_only() -> None:
     long_title = "T" * 200
     _, metadata = build_broker_message_presentation(
         {
@@ -304,7 +302,7 @@ def test_build_broker_message_presentation_truncates_long_source_metadata() -> N
             "sources": [
                 {
                     "title": long_title,
-                    "description": long_desc,
+                    "description": "should not appear in metadata",
                     "url": "/docs/x",
                 }
             ],
@@ -313,7 +311,7 @@ def test_build_broker_message_presentation_truncates_long_source_metadata() -> N
     )
     card = metadata["source_cards"][0]
     assert len(card["title"]) == 140
-    assert len(card["detail"]) == 72
+    assert "detail" not in card
 
 
 def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
@@ -401,7 +399,9 @@ def test_call_booneops_broker_merges_session_metadata_extra(monkeypatch) -> None
     assert payload["sessionMetadata"]["reportContext"] == {"rid": "7"}
 
 
-def test_call_booneops_broker_docs_route_appends_summary_first_guidance(monkeypatch) -> None:
+def test_call_booneops_broker_docs_route_keeps_user_message_clean_and_sets_guidance_metadata(
+    monkeypatch,
+) -> None:
     settings = _make_settings()
     user = _make_user()
     captured: dict = {}
@@ -419,20 +419,64 @@ def test_call_booneops_broker_docs_route_appends_summary_first_guidance(monkeypa
         return Resp()
 
     monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    user_q = "read the Switch manual"
     call_booneops_broker(
         settings,
         user=user,
         conversation_id="conv-1",
-        user_message="read the Switch manual",
+        user_message=user_q,
         route_label="docs_candidate",
         request_id="req-docs-augment",
         prior_messages=[],
         http_post=None,
     )
     payload = json.loads(captured["content"].decode())
-    assert payload["message"].startswith("read the Switch manual")
-    assert "[Retriever docs route]" in payload["message"]
-    assert "short summary first" in payload["message"]
+    assert payload["message"] == user_q
+    sm = payload["sessionMetadata"]
+    assert sm["retrieverDocsPresentationGuidance"].startswith("Lead with a short Summary")
+    assert "sourceCards" in sm["retrieverDocsPresentationGuidance"]
+    forbidden_in_message = (
+        "[Retriever docs route]",
+        "retrieverDocsPresentationGuidance",
+        "sourceCards",
+        "Lead with a short Summary",
+    )
+    for fs in forbidden_in_message:
+        assert fs not in payload["message"]
+
+
+@pytest.mark.parametrize("route_label", ("printsmith_candidate", "general_candidate"))
+def test_call_booneops_broker_non_docs_route_has_no_presentation_guidance_metadata(
+    monkeypatch, route_label: str
+) -> None:
+    settings = _make_settings()
+    captured: dict = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["content"] = content
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"ok","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    call_booneops_broker(
+        settings,
+        user=_make_user(),
+        conversation_id="conv-1",
+        user_message="hello",
+        route_label=route_label,
+        request_id="req-x",
+        prior_messages=[],
+        http_post=None,
+    )
+    payload = json.loads(captured["content"].decode())
+    assert "retrieverDocsPresentationGuidance" not in payload.get("sessionMetadata", {})
 
 
 def test_sanitized_broker_error_summary_prefers_errors0_over_error() -> None:
@@ -571,6 +615,45 @@ def test_normalize_and_validate_booneops_artifact_id() -> None:
     assert normalize_and_validate_booneops_artifact_id("ab") is None
     assert normalize_and_validate_booneops_artifact_id("x/y") is None
     assert normalize_and_validate_booneops_artifact_id("../x") is None
+
+
+def test_build_broker_message_presentation_docs_caps_source_cards_at_two() -> None:
+    srcs = [{"title": f"Doc {i}", "url": f"/docs/{i}"} for i in range(5)]
+    _, metadata = build_broker_message_presentation(
+        {"ok": True, "message": "x" * 600, "sources": srcs},
+        "docs_candidate",
+    )
+    assert len(metadata["source_cards"]) == 2
+    assert metadata["source_cards"][0]["title"] == "Doc 0"
+    assert metadata["source_cards"][1]["title"] == "Doc 1"
+
+
+def test_build_broker_message_presentation_docs_low_confidence_returns_clarify_not_dump() -> None:
+    wall = "Switch manual content " * 80
+    text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": wall,
+            "answerConfidence": "low",
+            "sources": [{"title": "Switch Guide", "url": "/docs/s"}],
+        },
+        "docs_candidate",
+    )
+    assert "Switch manual content" not in text
+    assert "Which product" in text or "doc entry" in text.lower()
+    assert "source_cards" not in metadata
+
+
+def test_build_broker_message_presentation_docs_weak_text_without_sources_clarifies() -> None:
+    text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": "I could not find relevant documentation for that product variant.",
+        },
+        "docs_candidate",
+    )
+    assert "could not find relevant documentation" not in text.lower()
+    assert "source_cards" not in metadata
 
 
 def test_build_broker_message_presentation_canonical_download_path_for_artifacts() -> None:

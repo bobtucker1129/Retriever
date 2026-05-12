@@ -34,17 +34,34 @@ _UUID_ARTIFACT_ID = re.compile(
 )
 _OPAQUE_ARTIFACT_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
-# Docs-routed turns: appended to ``message`` only (not echoed in stored user text).
-_DOCS_ROUTE_BROKER_INSTRUCTIONS = (
-    "\n\n---\n[Retriever docs route] Answer with a short summary first, then add detail if needed. "
-    "When real source metadata exists (titles, URLs, or doc paths), return it in sourceCards or "
-    "sources so Fetch can show compact links—do not invent placeholder citations."
+# Docs-routed turns: sent in ``sessionMetadata.retrieverDocsPresentationGuidance`` only.
+# Never append this to ``message`` — upstream tooling treats ``message`` as the user's search text.
+# The BooneOps broker may merge this into the gateway envelope when it learns the key; today it is
+# carried for contract completeness and operator visibility without polluting retrieval queries.
+_DOCS_ROUTE_PRESENTATION_GUIDANCE = (
+    "Lead with a short Summary (what matters), then practical Steps "
+    "(numbered or bulleted) when the user asked how-to or steps are inferable, then optional detail. "
+    "When real source metadata exists (titles, URLs, or doc paths), put at most two entries in "
+    "sourceCards or sources—titles only from the corpus; do not invent placeholder citations. "
+    "When grounding is weak, set answerConfidence to \"low\" or needsClarification true instead "
+    "of speculating."
 )
 
 # Presentation: keep broker metadata cards link-focused in the shell.
 _SOURCE_CARD_TITLE_MAX = 140
-_SOURCE_CARD_DETAIL_MAX = 72
+_MAX_DOCS_SOURCE_CARDS = 2
 _ARTIFACT_DESCRIPTION_MAX = 72
+
+_DOCS_WEAK_CONFIDENCE_LEVELS = frozenset({"low", "uncertain", "none", "unknown"})
+_DOCS_CLARIFY_USER_MESSAGE = (
+    "I could not tie that confidently to a specific doc entry.\n\n"
+    "Which product, version, or manual should we use (for example Switch, XMPie uProduce, or PrintSmith)?"
+)
+
+_LIST_ITEM_LINE = re.compile(
+    r"^(\d{1,3}[\.\)]|[*\-•]|step\s+\d+)\s+\S",
+    re.IGNORECASE,
+)
 # Echo back on later broker turns via assistant metadata (follow-up exports / styling).
 _MAX_PERSISTED_STRUCTURED_CONTEXT_JSON_BYTES = 750_000
 
@@ -174,12 +191,9 @@ def serialize_broker_json(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-def augment_broker_user_message_for_route(user_message: str, route_label: str) -> str:
-    """Add upstream instructions for BooneOps on documentation-routed broker calls only."""
-    base = (user_message or "").strip()
-    if route_label != "docs_candidate":
-        return base
-    return base + _DOCS_ROUTE_BROKER_INSTRUCTIONS
+def augment_broker_user_message_for_route(user_message: str, _route_label: str) -> str:
+    """Normalize broker user text; docs presentation hints live in sessionMetadata, not ``message``."""
+    return (user_message or "").strip()
 
 
 def augment_fetch_broker_user_message_for_turn(
@@ -248,6 +262,7 @@ def _is_probably_url(value: str) -> bool:
 
 
 def _extract_broker_source_cards(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Title and optional same-origin/external URL only; capped for compact UI."""
     cards: list[dict[str, str]] = []
     source_candidates: list[object] = []
     for key in ("sourceCards", "source_cards", "sources", "citations"):
@@ -255,7 +270,9 @@ def _extract_broker_source_cards(data: dict[str, Any]) -> list[dict[str, str]]:
         if isinstance(value, list):
             source_candidates.extend(value)
 
-    for item in source_candidates[:6]:
+    for item in source_candidates[:12]:
+        if len(cards) >= _MAX_DOCS_SOURCE_CARDS:
+            break
         if isinstance(item, str):
             title = _safe_text(item, max_len=_SOURCE_CARD_TITLE_MAX)
             if title:
@@ -277,18 +294,183 @@ def _extract_broker_source_cards(data: dict[str, Any]) -> list[dict[str, str]]:
             "kind": _safe_text(item.get("kind") or item.get("type") or "source", max_len=40),
             "title": title,
         }
-        detail = _safe_text(
-            item.get("description") or item.get("snippet") or item.get("detail"),
-            max_len=_SOURCE_CARD_DETAIL_MAX,
-        )
-        if detail:
-            card["detail"] = detail
         url = _safe_text(item.get("url") or item.get("href") or item.get("downloadPath"))
         if url and _is_probably_url(url):
             card["url"] = url
         cards.append(card)
 
-    return cards
+    return cards[:_MAX_DOCS_SOURCE_CARDS]
+
+
+def _raw_source_list_len(data: dict[str, Any]) -> int:
+    total = 0
+    for key in ("sourceCards", "source_cards", "sources", "citations"):
+        value = data.get(key)
+        if isinstance(value, list):
+            total += len(value)
+    return total
+
+
+def _parse_confidence_float(value: object) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _string_confidence_is_weak(raw: object) -> bool:
+    if not isinstance(raw, str):
+        return False
+    return raw.strip().lower() in _DOCS_WEAK_CONFIDENCE_LEVELS
+
+
+def _message_suggests_weak_ungrounded_docs(text: str) -> bool:
+    t = " ".join((text or "").lower().split())
+    needles = (
+        "not enough information",
+        "couldn't find relevant",
+        "could not find relevant",
+        "cannot find any",
+        "can't find any",
+        "no relevant documentation",
+        "no documentation was",
+        "i'm not able to find",
+        "i am not able to find",
+        "unable to find",
+        "did not find",
+        "don't have access to",
+        "do not have access to",
+    )
+    return any(n in t for n in needles)
+
+
+def _broker_docs_answer_is_low_confidence(data: dict[str, Any], raw_message: str) -> bool:
+    """Prefer a short clarify prompt over dumping retrieval when metadata/text says the match is weak."""
+    if data.get("needsClarification") is True:
+        return True
+    if data.get("clarifyOnly") is True:
+        return True
+    if data.get("lowConfidenceDocsAnswer") is True:
+        return True
+    for key in ("answerConfidence", "confidenceLevel", "docConfidence", "docsConfidence"):
+        if _string_confidence_is_weak(data.get(key)):
+            return True
+    for key in ("confidence", "answerConfidenceScore", "docConfidenceScore"):
+        score = _parse_confidence_float(data.get(key))
+        if score is not None and score < 0.5:
+            return True
+    nested = data.get("docsAnswer")
+    if isinstance(nested, dict):
+        if nested.get("needsClarification") is True:
+            return True
+        if _string_confidence_is_weak(nested.get("confidence") or nested.get("confidenceLevel")):
+            return True
+        nested_score = _parse_confidence_float(nested.get("score"))
+        if nested_score is not None and nested_score < 0.5:
+            return True
+    am = data.get("answerMetadata")
+    if isinstance(am, dict):
+        if am.get("needsClarification") is True:
+            return True
+        if _string_confidence_is_weak(am.get("confidence") or am.get("confidenceLevel")):
+            return True
+    if _raw_source_list_len(data) == 0 and _message_suggests_weak_ungrounded_docs(raw_message):
+        return True
+    return False
+
+
+def _split_doc_paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+
+def _line_looks_like_list_item(ln: str) -> bool:
+    return bool(_LIST_ITEM_LINE.match(ln.strip()))
+
+
+def _paragraph_is_mostly_list(p: str) -> bool:
+    lines = [ln.strip() for ln in p.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    hits = sum(1 for ln in lines if _line_looks_like_list_item(ln))
+    return hits >= 2 and hits >= (len(lines) + 1) // 2
+
+
+def _docs_should_shape_heavily(raw_message: str) -> bool:
+    if len(raw_message) >= 520:
+        return True
+    if raw_message.count("\n") >= 5:
+        return True
+    paras = _split_doc_paragraphs(raw_message)
+    if len(paras) >= 3:
+        return True
+    if len(paras) >= 2 and any(_paragraph_is_mostly_list(p) for p in paras[1:]):
+        return True
+    return False
+
+
+def _shape_docs_message_body(raw_message: str) -> str:
+    """Summary / Steps / Details from broker prose (docs route)."""
+    base = (raw_message or "").strip()
+    if not base or not _docs_should_shape_heavily(base):
+        return base
+    paras = _split_doc_paragraphs(base)
+    if not paras:
+        return base
+    summary = paras[0]
+    steps: Optional[str] = None
+    steps_idx: Optional[int] = None
+    for i, p in enumerate(paras[1:], start=1):
+        if _paragraph_is_mostly_list(p):
+            steps = p
+            steps_idx = i
+            break
+    used = {0}
+    if steps_idx is not None:
+        used.add(steps_idx)
+    detail_paras = [paras[i] for i in range(len(paras)) if i not in used]
+    details = "\n\n".join(detail_paras).strip()
+
+    parts: list[str] = []
+    if summary:
+        parts.append("Summary")
+        parts.append(summary)
+    if steps:
+        parts.append("")
+        parts.append("Steps")
+        parts.append(steps)
+    if details:
+        parts.append("")
+        parts.append("Details")
+        parts.append(details)
+    return "\n".join(parts).strip()
+
+
+def _append_artifact_section(body: str, data: dict[str, Any]) -> str:
+    fragments: list[str] = []
+    trimmed = (body or "").strip()
+    if trimmed:
+        fragments.append(trimmed)
+    artifacts = data.get("artifacts") or []
+    if isinstance(artifacts, list) and artifacts:
+        block = ["Attachments:"]
+        for art in artifacts:
+            if not isinstance(art, dict):
+                continue
+            fn = str(art.get("filename") or "attachment").strip()
+            aid = str(art.get("artifactId") or "").strip()
+            block.append(f"- {fn}" + (f" ({aid})" if aid else ""))
+        if len(block) > 1:
+            if fragments:
+                fragments.append("")
+            fragments.append("\n".join(block))
+    return "\n".join(fragments).strip()
 
 
 def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]:
@@ -317,11 +499,6 @@ def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]
                 card["downloadPath"] = download_path
         cards.append(card)
     return cards
-
-
-def _first_nonempty_lines(text: str, *, limit: int = 3) -> list[str]:
-    lines = [line.strip(" -•\t") for line in text.splitlines()]
-    return [line for line in lines if line][:limit]
 
 
 def _bounded_json_object_for_metadata(obj: object, *, max_bytes: int) -> Optional[dict[str, Any]]:
@@ -368,18 +545,6 @@ def _structured_context_metadata_from_broker(data: dict[str, Any]) -> dict[str, 
     if bounded_sc is not None:
         meta["sessionContext"] = bounded_sc
     return meta
-
-
-def _summarize_broker_answer(raw_message: str, route_label: str) -> Optional[str]:
-    if route_label != "docs_candidate":
-        return None
-    if len(raw_message) < 520 and raw_message.count("\n") < 5:
-        return None
-    lines = _first_nonempty_lines(raw_message, limit=3)
-    if not lines:
-        return None
-    summary = " ".join(lines)
-    return summary[:420]
 
 
 def build_broker_message_presentation(
@@ -431,6 +596,27 @@ def build_broker_message_presentation(
             "Your message was saved; try again in a moment."
         ), {}
 
+    metadata: dict[str, Any] = {}
+    if route_label == "docs_candidate":
+        if _broker_docs_answer_is_low_confidence(data, raw_message):
+            assistant_text = _append_artifact_section(_DOCS_CLARIFY_USER_MESSAGE, data)
+        else:
+            shaped = _shape_docs_message_body(raw_message)
+            assistant_text = _append_artifact_section(shaped, data)
+            source_cards = _extract_broker_source_cards(data)
+            if source_cards:
+                metadata["source_cards"] = source_cards
+        artifact_cards = _extract_broker_artifact_cards(data)
+        if artifact_cards:
+            metadata["artifacts"] = artifact_cards
+        request_id = _safe_text(data.get("requestId"), max_len=80)
+        if request_id:
+            metadata["request_id"] = request_id
+        structured = _structured_context_metadata_from_broker(data)
+        if structured:
+            metadata.update(structured)
+        return assistant_text, metadata
+
     lines = [raw_message]
     artifacts = data.get("artifacts") or []
     if isinstance(artifacts, list) and artifacts:
@@ -444,11 +630,7 @@ def build_broker_message_presentation(
             label = f"- {fn}" + (f" ({aid})" if aid else "")
             lines.append(label)
     assistant_text = "\n".join(lines)
-    summary = _summarize_broker_answer(raw_message, route_label)
-    if summary:
-        assistant_text = f"Summary\n{summary}\n\nDetails\n{assistant_text}"
 
-    metadata: dict[str, Any] = {}
     source_cards = _extract_broker_source_cards(data)
     if source_cards:
         metadata["source_cards"] = source_cards
@@ -648,8 +830,13 @@ def call_booneops_broker(
 ) -> BooneOpsBrokerTurnResult:
     """POST a signed broker message; never logs secrets or raw bearer tokens."""
     bot_id, role = map_user_to_broker_principal(user)
+    merged_session_extra: dict[str, Any] = (
+        dict(session_metadata_extra) if session_metadata_extra else {}
+    )
+    if route_label == "docs_candidate":
+        merged_session_extra["retrieverDocsPresentationGuidance"] = _DOCS_ROUTE_PRESENTATION_GUIDANCE
     broker_user_message = augment_fetch_broker_user_message_for_turn(
-        user_message, route_label, session_metadata_extra
+        user_message, route_label, merged_session_extra
     )
     payload = build_broker_payload(
         bot_id=bot_id,
@@ -660,7 +847,7 @@ def call_booneops_broker(
         request_id=request_id,
         route_label=route_label,
         prior_messages=prior_messages,
-        session_metadata_extra=session_metadata_extra,
+        session_metadata_extra=merged_session_extra or None,
     )
     body_bytes = serialize_broker_json(payload)
     secret = settings.booneops_broker_hmac_secret or ""

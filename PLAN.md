@@ -10,6 +10,8 @@ Plain English: **push-to-`main` deploy** on the Windows runner is routine; **pos
 
 Recent **employee-facing Fetch** work improved **readable answers** (Markdown + sanitize), **per-message status**, **metadata cards**, **viewport-stable layout**, **scroll/optimistic ask**, **CSS cache busting**, and **PrintSmith typo routing** — deployed through commits **`0e4f494`** / **`085b082`** (see **`SESSION-LOG.md`** 2026-05-12).
 
+Latest pilot polish shipped **safe pipe tables**, **compact metadata/source cards**, **downloadable artifacts**, **context-aware report follow-ups**, **authenticated BooneOps artifact download proxying**, **local HTML exports**, and **styled Excel exports**. Live Chrome verified deployed Retriever **`8867ff6`** on **`BGGOL-VESKO01`** and BooneOps broker styled Excel commit **`8bd5db0e`** after broker restart.
+
 **Do not widen flags** until **`/docs`-style answers** stay **summarized and well-attributed**; **`FETCH_TRUST_PLAN.md`** pilot notes stay the guide.
 
 Architecture artifacts remain authoritative for auth, Fetch trust, and runtime boundaries.
@@ -91,6 +93,7 @@ Completed:
 - **Live pilot (2026-05-11, constrained):** Verified deploy **`4789cc3`** (“Add Fetch broker error observability.”), GitHub Actions run **25693145755**, `/version` matches SHA, smoke with **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** aligned to env, **broker health OK**, **`/fetch`** unauthenticated → **401**, legacy **8000** liveness OK. BooneOps **`0b21f1bb`** adds broker **correlation** logging; Whitaker broker **`.env.broker`** corrected from Linux-default OpenClaw paths to **local gateway URL + token + device identity files** (`~/.openclaw/.gateway_token` mode **600**) — schedule **gateway token rotation** after credential exposure during troubleshooting (no secret values in docs). Product gaps: raw docs answers need **summaries/sources**; long-term Cursor-like **thinking/progress UX** roadmap; persona **BooneOps**, not private LordTate.
 - **Fetch pilot UX (2026-05-12):** Markdown/safe HTML for assistant bubbles, compact **model/context** status line per answer, optional **metadata** on messages for **source/artifact/status** cards, **optimistic ask** + anchored scroll, **viewport-height** resilient layout/CSS, stylesheet **cache-bust** (`?v=git_sha`) and **absolute static** mount, **PrintSmith typo + time-context** routing improvements; commits through **`085b082`** incl. layout/CSS delivery fixes (Actions e.g. **25705235002**).
 - **Auto deploy via GitHub:** Self-hosted Windows runner on `bggol-vesko01` runs **`.github/workflows/deploy-retriever-rebuild-windows.yml`** on **every push to `main`** (and manual dispatch when operators need migration or legacy-probe toggles). Production secrets stay on-server; the workflow only checks out `deploy/` and invokes `D:\retriever-rebuild\bin\deploy.ps1`. Documented in **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**.
+- **Fetch answer/readiness polish (2026-05-12):** Deployed **`9136fa2`**, **`8edbf72`**, **`afc2570`**, **`60dd1ad`**, **`baf1e48`**, and **`8867ff6`** to Retriever. BooneOps broker restarted on Whitaker with **`8bd5db0e`**. Results: Markdown pipe tables render as real tables; dated job/work-order questions route to PrintSmith/report handling; “export that” follow-ups inherit successful report context; HTML exports are generated locally with safe same-origin links; PDF/Excel/CSV broker artifacts download through Retriever instead of leaking broker paths or downloading JSON; fuzzy phrases like “fancy up the Excel file” now regenerate styled Excel using preserved `reportContext`.
 
 ## Active Architecture Artifacts
 
@@ -164,11 +167,17 @@ Resolved:
 - Context-window display should include both a simple amount/percentage and an operational state such as low, medium, high, or near full.
 - Fetch should keep the current Fetch layout, size, left-side behavior, and top-logo/header feel while improving the visuals with modestly more color and a little more font variation.
 - Old Fetch visual inspection is captured in `FETCH_UI_CONTINUITY.md`; this is now the design bridge into the first Fetch skeleton.
+- Fetch artifact downloads should go through Retriever-authenticated same-origin links. New BooneOps artifacts use `/fetch/artifacts/broker/{artifactId}`; existing `/v1/booneops/artifacts/{artifactId}` links are kept working through a compatibility proxy.
+- Fetch can generate local sanitized HTML exports from a previous successful answer. PDF/Excel/CSV still come from BooneOps broker artifacts.
+- Follow-up routing should be human-friendly when recent context is clearly report/export work. Phrases such as “fancy up the Excel file,” “make the spreadsheet prettier,” or “add colorful headers” should inherit the recent successful report context instead of going to the general stub.
+- Styled Excel is now a BooneOps capability. Styling is additive and generates a new artifact; old downloaded files are not mutated in place.
 
 Open:
 
 - **Fetch pilot — `/docs` presentation:** Confirmed live pilot: answers still skew **raw / hard to skim**; **summary + source cards / cleanup** is the **next engineering priority** before any broad rollout (`FETCH_TRUST_PLAN.md` pilot section).
 - **OpenClaw gateway credential:** Rotate the **broker gateway token** (or equivalent) after inadvertent exposure in agent/tool output during Whitaker broker config fixes.
+- **Fetch artifact lifecycle:** Local HTML exports and broker artifacts now work through Retriever links, but retention/cleanup policy for generated HTML files and long-lived broker artifacts still needs an operator decision.
+- **Fetch PDF behavior:** PDF follow-ups are broker/report-runtime artifacts. If employees expect a document-style PDF snapshot of the previous answer, not a chart/report PDF, that is a future product slice.
 - **RetrieverOps / Fetch-specific broker lane:** Deferred direction—**separate** lane (logs, limits, no instruction-update/write actions, less competition with chat surfaces)—**not** “clone BooneOps now.” See **`PARKED.md`**.
 - **Automated feedback:** exact **artifact format** and size cap for Phase A; whether Phase B public URL checks run on **every push** or a slower cadence; **rotation owner** for the Cloudflare Access service token on `bggol-vesko01`.
 - Whether general outside-world Fetch answers are enabled for all active users at launch or only beta users.
@@ -194,18 +203,19 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 ## Next Recommended Session
 
-**Pilot is proven — keep polishing employee-ready answers and presentation.**
+**Pilot is useful — keep tightening trust, context, and docs quality before widening audience.**
 
-Plain English goal: keep **narrow pilot flags** (**no** `FETCH_GENERAL_QUESTIONS_ENABLED`, **no** “turn it on for everyone”); continue **readable, trustworthy Fetch answers**, especially **`/docs`**: **summaries**, **source cards** or equivalent attribution UX, less wall-of-text. Add **Markdown pipe-table** rendering (safe allow-list + CSS) so tabular BooneOps answers read as **small styled tables**, not monospace pipes. Optionally improve **short-term progress feedback** beyond the spinner; treat **Cursor-style in-thread thinking/progress** as **later** roadmap. Confirm **BooneOps-facing** wording and tone everywhere Fetch speaks to employees.
+Plain English goal: keep **narrow pilot flags** (**no** `FETCH_GENERAL_QUESTIONS_ENABLED`, **no** “turn it on for everyone”); continue **readable, trustworthy Fetch answers**, especially **`/docs`**: **summaries**, **short source cards**, and less wall-of-text. The report/export path is now useful enough for pilot feedback, so the next wins are cleanup, retention, and trust polish rather than more broad capability.
 
 Recommended scope:
 
-1. **Markdown tables:** enable **`tables`** (or equivalent) in the answer Markdown step, extend **`nh3`** allow-list for **`table` / `thead` / `tbody` / `tr` / `th` / `td`** as needed, add compact **assistant-table** styles in **`app.css`**, extend **`test_fetch_answer_render.py`** with a pipe-table fixture.
-2. **Docs answer UX:** shaping + implementation for **summarized** replies and **clean source presentation** (see **`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**).
-3. **Optional:** incremental **status/progress UI** improvements on slow broker turns — without blocking on streaming or full delayed-report UX.
-4. **Security hygiene:** rotate **OpenClaw gateway credential** used by Whitaker broker if not already done (**no secrets in commits or session logs**).
-5. **Keep:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`** handy for regressions and smoke.
-6. **Defer:** Dedicated **RetrieverOps** broker clone / new lane (**`PARKED.md` OQ-10**); widen pilot only after formatting/persona bar is met.
+1. **Docs answer UX:** shaping + implementation for **summarized** replies and **clean source presentation** (see **`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**). Keep source cards short and only show them when real metadata exists.
+2. **Artifact lifecycle:** decide and implement cleanup/retention for local HTML exports and broker-generated artifacts. Keep download links same-origin and authenticated.
+3. **PDF expectation:** decide whether Fetch should add a local “answer snapshot PDF” path, separate from BooneOps chart/report PDFs.
+4. **Progress UX:** improve slow broker-turn feedback beyond the spinner without blocking on full streaming or delayed-report UX.
+5. **Security hygiene:** rotate **OpenClaw gateway credential** used by Whitaker broker if not already done (**no secrets in commits or session logs**).
+6. **Keep:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`** handy for regressions and smoke.
+7. **Defer:** Dedicated **RetrieverOps** broker clone / new lane (**`PARKED.md` OQ-10**); widen pilot only after docs formatting/persona/trust bar is met.
 
 ## Later Work
 

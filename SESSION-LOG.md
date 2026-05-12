@@ -4,6 +4,39 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-12 — Fetch tables, artifacts, follow-up context, and styled exports
+
+**Goal:** Continue **Fetch pilot employee-readiness** without widening rollout: make answers easier to read, route PrintSmith/report questions more naturally, make downloads work, and let normal follow-up language act on the previous report instead of falling into the general stub.
+
+**What happened:**
+
+- **Markdown/table rendering:** Deployed **`9136fa2`** so assistant pipe tables render as real sanitized HTML tables with compact Fetch styling; live Chrome found existing stored pipe-table answers rendering as table elements with horizontal overflow inside the bubble.
+- **Source/artifact presentation:** Source cards now show only when real metadata exists and stay compact; artifact cards render safe same-origin links. Local general/download stub wording is clearer when a request cannot run.
+- **Routing fixes:** Deployed **`8edbf72`** so dated job/work-order prompts route to PrintSmith/report handling. The exact prompt “Can you give me a list of job that were digital Color in the month of Jan, 2026” no longer hit the general stub.
+- **Follow-up exports:** Deployed **`afc2570`** so “export that” style follow-ups inherit the previous successful report/docs route. Local sanitized **HTML** exports work from the previous answer and return a same-origin attachment link.
+- **Artifact download proxy:** Deployed **`60dd1ad`** so BooneOps PDF/Excel/CSV artifacts download through Retriever instead of browser requests receiving JSON. Live Chrome verified existing PDF/XLSX links now stream real files, and new artifacts use `/fetch/artifacts/broker/{artifactId}`.
+- **Fuzzy follow-up language:** Deployed **`baf1e48`** so normal phrases like “fancy up the Excel file,” “make the spreadsheet prettier,” and “add colorful headers” continue recent successful report/export context instead of going general.
+- **Styled Excel:** Committed BooneOps **`8bd5db0e`** and restarted the Whitaker BooneOps broker LaunchAgent. Styled Excel mode adds blue header fill, white bold header text, and thin borders while preserving freeze row, autofilter, widths, and number/date formats.
+- **Report context handoff:** Deployed **`8867ff6`** so Retriever persists bounded BooneOps `reportContext` and forwards it with later follow-ups. This fixed the live “No structured report context is available” error for styled Excel follow-ups.
+- **Verification:** Retriever tests reached **198 passed**; BooneOps tests reached **58 passed**. Live Chrome verified production Retriever SHA **`8867ff6`**, a fresh DSF report, normal Excel export, then the exact fuzzy “fancy up the Excel” phrase producing a new valid XLSX. The downloaded workbook contained blue header fill **`FF4472C4`**, white font **`FFFFFFFF`**, and thin borders.
+
+**Plain-English result:**
+
+Fetch now feels much more like an employee-facing assistant: it reads tables cleanly, remembers the last report well enough to handle natural follow-ups, produces HTML snapshots locally, downloads BooneOps artifacts correctly, and can regenerate a nicer styled Excel file when asked in normal language. Rollout posture stayed **pilot-only**: **`FETCH_GENERAL_QUESTIONS_ENABLED` remains off**.
+
+**Still open:**
+
+- **Docs answers** still need summary-first presentation and short source cards before broad rollout.
+- **OpenClaw gateway credential rotation** is still a security follow-up if not already done.
+- **Artifact retention** needs a policy for local HTML exports and long-lived broker artifacts.
+- **PDF expectations** need a product decision: BooneOps PDFs are chart/report artifacts; a local “snapshot this answer as a PDF” path would be separate work.
+
+**Next recommended session:**
+
+`kickoff projects/retriever-rebuild` — goal: **docs answer quality + artifact lifecycle cleanup**. Keep pilot flags narrow; do not enable general questions broadly. Decide whether Fetch needs local answer-snapshot PDFs and confirm gateway credential rotation status.
+
+---
+
 ## 2026-05-12 — Fetch pilot employee-readiness UX (layout, scroll, attribution)
 
 **Goal:** Improve **Fetch pilot readiness** without widening rollout: **easier-to-read answers**, **clear source/metadata presentation**, **reliable viewport layout and scroll**, and **correct local routing** for PrintSmith-shaped questions despite typos; keep **narrow pilot flags**.

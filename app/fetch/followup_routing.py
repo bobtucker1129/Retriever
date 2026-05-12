@@ -27,6 +27,17 @@ _FORMAT_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+# PDF export follow-ups routed to BooneOps when the target sounds like broker output.
+_BROKER_PDF_OBJECT_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(report|chart|table|spreadsheet|excel|xlsx|xls|csv|workbook)\b",
+    re.IGNORECASE,
+)
+
+_ANSWER_PDF_REPLY_NOUN_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(answer|reply|response)\b",
+    re.IGNORECASE,
+)
+
 _HTML_EXPORT_RE: Final[re.Pattern[str]] = re.compile(
     r"\bhtml\b|\.html\b",
     re.IGNORECASE,
@@ -203,6 +214,34 @@ def html_export_prior_assistant(
 ) -> Optional[FetchMessageRecord]:
     """Assistant message HTML export could snapshot, if the user asked for HTML and context allows."""
     if not is_html_export_followup_text(cleaned):
+        return None
+    return latest_inheritable_assistant_record(prior_records)
+
+
+def is_answer_snapshot_pdf_followup_text(text: str) -> bool:
+    """Phrase points at PDF of the Fetch *answer*, not broker report/chart/tabular artifacts."""
+    low = text.strip().lower()
+    if not low:
+        return False
+    if re.search(r"\bpdf\b", low) is None:
+        return False
+    if not _has_export_action(low):
+        return False
+    if not _has_prior_referent_cue(low):
+        return False
+    if _BROKER_PDF_OBJECT_RE.search(low) is not None:
+        return False
+    if _ANSWER_PDF_REPLY_NOUN_RE.search(low) is None:
+        return False
+    return True
+
+
+def pdf_export_prior_assistant(
+    prior_records: Sequence[FetchMessageRecord],
+    cleaned: str,
+) -> Optional[FetchMessageRecord]:
+    """Same inheritable-assistant gates as HTML when the turn asks for an answer snapshot PDF."""
+    if not is_answer_snapshot_pdf_followup_text(cleaned):
         return None
     return latest_inheritable_assistant_record(prior_records)
 

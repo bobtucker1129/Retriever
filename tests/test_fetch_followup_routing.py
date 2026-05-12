@@ -5,9 +5,11 @@ from __future__ import annotations
 from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.followup_routing import (
     html_export_prior_assistant,
+    is_answer_snapshot_pdf_followup_text,
     is_artifact_refinement_followup_text,
     is_export_download_followup_text,
     is_html_export_followup_text,
+    pdf_export_prior_assistant,
     resolve_fetch_ask_route,
 )
 
@@ -30,6 +32,27 @@ def _rec(
         context_state=context_state,
         metadata=metadata,
     )
+
+
+def test_resolve_inherits_after_success_printsmith_broker_turn() -> None:
+    assert is_answer_snapshot_pdf_followup_text("please save this answer as a PDF") is True
+    assert is_answer_snapshot_pdf_followup_text("download the previous answer as pdf") is True
+    assert is_answer_snapshot_pdf_followup_text("export the last reply as a pdf please") is True
+    assert is_answer_snapshot_pdf_followup_text("export that chart as pdf") is False
+    assert is_answer_snapshot_pdf_followup_text("export that report as pdf") is False
+    assert is_answer_snapshot_pdf_followup_text("save this table as pdf") is False
+
+
+def test_pdf_snapshot_prior_follows_same_inherit_rules_as_html() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="docs_candidate",
+            context_state="ready",
+            content="Doc body.",
+        ),
+    ]
+    assert pdf_export_prior_assistant(prior, "save this answer as pdf") is not None
 
 
 def test_resolve_inherits_after_success_printsmith_broker_turn() -> None:

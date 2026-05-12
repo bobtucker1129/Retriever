@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 
 class FakeCursor:
     def __init__(self, db: "FakeDb", dictionary: bool = False):
@@ -212,6 +214,7 @@ class FakeCursor:
                     "context_percent": context_percent,
                     "context_state": context_state,
                     "metadata_json": metadata_json,
+                    "created_at": datetime.now(timezone.utc),
                 }
             )
             return

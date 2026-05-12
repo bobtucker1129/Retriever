@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import uuid
 
 import httpx
 from fastapi.testclient import TestClient
@@ -897,7 +898,7 @@ def test_fetch_post_ask_docs_renders_broker_source_cards(monkeypatch) -> None:
     assert page.status_code == 200
     assert "Sources" in page.text
     assert "Switch Scripting Guide" in page.text
-    assert 'title="Script element reference"' in page.text
+    assert 'title="Script element reference"' not in page.text
     assert "Script element reference</p>" not in page.text
 
 
@@ -1468,6 +1469,14 @@ def test_fetch_html_followup_writes_file_safe_href(monkeypatch, tmp_path: Path) 
     assert file_response.status_code == 200
     assert "text/html" in file_response.headers.get("content-type", "")
 
+    raw_meta = db.fetch_messages[-1]["metadata_json"]
+    assert raw_meta is not None
+    stored = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+    art0 = stored["artifacts"][0]
+    assert "expiresAtUtc" in art0
+    assert "issuedAtUtc" in art0
+    assert art0.get("storageScope") == "retriever_local"
+
 
 def test_fetch_html_followup_cold_start_no_export_no_broker(monkeypatch, tmp_path: Path) -> None:
     db = FakeDb()
@@ -1499,6 +1508,259 @@ def test_fetch_html_followup_cold_start_no_export_no_broker(monkeypatch, tmp_pat
     assert db.fetch_messages[-1]["route_key"] == "fetch_html_export"
     export_dir = tmp_path / "fetch_html_exports"
     assert not export_dir.exists() or len(list(export_dir.glob("*.html"))) == 0
+
+
+def test_fetch_pdf_answer_snapshot_followup_writes_pdf_safe_href(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="PDF lane")
+
+    FetchRepository(db.connection).append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Totals **bold**.",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(
+        fetch_routes,
+        "convert_html_export_document_to_pdf",
+        lambda _html, **_kwargs: (b"%PDF-1.4 mocked\n", None),
+    )
+
+    def boom_broker(*_a: object, **_k: object) -> BooneOpsBrokerTurnResult:
+        raise AssertionError("answer-snapshot PDF must not call BooneOps broker")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", boom_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "please save this answer as a PDF"},
+    )
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    m = re.search(r'href="(/fetch/artifacts/pdf/[a-f0-9]{32}\.pdf)"', page.text)
+    assert m is not None
+    assert safe_fetch_download_href(m.group(1)) == m.group(1)
+
+    export_dir = tmp_path / "fetch_html_exports"
+    pdfs = list(export_dir.glob("*.pdf"))
+    assert len(pdfs) == 1
+
+    file_response = client.get(m.group(1))
+    assert file_response.status_code == 200
+    ctype = file_response.headers.get("content-type", "").lower()
+    assert "pdf" in ctype or "octet-stream" in ctype
+
+    raw_meta = db.fetch_messages[-1]["metadata_json"]
+    assert raw_meta is not None
+    stored = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+    art0 = stored["artifacts"][0]
+    assert "expiresAtUtc" in art0
+    assert "issuedAtUtc" in art0
+    assert art0.get("storageScope") == "retriever_local"
+    assert db.fetch_messages[-1]["route_key"] == "fetch_pdf_export"
+
+
+def test_fetch_export_that_as_pdf_still_invokes_broker_route(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Broker PDF")
+
+    FetchRepository(db.connection).append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Here is your report.",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    captured: dict[str, object] = {}
+
+    def fake_broker(
+        _settings: AppSettings,
+        *,
+        route_label: str,
+        **_kw: object,
+    ) -> BooneOpsBrokerTurnResult:
+        captured["route_label"] = route_label
+        return BooneOpsBrokerTurnResult("PDF attached.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "can you export that as a pdf file?"},
+    )
+    assert response.status_code == 303
+    assert captured.get("route_label") == "printsmith_candidate"
+    assert db.fetch_messages[-2]["route_key"] == "printsmith_candidate"
+
+
+def test_fetch_pdf_export_route_returns_404_when_file_missing(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+    ghost = uuid.uuid4().hex
+    assert client.get(f"/fetch/artifacts/pdf/{ghost}.pdf").status_code == 404
+
+
+def test_fetch_shell_hides_missing_local_pdf_artifact(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Ghost pdf")
+    stem = uuid.uuid4().hex
+    path = f"/fetch/artifacts/pdf/{stem}.pdf"
+    FetchRepository(db.connection).append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Saved PDF snapshot.",
+        route_key="fetch_pdf_export",
+        context_state="ready",
+        metadata={
+            "artifacts": [
+                {
+                    "filename": "fetch-answer-export.pdf",
+                    "description": "local",
+                    "downloadPath": path,
+                    "expiresAtUtc": "2099-01-01T00:00:00Z",
+                }
+            ]
+        },
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    page = client.get(f"/fetch?c={conv.conversation_id}")
+    assert page.status_code == 200
+    assert "fetch-answer-export.pdf" not in page.text
+    assert 'class="fetch-artifact-dl"' not in page.text
+
+
+def test_fetch_shell_hides_missing_local_html_artifact_card(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Ghost html")
+    repo = FetchRepository(db.connection)
+    stem = uuid.uuid4().hex
+    path = f"/fetch/artifacts/html/{stem}.html"
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="I saved an HTML snapshot of your previous Fetch answer.",
+        route_key="fetch_html_export",
+        context_state="ready",
+        metadata={
+            "artifacts": [
+                {
+                    "filename": "fetch-answer-export.html",
+                    "description": "Sanitized standalone HTML snapshot of the prior answer.",
+                    "downloadPath": path,
+                    "expiresAtUtc": "2099-01-01T00:00:00Z",
+                }
+            ]
+        },
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    page = client.get(f"/fetch?c={conv.conversation_id}")
+    assert page.status_code == 200
+    assert "fetch-answer-export.html" not in page.text
+    assert 'class="fetch-artifact-dl"' not in page.text
+    assert "expired" not in page.text.lower()
+
+
+def test_fetch_shell_hides_expired_local_html_artifact_card(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Stale html")
+    repo = FetchRepository(db.connection)
+    stem = uuid.uuid4().hex
+    export_dir = tmp_path / "fetch_html_exports"
+    export_dir.mkdir(parents=True)
+    (export_dir / f"{stem}.html").write_text("<html><body>x</body></html>", encoding="utf-8")
+    path = f"/fetch/artifacts/html/{stem}.html"
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="I saved an HTML snapshot of your previous Fetch answer.",
+        route_key="fetch_html_export",
+        context_state="ready",
+        metadata={
+            "artifacts": [
+                {
+                    "filename": "fetch-answer-export.html",
+                    "downloadPath": path,
+                    "expiresAtUtc": "2000-01-01T00:00:00Z",
+                }
+            ]
+        },
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    page = client.get(f"/fetch?c={conv.conversation_id}")
+    assert page.status_code == 200
+    assert "fetch-answer-export.html" not in page.text
+    assert 'class="fetch-artifact-dl"' not in page.text
+    assert "expired" not in page.text.lower()
 
 
 def test_fetch_export_followup_after_general_stub_does_not_call_broker(monkeypatch) -> None:

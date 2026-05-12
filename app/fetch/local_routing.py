@@ -20,6 +20,7 @@ FETCH_ROUTE_LABELS: Final[tuple[str, ...]] = (
     "printsmith_candidate",
     "docs_candidate",
     "fetch_html_export",
+    "fetch_pdf_export",
     "general_candidate",
     "blocked_write",
     "unknown",
@@ -315,6 +316,15 @@ def build_fetch_stub_reply(route: str) -> str:
             "answer was exported.\n\n"
             f"{_STATUS_OFFLINE}\n\n"
             "When live, exporter output replaces this placeholder after a qualifying prior answer."
+        )
+
+    if route == "fetch_pdf_export":
+        return (
+            "PDF snapshots are produced only after an export-capable Fetch answer when "
+            "HTML-to-PDF tooling is reachable.\n\n"
+            f"{_STATUS_OFFLINE}\n\n"
+            "Offline mode cannot attach a converter; configure wkhtmltopdf or optional "
+            "xhtml2pdf on the server."
         )
 
     if route == "general_candidate":

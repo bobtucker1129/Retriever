@@ -22,6 +22,9 @@ dev = [
   "pytest",
   "pytest-asyncio",
 ]
+pdf = [
+  "xhtml2pdf",
+]
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]

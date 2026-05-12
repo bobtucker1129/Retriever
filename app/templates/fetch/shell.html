@@ -104,10 +104,9 @@
                       class="fetch-source-link"
                       href="{{ source.url }}"
                       {% if source.url.startswith('/') %}data-fetch-same-origin="true"{% else %}target="_blank" rel="noreferrer"{% endif %}
-                      {% if source.detail %}title="{{ source.detail | e }}"{% endif %}
                     >{{ source.title }}</a>
                     {% else %}
-                    <span class="fetch-source-link fetch-source-link--plain" {% if source.detail %}title="{{ source.detail | e }}"{% endif %}>{{ source.title }}</span>
+                    <span class="fetch-source-link fetch-source-link--plain">{{ source.title }}</span>
                     {% endif %}
                   </li>
                 {% endfor %}

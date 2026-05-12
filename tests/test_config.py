@@ -6,6 +6,10 @@ from pydantic import ValidationError
 from app.config import AppSettings
 
 
+def test_fetch_local_artifact_retention_defaults_to_seven_days() -> None:
+    assert AppSettings().fetch_local_artifact_retention_days == 7
+
+
 def test_local_config_can_start_without_cloudflare_or_mysql_secret() -> None:
     settings = AppSettings()
 
