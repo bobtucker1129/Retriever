@@ -14,6 +14,7 @@ import pytest
 from app.auth.permissions import CurrentUser
 from app.config import AppSettings
 from app.fetch.booneops_broker import (
+    augment_broker_user_message_for_route,
     broker_message_url,
     build_broker_message_presentation,
     call_booneops_broker,
@@ -23,6 +24,7 @@ from app.fetch.booneops_broker import (
     sign_body_hmac_sha256,
 )
 from app.fetch.local_routing import should_delegate_ask_to_booneops_broker
+from app.fetch.safe_links import safe_fetch_download_href
 
 
 def _make_settings() -> AppSettings:
@@ -158,14 +160,46 @@ def test_build_broker_message_presentation_adds_docs_summary_and_source_cards() 
     assert metadata["source_cards"][0]["url"] == "/docs/switch-script-guide"
 
 
-def test_build_broker_message_presentation_adds_docs_route_card_without_sources() -> None:
+def test_build_broker_message_presentation_docs_route_has_no_synthetic_source_cards() -> None:
     text, metadata = build_broker_message_presentation(
         {"ok": True, "message": "Short docs answer."},
         "docs_candidate",
     )
 
     assert text == "Short docs answer."
-    assert metadata["source_cards"][0]["title"] == "BooneOps documentation route"
+    assert "source_cards" not in metadata
+
+
+def test_augment_broker_user_message_adds_docs_instructions_only() -> None:
+    q = "How does uPlan proofing work?"
+    assert augment_broker_user_message_for_route(q, "printsmith_candidate") == q
+    assert augment_broker_user_message_for_route(q, "docs_candidate").startswith(q)
+    augmented = augment_broker_user_message_for_route(q, "docs_candidate")
+    assert "[Retriever docs route]" in augmented
+    assert "short summary first" in augmented
+    assert "sourceCards" in augmented
+
+
+def test_build_broker_message_presentation_truncates_long_source_metadata() -> None:
+    long_desc = "word " * 30
+    long_title = "T" * 200
+    _, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": "Answer.",
+            "sources": [
+                {
+                    "title": long_title,
+                    "description": long_desc,
+                    "url": "/docs/x",
+                }
+            ],
+        },
+        "docs_candidate",
+    )
+    card = metadata["source_cards"][0]
+    assert len(card["title"]) == 140
+    assert len(card["detail"]) == 72
 
 
 def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
@@ -217,6 +251,40 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     assert payload["sessionMetadata"]["routeLabel"] == "printsmith_candidate"
     assert "unit-test-bearer" not in result.assistant_text
     assert "unit-test-hmac" not in result.assistant_text
+
+
+def test_call_booneops_broker_docs_route_appends_summary_first_guidance(monkeypatch) -> None:
+    settings = _make_settings()
+    user = _make_user()
+    captured: dict = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["content"] = content
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"ok","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message="read the Switch manual",
+        route_label="docs_candidate",
+        request_id="req-docs-augment",
+        prior_messages=[],
+        http_post=None,
+    )
+    payload = json.loads(captured["content"].decode())
+    assert payload["message"].startswith("read the Switch manual")
+    assert "[Retriever docs route]" in payload["message"]
+    assert "short summary first" in payload["message"]
 
 
 def test_sanitized_broker_error_summary_prefers_errors0_over_error() -> None:
@@ -333,3 +401,16 @@ def test_call_booneops_broker_network_error_is_user_safe(monkeypatch) -> None:
     lowered = result.assistant_text.lower()
     assert "broker" in lowered
     assert result.context_state == "booneops_error"
+
+
+def test_safe_fetch_download_href_accepts_root_paths_only() -> None:
+    assert safe_fetch_download_href("/reports/abc/file.pdf") == "/reports/abc/file.pdf"
+    assert safe_fetch_download_href("  /ok  ") == "/ok"
+    assert safe_fetch_download_href(None) is None
+    assert safe_fetch_download_href("") is None
+    assert safe_fetch_download_href("//evil.example/path") is None
+    assert safe_fetch_download_href("https://x.example/a") is None
+    assert safe_fetch_download_href("/../admin") is None
+    assert safe_fetch_download_href("/ok\\windows") is None
+    assert safe_fetch_download_href("/ok\tbad") is None
+    assert safe_fetch_download_href("/ok\x0bbad") is None

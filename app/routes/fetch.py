@@ -22,6 +22,7 @@ from app.db.connection import create_connection
 from app.db.repositories.fetch import FetchRepository
 from app.dependencies import settings_dependency
 from app.fetch.answer_render import assistant_body_html, build_assistant_status_line
+from app.fetch.safe_links import safe_fetch_download_href
 from app.fetch.booneops_broker import (
     BooneOpsBrokerTurnResult,
     call_booneops_broker,
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/fetch", tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["fetch_assistant_body"] = assistant_body_html
 templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
+templates.env.filters["fetch_safe_artifact_href"] = safe_fetch_download_href
 
 
 def _last_user_message_id(messages: list) -> Optional[str]:

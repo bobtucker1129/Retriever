@@ -292,6 +292,9 @@ def build_fetch_stub_reply(route: str) -> str:
     if route == "general_candidate":
         return (
             "This message looks like a general question.\n\n"
+            "Downloadable charts or files need a live BooneOps reply with artifact metadata, "
+            "or a docs / PrintSmith / report-style route—not this offline stub while general "
+            "routing is off.\n\n"
             f"{_STATUS_OFFLINE}\n\n"
             "When general or model routing is enabled for your account, this label would "
             "feed the appropriate provider path; here you only get this placeholder."

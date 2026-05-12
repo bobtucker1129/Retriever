@@ -67,15 +67,20 @@ def build_assistant_status_line(m: FetchMessageRecord, settings: AppSettings) ->
     return f"Model: {model} | General Question: {gq} | Context: {pct}% {state_word}"
 
 
-_MD_EXTENSIONS = ["nl2br", "sane_lists"]
+# GFM-style pipe tables need the "tables" extension; nh3 then keeps structure via explicit allowlists.
+_MD_EXTENSIONS = ["nl2br", "sane_lists", "tables"]
 
 
 def assistant_body_html(plain_text: str) -> Markup:
     """Convert stored plain text to sanitized HTML for assistant bubbles."""
     if not plain_text:
         return Markup("")
-    # Markdown preserves readable structure; nh3 strips anything unsafe.
+    # Markdown preserves readable structure; nh3 strips scripts, event handlers, iframes, inline styles, etc.
     md = markdown.Markdown(extensions=_MD_EXTENSIONS)
     html = md.convert(plain_text)
-    clean = nh3.clean(html)
+    clean = nh3.clean(
+        html,
+        tags=nh3.ALLOWED_TAGS,
+        attributes=nh3.ALLOWED_ATTRIBUTES,
+    )
     return Markup(clean)

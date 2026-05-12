@@ -24,6 +24,18 @@ logger = logging.getLogger(__name__)
 BOONEOPS_MESSAGE_PATH = "/v1/booneops/message"
 _DEFAULT_HTTP_TIMEOUT = 115.0
 
+# Docs-routed turns: appended to ``message`` only (not echoed in stored user text).
+_DOCS_ROUTE_BROKER_INSTRUCTIONS = (
+    "\n\n---\n[Retriever docs route] Answer with a short summary first, then add detail if needed. "
+    "When real source metadata exists (titles, URLs, or doc paths), return it in sourceCards or "
+    "sources so Fetch can show compact links—do not invent placeholder citations."
+)
+
+# Presentation: keep broker metadata cards link-focused in the shell.
+_SOURCE_CARD_TITLE_MAX = 140
+_SOURCE_CARD_DETAIL_MAX = 72
+_ARTIFACT_DESCRIPTION_MAX = 72
+
 HttpPostFn = Callable[..., Any]
 
 
@@ -101,6 +113,14 @@ def serialize_broker_json(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
+def augment_broker_user_message_for_route(user_message: str, route_label: str) -> str:
+    """Add upstream instructions for BooneOps on documentation-routed broker calls only."""
+    base = (user_message or "").strip()
+    if route_label != "docs_candidate":
+        return base
+    return base + _DOCS_ROUTE_BROKER_INSTRUCTIONS
+
+
 def _normalize_broker_error_message(raw: str, *, max_len: int = 200) -> str:
     """Collapse to one line and truncate for safe logs (no raw body)."""
     one_line = " ".join((raw or "").split())
@@ -147,7 +167,7 @@ def _is_probably_url(value: str) -> bool:
     return value.startswith(("http://", "https://", "/"))
 
 
-def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list[dict[str, str]]:
+def _extract_broker_source_cards(data: dict[str, Any]) -> list[dict[str, str]]:
     cards: list[dict[str, str]] = []
     source_candidates: list[object] = []
     for key in ("sourceCards", "source_cards", "sources", "citations"):
@@ -157,7 +177,7 @@ def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list
 
     for item in source_candidates[:6]:
         if isinstance(item, str):
-            title = _safe_text(item)
+            title = _safe_text(item, max_len=_SOURCE_CARD_TITLE_MAX)
             if title:
                 cards.append({"kind": "source", "title": title})
             continue
@@ -168,7 +188,8 @@ def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list
             or item.get("label")
             or item.get("name")
             or item.get("filename")
-            or item.get("source")
+            or item.get("source"),
+            max_len=_SOURCE_CARD_TITLE_MAX,
         )
         if not title:
             continue
@@ -176,7 +197,10 @@ def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list
             "kind": _safe_text(item.get("kind") or item.get("type") or "source", max_len=40),
             "title": title,
         }
-        detail = _safe_text(item.get("description") or item.get("snippet") or item.get("detail"))
+        detail = _safe_text(
+            item.get("description") or item.get("snippet") or item.get("detail"),
+            max_len=_SOURCE_CARD_DETAIL_MAX,
+        )
         if detail:
             card["detail"] = detail
         url = _safe_text(item.get("url") or item.get("href") or item.get("downloadPath"))
@@ -184,14 +208,6 @@ def _extract_broker_source_cards(data: dict[str, Any], route_label: str) -> list
             card["url"] = url
         cards.append(card)
 
-    if not cards and route_label == "docs_candidate":
-        cards.append(
-            {
-                "kind": "docs",
-                "title": "BooneOps documentation route",
-                "detail": "Answer was routed through BooneOps for vendor/tool documentation lookup.",
-            }
-        )
     return cards
 
 
@@ -208,7 +224,9 @@ def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]
         card = {"filename": filename}
         if artifact_id:
             card["artifactId"] = artifact_id
-        description = _safe_text(art.get("description") or art.get("sizeLabel"))
+        description = _safe_text(
+            art.get("description") or art.get("sizeLabel"), max_len=_ARTIFACT_DESCRIPTION_MAX
+        )
         if description:
             card["description"] = description
         download_path = _safe_text(art.get("downloadPath"))
@@ -302,7 +320,7 @@ def build_broker_message_presentation(
         assistant_text = f"Summary\n{summary}\n\nDetails\n{assistant_text}"
 
     metadata: dict[str, Any] = {}
-    source_cards = _extract_broker_source_cards(data, route_label)
+    source_cards = _extract_broker_source_cards(data)
     if source_cards:
         metadata["source_cards"] = source_cards
     artifact_cards = _extract_broker_artifact_cards(data)
@@ -344,12 +362,13 @@ def call_booneops_broker(
 ) -> BooneOpsBrokerTurnResult:
     """POST a signed broker message; never logs secrets or raw bearer tokens."""
     bot_id, role = map_user_to_broker_principal(user)
+    broker_user_message = augment_broker_user_message_for_route(user_message, route_label)
     payload = build_broker_payload(
         bot_id=bot_id,
         role=role,
         user=user,
         conversation_id=conversation_id,
-        user_message=user_message,
+        user_message=broker_user_message,
         request_id=request_id,
         route_label=route_label,
         prior_messages=prior_messages,

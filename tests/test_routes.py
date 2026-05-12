@@ -890,7 +890,118 @@ def test_fetch_post_ask_docs_renders_broker_source_cards(monkeypatch) -> None:
     assert page.status_code == 200
     assert "Sources" in page.text
     assert "Switch Scripting Guide" in page.text
-    assert "Script element reference" in page.text
+    assert 'title="Script element reference"' in page.text
+    assert "Script element reference</p>" not in page.text
+
+
+def test_fetch_post_ask_renders_safe_artifact_download_link(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Artifact lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult(
+            "Report is ready.",
+            "booneops",
+            {
+                "artifacts": [
+                    {
+                        "filename": "Quarterly.xlsx",
+                        "description": "Q1 export",
+                        "downloadPath": "/fetch/artifacts/q1.xlsx",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "PrintSmith DSF job status"},
+    )
+
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert 'class="fetch-artifact-dl"' in page.text
+    assert 'href="/fetch/artifacts/q1.xlsx"' in page.text
+    assert "Quarterly.xlsx" in page.text
+
+
+def test_fetch_post_ask_skips_external_artifact_href(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Artifact lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult(
+            "Here is a file.",
+            "booneops",
+            {
+                "artifacts": [
+                    {
+                        "filename": "bad.xlsx",
+                        "downloadPath": "https://evil.example/leak",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "PrintSmith DSF export please"},
+    )
+
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert "evil.example" not in page.text
+    assert 'class="fetch-artifact-dl"' not in page.text
+    assert 'class="fetch-artifact-name"' in page.text
+
+
+def test_fetch_stub_turn_has_no_metadata_source_section(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Stub lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What is the capital of France?"},
+    )
+
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert 'aria-label="Answer details"' not in page.text
+    assert "fetch-source-card-list" not in page.text
 
 
 def test_fetch_post_ask_broker_failure_keeps_conversation_usable(monkeypatch) -> None:

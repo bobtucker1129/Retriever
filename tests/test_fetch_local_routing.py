@@ -74,5 +74,14 @@ def test_stub_copy_always_warns_offline_for_route_like_prompts() -> None:
         assert "stub" in body.lower() or "not connected" in body.lower()
 
 
+def test_general_stub_explains_downloads_need_broker_or_routed_paths() -> None:
+    body = build_fetch_stub_reply("general_candidate")
+    lowered = body.lower()
+    assert "download" in lowered
+    assert "artifact" in lowered
+    assert "docs" in lowered
+    assert "printsmith" in lowered
+
+
 def test_normalize_user_text() -> None:
     assert normalize_user_text("  a  b  ") == "a b"

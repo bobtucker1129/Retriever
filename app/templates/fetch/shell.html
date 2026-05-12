@@ -90,40 +90,54 @@
             {% else %}
             <p>{{ m.content }}</p>
             {% endif %}
-            {% if m.metadata and (m.metadata.source_cards or m.metadata.artifacts or m.metadata.status_cards) %}
+            {% if m.metadata and ((m.metadata.source_cards or [])|length > 0 or (m.metadata.artifacts or [])|length > 0 or (m.metadata.status_cards or [])|length > 0) %}
             <div class="fetch-message-metadata" aria-label="Answer details">
               {% if m.metadata.source_cards %}
               <div class="fetch-source-cards" aria-label="Sources">
                 <div class="fetch-metadata-title">Sources</div>
+                <ul class="fetch-source-card-list">
                 {% for source in m.metadata.source_cards %}
-                <article class="fetch-source-card {{ source.kind|default('source') }}">
-                  <span class="source-badge {{ source.kind|default('source') }}">{{ source.kind|default('source') }}</span>
-                  {% if source.url %}
-                  <a href="{{ source.url }}" target="_blank" rel="noreferrer">{{ source.title }}</a>
-                  {% else %}
-                  <strong>{{ source.title }}</strong>
-                  {% endif %}
-                  {% if source.detail %}<p>{{ source.detail }}</p>{% endif %}
-                </article>
+                  <li class="fetch-source-card {{ source.kind|default('source') }}">
+                    <span aria-hidden="true" class="fetch-source-kind">{{ source.kind|default('source') }}</span>
+                    {% if source.url %}
+                    <a
+                      class="fetch-source-link"
+                      href="{{ source.url }}"
+                      {% if source.url.startswith('/') %}data-fetch-same-origin="true"{% else %}target="_blank" rel="noreferrer"{% endif %}
+                      {% if source.detail %}title="{{ source.detail | e }}"{% endif %}
+                    >{{ source.title }}</a>
+                    {% else %}
+                    <span class="fetch-source-link fetch-source-link--plain" {% if source.detail %}title="{{ source.detail | e }}"{% endif %}>{{ source.title }}</span>
+                    {% endif %}
+                  </li>
                 {% endfor %}
+                </ul>
               </div>
               {% endif %}
               {% if m.metadata.artifacts %}
               <div class="fetch-artifact-cards" aria-label="Attachments">
                 <div class="fetch-metadata-title">Attachments</div>
+                <ul class="fetch-artifact-card-list">
                 {% for artifact in m.metadata.artifacts %}
-                <article class="fetch-artifact-card">
-                  <strong>{{ artifact.filename }}</strong>
-                  {% if artifact.description %}<p>{{ artifact.description }}</p>{% endif %}
-                  {% if artifact.artifactId %}<span class="fetch-artifact-id">Artifact: {{ artifact.artifactId }}</span>{% endif %}
-                </article>
+                  {% set artifact_href = artifact.downloadPath | fetch_safe_artifact_href %}
+                  <li class="fetch-artifact-card">
+                    {% if artifact_href %}
+                    <a class="fetch-artifact-dl" href="{{ artifact_href }}" download>{{ artifact.filename }}</a>
+                    {% else %}
+                    <span class="fetch-artifact-name">{{ artifact.filename }}</span>
+                    {% endif %}
+                    {% if artifact.description %}
+                    <span class="fetch-artifact-desc" title="{{ artifact.description | e }}">{{ artifact.description }}</span>
+                    {% endif %}
+                  </li>
                 {% endfor %}
+                </ul>
               </div>
               {% endif %}
               {% if m.metadata.status_cards %}
               <div class="fetch-status-cards" aria-label="Status">
                 {% for status in m.metadata.status_cards %}
-                <article class="fetch-status-card">
+                <article class="fetch-status-card fetch-status-card--compact">
                   <strong>{{ status.state }}</strong>
                   {% if status.detail %}<p>{{ status.detail }}</p>{% endif %}
                 </article>

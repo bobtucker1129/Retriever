@@ -38,6 +38,48 @@ def test_assistant_body_html_allows_markdown_strips_scripts() -> None:
     assert "<script>" not in text.lower()
 
 
+def test_assistant_body_html_renders_pipe_table_with_safe_structure() -> None:
+    md = "| Col A | Col B |\n| --- | --- |\n| 1 | 2 |\n"
+    text = str(assistant_body_html(md))
+    assert "<table>" in text
+    assert "<thead>" in text and "<tbody>" in text
+    assert "<tr>" in text
+    assert "<th" in text and "Col A" in text and "Col B" in text
+    assert "<td" in text and "1" in text and "2" in text
+
+
+def test_assistant_body_html_pipe_table_strips_script_in_cells() -> None:
+    md = "| x |\n| --- |\n| pre <script>bad</script> post |\n"
+    text = str(assistant_body_html(md))
+    assert "<table>" in text and "<td" in text
+    assert "<script>" not in text.lower()
+    assert "pre" in text and "post" in text
+
+
+def test_assistant_body_html_pipe_table_strips_iframe_style_and_handlers_in_cells() -> None:
+    """nh3 allowlists omit iframe/style tags and strip dangerous attributes from allowed tags."""
+    iframe_md = '| c |\n| --- |\n| pre <iframe src="//e"></iframe> post |\n'
+    low_iframe = str(assistant_body_html(iframe_md)).lower()
+    assert "<table>" in low_iframe and "<td" in low_iframe
+    assert "iframe" not in low_iframe
+    assert "pre" in low_iframe and "post" in low_iframe
+
+    style_md = "| c |\n| --- |\n| x <style>body{background:red}</style> y |\n"
+    low_style = str(assistant_body_html(style_md)).lower()
+    assert "<table>" in low_style
+    assert "<style" not in low_style
+    assert "x" in low_style and "y" in low_style
+
+    handler_md = (
+        "| c |\n| --- |\n| <span style=\"color:red\" onclick=\"alert(1)\">safe</span> |\n"
+    )
+    low_h = str(assistant_body_html(handler_md)).lower()
+    assert "<table>" in low_h and "<td" in low_h
+    assert "onclick" not in low_h
+    assert "style=" not in low_h
+    assert "safe" in low_h
+
+
 def test_assistant_body_html_renders_numbered_lists_as_sanitized_ordered_lists() -> None:
     html = assistant_body_html("Steps:\n\n1. First\n2. Second\n")
     text = str(html)
