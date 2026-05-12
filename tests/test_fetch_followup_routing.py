@@ -227,6 +227,25 @@ def test_resolve_refinement_inherits_printsmith_with_exact_user_fancy_excel_phra
     assert extra.get("reportStyle") == "basic_styled_excel"
 
 
+def test_resolve_fancy_excel_phrase_merges_prior_report_context_and_style() -> None:
+    prior_ctx = {"exportRows": [{"a": 1}], "exportColumns": ["a"]}
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Attached: totals.xlsx",
+            metadata={"reportContext": prior_ctx},
+        ),
+    ]
+    phrase = (
+        "Can you fancy up the excel file and maybe add some bolding and colorful headers?"
+    )
+    route, extra = resolve_fetch_ask_route(phrase, "general_candidate", prior)
+    assert route == "printsmith_candidate"
+    assert extra == {"reportContext": prior_ctx, "reportStyle": "basic_styled_excel"}
+
+
 def test_resolve_refinement_inherits_fuzzy_phrases_with_style_hint_when_tabular() -> None:
     prior = [
         _rec(

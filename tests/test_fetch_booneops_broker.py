@@ -13,6 +13,7 @@ import pytest
 
 from app.auth.permissions import CurrentUser
 from app.config import AppSettings
+from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.booneops_broker import (
     augment_broker_user_message_for_route,
     augment_fetch_broker_user_message_for_turn,
@@ -25,6 +26,7 @@ from app.fetch.booneops_broker import (
     sanitized_broker_error_summary,
     sign_body_hmac_sha256,
 )
+from app.fetch.followup_routing import resolve_fetch_ask_route
 from app.fetch.local_routing import should_delegate_ask_to_booneops_broker
 from app.fetch.safe_links import safe_fetch_download_href
 
@@ -170,6 +172,99 @@ def test_build_broker_message_presentation_docs_route_has_no_synthetic_source_ca
 
     assert text == "Short docs answer."
     assert "source_cards" not in metadata
+
+
+def test_build_broker_message_presentation_preserves_report_context() -> None:
+    ctx = {
+        "reportSpec": {"title": "Sales", "chartType": "bar"},
+        "exportColumns": ["rep", "total"],
+        "exportRows": [{"rep": "A", "total": 10}],
+    }
+    _, metadata = build_broker_message_presentation(
+        {"ok": True, "message": "Here is your export.", "reportContext": ctx},
+        "printsmith_candidate",
+    )
+    assert metadata["reportContext"] == ctx
+
+
+def test_build_broker_message_presentation_normalizes_snake_case_report_context() -> None:
+    ctx = {"exportRows": [{"x": 1}]}
+    _, metadata = build_broker_message_presentation(
+        {"ok": True, "message": "Done.", "report_context": ctx},
+        "printsmith_candidate",
+    )
+    assert metadata["reportContext"] == ctx
+    assert "report_context" not in metadata
+
+
+def test_build_broker_message_presentation_does_not_persist_huge_report_context(caplog) -> None:
+    huge = {"blob": "x" * 900_000}
+    _, metadata = build_broker_message_presentation(
+        {"ok": True, "message": "Totals attached.", "reportContext": huge},
+        "printsmith_candidate",
+    )
+    assert "reportContext" not in metadata
+    assert any("exceeds" in r.message for r in caplog.records)
+
+
+def test_fancy_excel_followup_broker_payload_includes_saved_report_context(monkeypatch) -> None:
+    """After a broker turn stored reportContext, styling language merges it into sessionMetadata."""
+    prior_ctx = {
+        "reportSpec": {"title": "Q1"},
+        "exportColumns": ["invoice"],
+        "exportRows": [{"invoice": "104446"}],
+    }
+    prior = [
+        FetchMessageRecord(
+            message_id="m1",
+            conversation_id="c",
+            user_id=1,
+            role="assistant",
+            content="Excel attached.",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            metadata={"reportContext": prior_ctx, "artifacts": []},
+        ),
+    ]
+    phrase = (
+        "Can you fancy up the excel file and maybe add some bolding and colorful headers?"
+    )
+    _route, extra = resolve_fetch_ask_route(phrase, "general_candidate", prior)
+    assert extra.get("reportStyle") == "basic_styled_excel"
+    assert extra.get("reportContext") == prior_ctx
+
+    settings = _make_settings()
+    user = _make_user()
+    captured: dict = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["content"] = content
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"ok","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message=phrase,
+        route_label=_route,
+        request_id="req-style",
+        prior_messages=[],
+        session_metadata_extra=extra,
+        http_post=None,
+    )
+    payload = json.loads(captured["content"].decode())
+    sm = payload["sessionMetadata"]
+    assert sm["reportStyle"] == "basic_styled_excel"
+    assert sm["reportContext"] == prior_ctx
 
 
 def test_augment_fetch_broker_user_message_wraps_basic_styled_excel_followups() -> None:

@@ -45,6 +45,8 @@ _DOCS_ROUTE_BROKER_INSTRUCTIONS = (
 _SOURCE_CARD_TITLE_MAX = 140
 _SOURCE_CARD_DETAIL_MAX = 72
 _ARTIFACT_DESCRIPTION_MAX = 72
+# Echo back on later broker turns via assistant metadata (follow-up exports / styling).
+_MAX_PERSISTED_STRUCTURED_CONTEXT_JSON_BYTES = 750_000
 
 HttpPostFn = Callable[..., Any]
 BrokerArtifactGetFn = Callable[..., Any]
@@ -322,6 +324,52 @@ def _first_nonempty_lines(text: str, *, limit: int = 3) -> list[str]:
     return [line for line in lines if line][:limit]
 
 
+def _bounded_json_object_for_metadata(obj: object, *, max_bytes: int) -> Optional[dict[str, Any]]:
+    """Return a JSON-round-trippable dict copy, or None if missing, not a dict, or too large."""
+    if not isinstance(obj, dict):
+        return None
+    try:
+        raw = json.dumps(obj, separators=(",", ":"), default=str)
+    except (TypeError, ValueError):
+        logger.warning("Broker structured context is not JSON-serializable; skipping persistence.")
+        return None
+    if len(raw.encode("utf-8")) > max_bytes:
+        logger.warning(
+            "Broker structured context exceeds %s bytes; skipping persistence.",
+            max_bytes,
+        )
+        return None
+    return json.loads(raw)
+
+
+def _structured_context_metadata_from_broker(data: dict[str, Any]) -> dict[str, Any]:
+    """Allowlisted nested payloads from broker JSON for assistant metadata (session echo).
+
+    Keys align with ``sessionMetadata`` follow-up contract (camelCase). Snake_case
+    top-level broker fields are normalized to the camelCase metadata key BooneOps expects.
+    ``resultData`` is intentionally omitted: the broker rebuilds it from ``reportContext``.
+    """
+    meta: dict[str, Any] = {}
+    rc = data.get("reportContext")
+    if rc is None:
+        rc = data.get("report_context")
+    bounded = _bounded_json_object_for_metadata(
+        rc, max_bytes=_MAX_PERSISTED_STRUCTURED_CONTEXT_JSON_BYTES
+    )
+    if bounded is not None:
+        meta["reportContext"] = bounded
+
+    sc = data.get("sessionContext")
+    if sc is None:
+        sc = data.get("session_context")
+    bounded_sc = _bounded_json_object_for_metadata(
+        sc, max_bytes=_MAX_PERSISTED_STRUCTURED_CONTEXT_JSON_BYTES
+    )
+    if bounded_sc is not None:
+        meta["sessionContext"] = bounded_sc
+    return meta
+
+
 def _summarize_broker_answer(raw_message: str, route_label: str) -> Optional[str]:
     if route_label != "docs_candidate":
         return None
@@ -410,6 +458,9 @@ def build_broker_message_presentation(
     request_id = _safe_text(data.get("requestId"), max_len=80)
     if request_id:
         metadata["request_id"] = request_id
+    structured = _structured_context_metadata_from_broker(data)
+    if structured:
+        metadata.update(structured)
     return assistant_text, metadata
 
 
