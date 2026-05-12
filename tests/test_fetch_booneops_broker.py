@@ -253,6 +253,40 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     assert "unit-test-hmac" not in result.assistant_text
 
 
+def test_call_booneops_broker_merges_session_metadata_extra(monkeypatch) -> None:
+    settings = _make_settings()
+    user = _make_user()
+    captured: dict = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["content"] = content
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"ok","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message="export pdf",
+        route_label="printsmith_candidate",
+        request_id="req-meta",
+        prior_messages=[],
+        session_metadata_extra={"reportContext": {"rid": "7"}},
+        http_post=None,
+    )
+    payload = json.loads(captured["content"].decode())
+    assert payload["sessionMetadata"]["routeLabel"] == "printsmith_candidate"
+    assert payload["sessionMetadata"]["reportContext"] == {"rid": "7"}
+
+
 def test_call_booneops_broker_docs_route_appends_summary_first_guidance(monkeypatch) -> None:
     settings = _make_settings()
     user = _make_user()

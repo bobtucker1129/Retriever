@@ -7,7 +7,7 @@ from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth.cloudflare import get_identity_from_request
@@ -27,6 +27,18 @@ from app.fetch.booneops_broker import (
     BooneOpsBrokerTurnResult,
     call_booneops_broker,
     prior_messages_from_history,
+)
+from app.fetch.followup_routing import (
+    html_export_prior_assistant,
+    is_html_export_followup_text,
+    resolve_fetch_ask_route,
+)
+from app.fetch.html_export import (
+    HTML_EXPORT_NEED_PRIOR_REPLY,
+    build_standalone_html_export_document,
+    resolve_export_disk_path,
+    short_html_export_confirmation,
+    write_html_export_file,
 )
 from app.fetch.local_routing import (
     build_fetch_stub_reply,
@@ -227,6 +239,27 @@ async def delete_conversation_route(
     return RedirectResponse(url="/fetch", status_code=303)
 
 
+@router.get("/artifacts/html/{stem}.html")
+async def download_fetch_html_export(
+    stem: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+):
+    """Serve locally generated HTML exports (uuid stem only; under report directory)."""
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+
+    path_obj = resolve_export_disk_path(settings, stem)
+    if path_obj is None or not path_obj.is_file():
+        raise HTTPException(status_code=404, detail="Export not found")
+    return FileResponse(
+        path=str(path_obj),
+        media_type="text/html; charset=utf-8",
+        filename="fetch-answer-export.html",
+    )
+
+
 @router.post("/conversations/{conversation_id}/ask", response_class=RedirectResponse)
 async def ask_in_conversation(
     conversation_id: str,
@@ -249,8 +282,13 @@ async def ask_in_conversation(
     cleaned = " ".join(question.split()).strip()
     if not cleaned:
         return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
-    route = classify_fetch_intent(cleaned)
+    base_route = classify_fetch_intent(cleaned)
     prior_records = repo.list_messages(user.id, conversation_id)
+    html_prior = html_export_prior_assistant(prior_records, cleaned)
+    route, session_metadata_extra = resolve_fetch_ask_route(cleaned, base_route, prior_records)
+    if is_html_export_followup_text(cleaned):
+        route = "fetch_html_export"
+        session_metadata_extra = {}
     repo.append_message(
         user.id,
         conversation_id,
@@ -261,7 +299,31 @@ async def ask_in_conversation(
 
     request_id = str(uuid.uuid4())
     use_broker = should_delegate_ask_to_booneops_broker(route, settings)
-    if use_broker:
+    if route == "fetch_html_export":
+        if html_prior is not None:
+            doc = build_standalone_html_export_document(
+                html_prior.content,
+                source_route_label=(html_prior.route_key or "prior").strip(),
+            )
+            download_path, _disk = write_html_export_file(settings, doc)
+            assistant_text = short_html_export_confirmation()
+            context_state = "ready"
+            model_label = settings.model_default
+            assistant_metadata = {
+                "artifacts": [
+                    {
+                        "filename": "fetch-answer-export.html",
+                        "description": "Sanitized standalone HTML snapshot of the prior answer.",
+                        "downloadPath": download_path,
+                    }
+                ]
+            }
+        else:
+            assistant_text = HTML_EXPORT_NEED_PRIOR_REPLY
+            context_state = "stub"
+            model_label = settings.model_default
+            assistant_metadata = None
+    elif use_broker:
         prior_messages = prior_messages_from_history(prior_records)
         broker_result: BooneOpsBrokerTurnResult = call_booneops_broker(
             settings,
@@ -271,6 +333,7 @@ async def ask_in_conversation(
             route_label=route,
             request_id=request_id,
             prior_messages=prior_messages,
+            session_metadata_extra=session_metadata_extra or None,
         )
         assistant_text = broker_result.assistant_text
         context_state = broker_result.context_state

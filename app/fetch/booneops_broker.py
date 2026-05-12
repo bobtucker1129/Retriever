@@ -86,6 +86,7 @@ def build_broker_payload(
     request_id: str,
     route_label: str,
     prior_messages: list[dict[str, str]],
+    session_metadata_extra: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     caps = sorted(user.capabilities) if user.capabilities else []
     session_metadata: dict[str, Any] = {
@@ -94,6 +95,10 @@ def build_broker_payload(
         "booneopsLevel": user.booneops_level or "none",
         "retrieverCapabilities": caps,
     }
+    if session_metadata_extra:
+        for key, value in session_metadata_extra.items():
+            if value is not None:
+                session_metadata[key] = value
     return {
         "botId": bot_id,
         "userId": str(user.id),
@@ -358,6 +363,7 @@ def call_booneops_broker(
     route_label: str,
     request_id: str,
     prior_messages: list[dict[str, str]],
+    session_metadata_extra: Optional[dict[str, Any]] = None,
     http_post: Optional[HttpPostFn] = None,
 ) -> BooneOpsBrokerTurnResult:
     """POST a signed broker message; never logs secrets or raw bearer tokens."""
@@ -372,6 +378,7 @@ def call_booneops_broker(
         request_id=request_id,
         route_label=route_label,
         prior_messages=prior_messages,
+        session_metadata_extra=session_metadata_extra,
     )
     body_bytes = serialize_broker_json(payload)
     secret = settings.booneops_broker_hmac_secret or ""

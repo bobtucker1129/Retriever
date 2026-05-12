@@ -19,6 +19,7 @@ FETCH_ROUTE_LABELS: Final[tuple[str, ...]] = (
     "email_cleanup",
     "printsmith_candidate",
     "docs_candidate",
+    "fetch_html_export",
     "general_candidate",
     "blocked_write",
     "unknown",
@@ -306,6 +307,14 @@ def build_fetch_stub_reply(route: str) -> str:
             f"{_STATUS_OFFLINE}\n\n"
             "When documentation retrieval is enabled, answers would come from approved "
             "sources only—no web search or ad-hoc uploads in this stub."
+        )
+
+    if route == "fetch_html_export":
+        return (
+            "HTML export is a follow-up stub path in offline mode unless a broker-backed "
+            "answer was exported.\n\n"
+            f"{_STATUS_OFFLINE}\n\n"
+            "When live, exporter output replaces this placeholder after a qualifying prior answer."
         )
 
     if route == "general_candidate":

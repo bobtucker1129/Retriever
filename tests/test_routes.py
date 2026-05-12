@@ -13,6 +13,7 @@ from app.config import AppSettings
 from app.dependencies import settings_dependency
 from app.db.repositories.fetch import FetchRepository
 from app.fetch.booneops_broker import BooneOpsBrokerTurnResult
+from app.fetch.safe_links import safe_fetch_download_href
 from app.main import create_app
 from tests.fakes import FakeDb
 
@@ -1036,6 +1037,302 @@ def test_fetch_post_ask_broker_failure_keeps_conversation_usable(monkeypatch) ->
     assert db.fetch_messages[1]["role"] == "assistant"
     assert "saved" in db.fetch_messages[1]["content"].lower()
     assert db.fetch_messages[1]["context_state"] == "booneops_error"
+
+
+def test_fetch_export_followup_inherits_printsmith_and_calls_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Export lane")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="user",
+        content="How many jobs in January?",
+        route_key="printsmith_candidate",
+    )
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="January had 42 jobs.",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("Fetch ask must use broker client, not raw httpx")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    captured: dict[str, object] = {}
+
+    def fake_broker(
+        _settings: AppSettings,
+        *,
+        route_label: str,
+        prior_messages: list,
+        session_metadata_extra: object = None,
+        **_kw: object,
+    ) -> BooneOpsBrokerTurnResult:
+        captured["route_label"] = route_label
+        captured["prior_messages"] = list(prior_messages)
+        captured["session_metadata_extra"] = session_metadata_extra
+        return BooneOpsBrokerTurnResult("PDF export reply.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "can you export that as a pdf file?"},
+    )
+
+    assert response.status_code == 303
+    assert captured.get("route_label") == "printsmith_candidate"
+    prior_msgs = captured.get("prior_messages")
+    assert isinstance(prior_msgs, list)
+    texts = [m.get("text", "") for m in prior_msgs if isinstance(m, dict)]
+    assert "How many jobs in January?" in texts
+    assert "January had 42 jobs." in texts
+    assert db.fetch_messages[-2]["route_key"] == "printsmith_candidate"
+    assert db.fetch_messages[-1]["content"] == "PDF export reply."
+
+
+def test_fetch_export_followup_inherits_docs_and_calls_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Docs export")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Switch scripting overview.",
+        route_key="docs_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("Fetch ask must use broker client")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    captured: dict[str, object] = {}
+
+    def fake_broker(
+        _settings: AppSettings,
+        *,
+        route_label: str,
+        **_kw: object,
+    ) -> BooneOpsBrokerTurnResult:
+        captured["route_label"] = route_label
+        return BooneOpsBrokerTurnResult("CSV attached.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "export that as csv"},
+    )
+
+    assert response.status_code == 303
+    assert captured.get("route_label") == "docs_candidate"
+
+
+def test_fetch_html_followup_writes_file_safe_href(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="HTML lane")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Line **one**\n<script>evil()</script>",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def boom_broker(*_a: object, **_k: object) -> BooneOpsBrokerTurnResult:
+        raise AssertionError("HTML export must not call BooneOps broker")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", boom_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "can you export that as an html file?"},
+    )
+
+    assert response.status_code == 303
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    m = re.search(r'href="(/fetch/artifacts/html/[a-f0-9]{32}\.html)"', page.text)
+    assert m is not None
+    dl = safe_fetch_download_href(m.group(1))
+    assert dl == m.group(1)
+
+    export_dir = tmp_path / "fetch_html_exports"
+    assert export_dir.is_dir()
+    exported = list(export_dir.glob("*.html"))
+    assert len(exported) == 1
+    body = exported[0].read_text(encoding="utf-8").lower()
+    assert "<script" not in body
+    assert "line" in body
+
+    file_response = client.get(m.group(1))
+    assert file_response.status_code == 200
+    assert "text/html" in file_response.headers.get("content-type", "")
+
+
+def test_fetch_html_followup_cold_start_no_export_no_broker(monkeypatch, tmp_path: Path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cold html")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"retriever_report_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def boom_broker(*_a: object, **_k: object) -> BooneOpsBrokerTurnResult:
+        raise AssertionError("broker must not run for HTML cold export")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", boom_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "please export this as html"},
+    )
+
+    assert response.status_code == 303
+    assert "need" in db.fetch_messages[-1]["content"].lower()
+    assert db.fetch_messages[-1]["route_key"] == "fetch_html_export"
+    export_dir = tmp_path / "fetch_html_exports"
+    assert not export_dir.exists() or len(list(export_dir.glob("*.html"))) == 0
+
+
+def test_fetch_export_followup_after_general_stub_does_not_call_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="General lane")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="user",
+        content="What is the meaning of life?",
+        route_key="general_candidate",
+    )
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="stub body",
+        route_key="general_candidate",
+        context_state="stub",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("Fetch ask must use broker client")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    def boom_broker(*_a: object, **_k: object) -> BooneOpsBrokerTurnResult:
+        raise AssertionError("broker must not run for uninheritable export follow-ups")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", boom_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "download that as excel"},
+    )
+
+    assert response.status_code == 303
+    assert db.fetch_messages[-1]["context_state"] == "stub"
+
+
+def test_fetch_export_followup_new_thread_does_not_call_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cold export")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def _no_http(*_a: object, **_k: object) -> None:
+        raise AssertionError("unexpected outbound HTTP from fetch ask")
+
+    monkeypatch.setattr(httpx, "get", _no_http)
+    monkeypatch.setattr(httpx, "post", _no_http)
+    monkeypatch.setattr(httpx, "request", _no_http)
+
+    def boom_broker(*_a: object, **_k: object) -> BooneOpsBrokerTurnResult:
+        raise AssertionError("broker must not run without inheritable broker context")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", boom_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "export as pdf"},
+    )
+
+    assert response.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "unknown"
+
 
 def test_home_hides_fetch_nav_without_access(monkeypatch) -> None:
     db = FakeDb()
