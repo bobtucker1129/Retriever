@@ -15,6 +15,7 @@ from app.auth.permissions import CurrentUser
 from app.config import AppSettings
 from app.fetch.booneops_broker import (
     augment_broker_user_message_for_route,
+    augment_fetch_broker_user_message_for_turn,
     broker_message_url,
     build_broker_message_presentation,
     call_booneops_broker,
@@ -169,6 +170,23 @@ def test_build_broker_message_presentation_docs_route_has_no_synthetic_source_ca
 
     assert text == "Short docs answer."
     assert "source_cards" not in metadata
+
+
+def test_augment_fetch_broker_user_message_wraps_basic_styled_excel_followups() -> None:
+    raw = "bold headers please"
+    wrapped = augment_fetch_broker_user_message_for_turn(
+        raw,
+        "printsmith_candidate",
+        {"reportStyle": "basic_styled_excel"},
+    )
+    assert "[Retriever follow-up: basic styled Excel]" in wrapped
+    assert "User wording: bold headers please" in wrapped
+    docs = augment_fetch_broker_user_message_for_turn(
+        raw,
+        "docs_candidate",
+        {"reportStyle": "basic_styled_excel"},
+    )
+    assert "[Retriever docs route]" in docs
 
 
 def test_augment_broker_user_message_adds_docs_instructions_only() -> None:

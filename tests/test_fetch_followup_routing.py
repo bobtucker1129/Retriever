@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.followup_routing import (
     html_export_prior_assistant,
+    is_artifact_refinement_followup_text,
     is_export_download_followup_text,
     is_html_export_followup_text,
     resolve_fetch_ask_route,
@@ -72,6 +73,28 @@ def test_resolve_carries_allowlisted_prior_metadata() -> None:
     route, extra = resolve_fetch_ask_route("download that as xlsx please", "unknown", prior)
     assert route == "printsmith_candidate"
     assert extra == {"reportContext": {"session": "abc"}}
+
+
+def test_resolve_export_merges_prior_metadata_with_spreadsheet_style_hint() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Totals",
+            metadata={"reportContext": {"session": "abc"}, "source_cards": []},
+        ),
+    ]
+    route, extra = resolve_fetch_ask_route(
+        "download that xlsx with bold colorful headers",
+        "unknown",
+        prior,
+    )
+    assert route == "printsmith_candidate"
+    assert extra == {
+        "reportContext": {"session": "abc"},
+        "reportStyle": "basic_styled_excel",
+    }
 
 
 def test_resolve_does_not_inherit_after_stub_assistant_even_if_printsmith_labeled() -> None:
@@ -175,6 +198,132 @@ def test_html_export_prior_not_triggered_without_html_format() -> None:
         ),
     ]
     assert html_export_prior_assistant(prior, "export that as csv") is None
+
+
+def test_is_artifact_refinement_followup_detects_styling_and_rejects_trivia() -> None:
+    assert is_artifact_refinement_followup_text("make the spreadsheet prettier") is True
+    assert is_artifact_refinement_followup_text(
+        "Can you fancy up the excel file and maybe add some bolding and colorful headers?"
+    ) is True
+    assert is_artifact_refinement_followup_text("why is the sky blue?") is False
+    assert is_artifact_refinement_followup_text("what is the capital of France?") is False
+
+
+def test_resolve_refinement_inherits_printsmith_with_exact_user_fancy_excel_phrase() -> None:
+    prior = [
+        _rec("user", route_key="printsmith_candidate", context_state=None, content="Sales by rep"),
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Attached: totals.xlsx",
+        ),
+    ]
+    phrase = (
+        "Can you fancy up the excel file and maybe add some bolding and colorful headers?"
+    )
+    route, extra = resolve_fetch_ask_route(phrase, "general_candidate", prior)
+    assert route == "printsmith_candidate"
+    assert extra.get("reportStyle") == "basic_styled_excel"
+
+
+def test_resolve_refinement_inherits_fuzzy_phrases_with_style_hint_when_tabular() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Here is your export.",
+        ),
+    ]
+    for text in (
+        "make the spreadsheet prettier",
+        "add colorful headers to the workbook",
+        "clean up that report",
+        "make this table look nicer",
+    ):
+        route, extra = resolve_fetch_ask_route(text, "general_candidate", prior)
+        assert route == "printsmith_candidate", text
+        assert extra.get("reportStyle") == "basic_styled_excel", text
+
+
+def test_resolve_refinement_pdf_clean_up_inherits_without_spreadsheet_style_hint() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="docs_candidate",
+            context_state="ready",
+            content="Manual PDF attached.",
+        ),
+    ]
+    route, extra = resolve_fetch_ask_route(
+        "clean up that pdf layout please",
+        "general_candidate",
+        prior,
+    )
+    assert route == "docs_candidate"
+    assert "reportStyle" not in extra
+
+
+def test_resolve_refinement_does_not_trigger_for_unrelated_questions_after_report() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="January totals attached.",
+        ),
+    ]
+    route, _ = resolve_fetch_ask_route("why is the sky blue?", "general_candidate", prior)
+    assert route == "general_candidate"
+    route2, _ = resolve_fetch_ask_route(
+        "what is the capital of France?",
+        "general_candidate",
+        prior,
+    )
+    assert route2 == "general_candidate"
+
+
+def test_resolve_refinement_definition_question_not_inherited_even_with_format_words() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Report rows.",
+        ),
+    ]
+    route, _ = resolve_fetch_ask_route(
+        "what is spreadsheet formatting?",
+        "general_candidate",
+        prior,
+    )
+    assert route == "general_candidate"
+
+
+def test_resolve_refinement_skips_general_stub_to_find_prior_broker_success() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="booneops",
+            content="Totals attached.",
+        ),
+        _rec("user", route_key="general_candidate", context_state=None, content="thanks"),
+        _rec(
+            "assistant",
+            route_key="general_candidate",
+            context_state="stub",
+            content="You're welcome.",
+        ),
+    ]
+    route, extra = resolve_fetch_ask_route(
+        "make the spreadsheet prettier",
+        "general_candidate",
+        prior,
+    )
+    assert route == "printsmith_candidate"
+    assert extra.get("reportStyle") == "basic_styled_excel"
 
 
 def test_malicious_script_stripped_from_standalone_export() -> None:

@@ -32,6 +32,36 @@ _HTML_EXPORT_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+# Follow-up refinement of a recent report/export (styling, cleanup, layout) without
+# requiring deictic ``that/this`` when the user names the artifact naturally.
+_ARTIFACT_REFINEMENT_TOPIC_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b("
+    r"excel|xlsx|xls|spreadsheet|workbook|csv|"
+    r"\bpdf\b|report|table|chart"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_ARTIFACT_REFINEMENT_STYLE_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b("
+    r"fancy|prett(y|ier|ify)|nic(er|e)|beautiful|polish|spruce|"
+    r"clean\s*up|cleaner|tidy|tidier|"
+    r"styl(e|es|ing|ed)|bold(ing)?|italic|underline|"
+    r"color|colour|colorful|colourful|"
+    r"header(s)?|border(s)?|gridline|highlight|zebra|stripe|"
+    r"formatted|formatting|reformat|layout|widths?|alignment"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Avoid treating definitional trivia as artifact refinement after a report/export turn.
+_REFINEMENT_DEFINITIONAL_QUESTION_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\s*(what|why|who|when|where|which)\s+(is|are|was|were)\s+",
+    re.IGNORECASE,
+)
+
+_ALLOWED_REPORT_STYLE_HINTS: Final[frozenset[str]] = frozenset({"basic_styled_excel"})
+
 # Route inheritance for file exports requires the user to point at prior content
 # (deictic or explicit "result/answer/report/..."), not a bare format request.
 _PRIOR_REFERENT_RE: Final[re.Pattern[str]] = re.compile(
@@ -85,6 +115,47 @@ def is_html_export_followup_text(text: str) -> bool:
     if not _has_export_action(low):
         return False
     return _has_prior_referent_cue(low)
+
+
+_SPREADSHEET_FOR_STYLE_HINT_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(excel|xlsx|xls|spreadsheet|workbook|csv|report|table)\b",
+    re.IGNORECASE,
+)
+
+
+def is_artifact_refinement_followup_text(text: str) -> bool:
+    """Whether ``text`` continues recent report/export work via styling or cleanup language."""
+    low = text.strip().lower()
+    if not low:
+        return False
+    if _REFINEMENT_DEFINITIONAL_QUESTION_RE.search(low) is not None:
+        return False
+    if _ARTIFACT_REFINEMENT_TOPIC_RE.search(low) is None:
+        return False
+    if _ARTIFACT_REFINEMENT_STYLE_RE.search(low) is None:
+        return False
+    return True
+
+
+def _pdf_only_style_target(low: str) -> bool:
+    """True when the user names PDF but not a spreadsheet/tabular export format."""
+    if re.search(r"\bpdf\b", low) is None:
+        return False
+    return (
+        re.search(r"\b(excel|xlsx|xls|spreadsheet|workbook|csv)\b", low) is None
+    )
+
+
+def styled_spreadsheet_hint_for_refinement(text: str) -> Optional[str]:
+    """Allowlisted ``reportStyle`` session hint for spreadsheet-focused refinement."""
+    if not is_artifact_refinement_followup_text(text):
+        return None
+    low = text.strip().lower()
+    if _SPREADSHEET_FOR_STYLE_HINT_RE.search(low) is None:
+        return None
+    if _pdf_only_style_target(low):
+        return None
+    return "basic_styled_excel"
 
 
 def _assistant_inheritable_route(rec: FetchMessageRecord) -> Optional[str]:
@@ -141,18 +212,23 @@ def resolve_fetch_ask_route(
     base_route: str,
     prior_records: Sequence[FetchMessageRecord],
 ) -> tuple[str, dict[str, Any]]:
-    """Return effective route and optional broker session metadata from the prior turn.
+    """Return effective route and optional broker metadata when this turn continues report/export work.
 
-    Does not change ``base_route`` unless this message is an export follow-up and a
-    recent successful PrintSmith/docs broker answer exists.
+    Applies to explicit PDF/Excel/CSV export follow-ups and to natural-language artifact
+    refinement (styling, formatting, cleanup) after a recent successful PrintSmith/docs broker turn.
     """
     if base_route in _NO_OVERRIDE_ROUTES:
         return base_route, {}
-    if not is_export_download_followup_text(cleaned):
+    export_followup = is_export_download_followup_text(cleaned)
+    refinement_followup = is_artifact_refinement_followup_text(cleaned)
+    if not export_followup and not refinement_followup:
         return base_route, {}
     prior_assistant = latest_inheritable_assistant_record(prior_records)
     inherited = _assistant_inheritable_route(prior_assistant) if prior_assistant else None
     if inherited is None:
         return base_route, {}
     extra = inheritable_session_metadata_from_assistant(prior_assistant)
+    style_hint = styled_spreadsheet_hint_for_refinement(cleaned)
+    if style_hint is not None and style_hint in _ALLOWED_REPORT_STYLE_HINTS:
+        extra = {**extra, "reportStyle": style_hint}
     return inherited, extra

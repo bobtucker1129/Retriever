@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 
@@ -1292,6 +1293,72 @@ def test_fetch_export_followup_inherits_printsmith_and_calls_broker(monkeypatch)
     assert "January had 42 jobs." in texts
     assert db.fetch_messages[-2]["route_key"] == "printsmith_candidate"
     assert db.fetch_messages[-1]["content"] == "PDF export reply."
+
+
+def test_fetch_refinement_followup_inherits_printsmith_and_sends_report_style(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Refine lane")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="user",
+        content="Open jobs summary",
+        route_key="printsmith_candidate",
+    )
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="January had 42 jobs.",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["payload"] = json.loads(content.decode())
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"Styled spreadsheet reply.","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+
+    phrase = (
+        "Can you fancy up the excel file and maybe add some bolding and colorful headers?"
+    )
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": phrase},
+    )
+
+    assert response.status_code == 303
+    payload = captured.get("payload")
+    assert isinstance(payload, dict)
+    assert payload.get("sessionMetadata", {}).get("reportStyle") == "basic_styled_excel"
+    msg = str(payload.get("message") or "")
+    assert "[Retriever follow-up: basic styled Excel]" in msg
+    assert phrase in msg
+    assert db.fetch_messages[-2]["content"] == phrase
+    assert db.fetch_messages[-2]["route_key"] == "printsmith_candidate"
+    assert "Styled spreadsheet reply." in db.fetch_messages[-1]["content"]
 
 
 def test_fetch_export_followup_inherits_docs_and_calls_broker(monkeypatch) -> None:

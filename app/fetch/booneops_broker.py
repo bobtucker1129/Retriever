@@ -180,6 +180,25 @@ def augment_broker_user_message_for_route(user_message: str, route_label: str) -
     return base + _DOCS_ROUTE_BROKER_INSTRUCTIONS
 
 
+def augment_fetch_broker_user_message_for_turn(
+    user_message: str,
+    route_label: str,
+    session_metadata_extra: Optional[dict[str, Any]] = None,
+) -> str:
+    """Normalize Fetch broker text (styled spreadsheet follow-ups) before route-specific augmentation."""
+    base = (user_message or "").strip()
+    extra = session_metadata_extra or {}
+    if extra.get("reportStyle") == "basic_styled_excel":
+        base = (
+            "[Retriever follow-up: basic styled Excel]\n"
+            "Regenerate the previous spreadsheet or tabular report export with styled headers "
+            "(bold text and a conservative header fill color), light cell borders, readable column widths, "
+            "and the same underlying data—do not invent new rows or metrics.\n\n"
+            f"User wording: {base}"
+        )
+    return augment_broker_user_message_for_route(base, route_label)
+
+
 def _normalize_broker_error_message(raw: str, *, max_len: int = 200) -> str:
     """Collapse to one line and truncate for safe logs (no raw body)."""
     one_line = " ".join((raw or "").split())
@@ -578,7 +597,9 @@ def call_booneops_broker(
 ) -> BooneOpsBrokerTurnResult:
     """POST a signed broker message; never logs secrets or raw bearer tokens."""
     bot_id, role = map_user_to_broker_principal(user)
-    broker_user_message = augment_broker_user_message_for_route(user_message, route_label)
+    broker_user_message = augment_fetch_broker_user_message_for_turn(
+        user_message, route_label, session_metadata_extra
+    )
     payload = build_broker_payload(
         bot_id=bot_id,
         role=role,
