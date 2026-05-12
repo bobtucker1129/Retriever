@@ -4,11 +4,15 @@ This is the cross-session project dashboard. `SESSION-LOG.md` records what happe
 
 ## Current Phase
 
-**Operations track — automated feedback after deploy**
+**Live Fetch pilot — employee UX polish in flight; keep flags narrow (no broad rollout)**
 
-Plain English: **push-to-`main` deploy** on the Windows self-hosted runner is working; **`RetrieverRebuild`** on **`8810`** updates without manual RDP deploy as the default path. The active gap is **feedback the agent can read**—deploy/smoke/health/version outcomes and (later) public URL and Fetch checks—without clipboard mediation. Implementation follows the staged roadmap in **`docs/runbooks/automated-feedback-bridge-windows.md`** (Phases A–D).
+Plain English: **push-to-`main` deploy** on the Windows runner is routine; **post-deploy feedback** is **green** after version stamping, broker URL, runner permissions, and related fixes. **`RetrieverRebuild`** on **`8810`** has been **verified** with **`FETCH_ENABLED`**, BooneOps **`BOONEOPS_BROKER_ENABLED`**, **`FETCH_GENERAL_QUESTIONS_ENABLED=false`**, smoke aligned to pilot expectations, **legacy `Retriever` on `8000`** read-only-checked and still serving, **`/fetch` protected** until Access session, and broker path **healthy** including **Retriever broker error observability** and BooneOps **correlation** logging.
 
-Planning-and-architecture artifacts below remain authoritative for auth, Fetch trust, and runtime boundaries; the **session focus** shifts to closing the deploy feedback loop while **legacy `Retriever` on `8000`** stays untouched.
+Recent **employee-facing Fetch** work improved **readable answers** (Markdown + sanitize), **per-message status**, **metadata cards**, **viewport-stable layout**, **scroll/optimistic ask**, **CSS cache busting**, and **PrintSmith typo routing** — deployed through commits **`0e4f494`** / **`085b082`** (see **`SESSION-LOG.md`** 2026-05-12).
+
+**Do not widen flags** until **`/docs`-style answers** stay **summarized and well-attributed**; **`FETCH_TRUST_PLAN.md`** pilot notes stay the guide.
+
+Architecture artifacts remain authoritative for auth, Fetch trust, and runtime boundaries.
 
 ## Current Status
 
@@ -84,6 +88,8 @@ Completed:
 - **Fetch local routing (stub):** `classify_fetch_intent` assigns deterministic route labels (`local`, slash `help`/`sources`/`health`, `email_cleanup`, `printsmith_candidate`, `docs_candidate`, `general_candidate`, `blocked_write`, `unknown`). The ask handler persists those labels as `route_key` and returns route-specific offline copy; still no providers, PrintSmith, docs APIs, BooneOps, uploads, or web calls.
 - Deployed commit `89ecd60` to `RetrieverRebuild` on `bggol-vesko01`; `smoke.ps1` passed, `RetrieverRebuild` is running, and legacy `Retriever` is still running.
 - **BooneOps broker (Phase 1, default off):** Optional `BOONEOPS_BROKER_ENABLED` path calls `POST /v1/booneops/message` with bearer token and `X-BooneOps-Signature: sha256=…` over the raw JSON body per `projects/booneops-bots` contract. When enabled with `FETCH_ENABLED`, `printsmith_candidate` and `docs_candidate` ask turns use the broker; `general_candidate` stays on the stub unless `FETCH_GENERAL_QUESTIONS_ENABLED`. Retriever maps users to broker `role`/`botId` from `is_admin`, `booneops_level` (`medium` → super bot), and otherwise production bot. Tests use mocked HTTP only.
+- **Live pilot (2026-05-11, constrained):** Verified deploy **`4789cc3`** (“Add Fetch broker error observability.”), GitHub Actions run **25693145755**, `/version` matches SHA, smoke with **`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED=true`** aligned to env, **broker health OK**, **`/fetch`** unauthenticated → **401**, legacy **8000** liveness OK. BooneOps **`0b21f1bb`** adds broker **correlation** logging; Whitaker broker **`.env.broker`** corrected from Linux-default OpenClaw paths to **local gateway URL + token + device identity files** (`~/.openclaw/.gateway_token` mode **600**) — schedule **gateway token rotation** after credential exposure during troubleshooting (no secret values in docs). Product gaps: raw docs answers need **summaries/sources**; long-term Cursor-like **thinking/progress UX** roadmap; persona **BooneOps**, not private LordTate.
+- **Fetch pilot UX (2026-05-12):** Markdown/safe HTML for assistant bubbles, compact **model/context** status line per answer, optional **metadata** on messages for **source/artifact/status** cards, **optimistic ask** + anchored scroll, **viewport-height** resilient layout/CSS, stylesheet **cache-bust** (`?v=git_sha`) and **absolute static** mount, **PrintSmith typo + time-context** routing improvements; commits through **`085b082`** incl. layout/CSS delivery fixes (Actions e.g. **25705235002**).
 - **Auto deploy via GitHub:** Self-hosted Windows runner on `bggol-vesko01` runs **`.github/workflows/deploy-retriever-rebuild-windows.yml`** on **every push to `main`** (and manual dispatch when operators need migration or legacy-probe toggles). Production secrets stay on-server; the workflow only checks out `deploy/` and invokes `D:\retriever-rebuild\bin\deploy.ps1`. Documented in **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**.
 
 ## Active Architecture Artifacts
@@ -119,7 +125,7 @@ Resolved:
 - `projects/Retriever/` is the old LAN repo reference copy, not the rebuild workspace.
 - `projects/retriever-rebuild/` is the planning/build home for the new Retriever.
 - Old Fetch on `bggol-vesko01` should be turned off via a feature flag. Nobody uses it, and disabling it clears the way for the new Fetch without confusing users.
-- Automated CI/CD deployments and staging validations are a core goal. **Done for first production lane:** a self-hosted Windows GitHub Actions runner on `bggol-vesko01` deploys `RetrieverRebuild` on **push to `main`**, with optional **manual dispatch** for migrations and controlled **`skip_legacy_liveness`**. (A dedicated staging site may follow later if needed.) **Next:** automated **feedback** to the agent (artifacts/summaries, then public URL checks with on-box service token—see **`docs/runbooks/automated-feedback-bridge-windows.md`**).
+- Automated CI/CD deployments and staging validations are a core goal. **Done for first production lane:** a self-hosted Windows GitHub Actions runner on `bggol-vesko01` deploys `RetrieverRebuild` on **push to `main`**, with optional **manual dispatch** for migrations and controlled **`skip_legacy_liveness`**. (A dedicated staging site may follow later if needed.) **Post-deploy feedback** for agents (artifact / bounded bundle: health, smoke, version lineage, legacy probe) is **green after** stamping, broker URL, and runner permission fixes (**2026-05-11 pilot**); **Phases B–D** (e.g., on-box Access-token public URL cadence—see **`docs/runbooks/automated-feedback-bridge-windows.md`**) proceed as rollout needs them.
 - Cloudflare Access should protect `retriever.boonegraphics.net` for everyone.
 - New Retriever should not expose old LAN modules through the new domain until they are rebuilt.
 - Fetch comes first, but auth comes before Fetch.
@@ -161,7 +167,8 @@ Resolved:
 
 Open:
 
-- **Fetch pilot — `/docs` presentation:** Pilot replies looked like **raw retrieval dumps**; needs **summary + source cleanup** before wider rollout (`FETCH_TRUST_PLAN.md` pilot section).
+- **Fetch pilot — `/docs` presentation:** Confirmed live pilot: answers still skew **raw / hard to skim**; **summary + source cards / cleanup** is the **next engineering priority** before any broad rollout (`FETCH_TRUST_PLAN.md` pilot section).
+- **OpenClaw gateway credential:** Rotate the **broker gateway token** (or equivalent) after inadvertent exposure in agent/tool output during Whitaker broker config fixes.
 - **RetrieverOps / Fetch-specific broker lane:** Deferred direction—**separate** lane (logs, limits, no instruction-update/write actions, less competition with chat surfaces)—**not** “clone BooneOps now.” See **`PARKED.md`**.
 - **Automated feedback:** exact **artifact format** and size cap for Phase A; whether Phase B public URL checks run on **every push** or a slower cadence; **rotation owner** for the Cloudflare Access service token on `bggol-vesko01`.
 - Whether general outside-world Fetch answers are enabled for all active users at launch or only beta users.
@@ -187,19 +194,18 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 ## Next Recommended Session
 
-**Fetch next step (pilot follow-up):** prioritize **correlation logging** across **Fetch ask → broker → downstream** before heavier integration tests or wider rollout; gate expands only after traces are usable.
+**Pilot is proven — keep polishing employee-ready answers and presentation.**
 
-**Close the automated feedback loop (Phase A), then stage B–D.**
-
-Plain English goal: **deploy is already automatic** on **`main`**; the operator/agent should get a **small, readable bundle** after each run—deploy ref, **health + smoke** outcome, **`/version`** (and related **`/health/*`** snippets), and the **read-only legacy `8000`** probe result—via a GitHub **artifact** and/or a **bounded log block**, not copy-paste. That is Phase A in **`docs/runbooks/automated-feedback-bridge-windows.md`**.
+Plain English goal: keep **narrow pilot flags** (**no** `FETCH_GENERAL_QUESTIONS_ENABLED`, **no** “turn it on for everyone”); continue **readable, trustworthy Fetch answers**, especially **`/docs`**: **summaries**, **source cards** or equivalent attribution UX, less wall-of-text. Add **Markdown pipe-table** rendering (safe allow-list + CSS) so tabular BooneOps answers read as **small styled tables**, not monospace pipes. Optionally improve **short-term progress feedback** beyond the spinner; treat **Cursor-style in-thread thinking/progress** as **later** roadmap. Confirm **BooneOps-facing** wording and tone everywhere Fetch speaks to employees.
 
 Recommended scope:
 
-1. Implement or verify **Phase A** output from the Windows runner (script + workflow step as needed), keeping **repo secrets empty** for this design unless policy changes.
-2. Document the **exact artifact name and format** in **`github-actions-retriever-rebuild-deploy.md`** once chosen.
-3. **Fetch/product work in parallel** (optional this session): browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Access; keep **`FETCH_ENABLED=false`** until **`deploy/WINDOWS_FETCH_RELEASE.md`** checklist allows deliberate enablement.
-4. **Phase B prep:** confirm where the **Cloudflare Access service token** will live on **`bggol-vesko01`** (not GitHub repo secrets); wire **`smoke.ps1`** (or sibling) only when variables are present—see feedback runbook.
-5. Defer **Phase C** (real Fetch prompt + broker smoke) until broker/Fetch flags are intentionally on for a controlled window.
+1. **Markdown tables:** enable **`tables`** (or equivalent) in the answer Markdown step, extend **`nh3`** allow-list for **`table` / `thead` / `tbody` / `tr` / `th` / `td`** as needed, add compact **assistant-table** styles in **`app.css`**, extend **`test_fetch_answer_render.py`** with a pipe-table fixture.
+2. **Docs answer UX:** shaping + implementation for **summarized** replies and **clean source presentation** (see **`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**).
+3. **Optional:** incremental **status/progress UI** improvements on slow broker turns — without blocking on streaming or full delayed-report UX.
+4. **Security hygiene:** rotate **OpenClaw gateway credential** used by Whitaker broker if not already done (**no secrets in commits or session logs**).
+5. **Keep:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`** handy for regressions and smoke.
+6. **Defer:** Dedicated **RetrieverOps** broker clone / new lane (**`PARKED.md` OQ-10**); widen pilot only after formatting/persona bar is met.
 
 ## Later Work
 

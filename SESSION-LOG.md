@@ -4,6 +4,55 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-12 — Fetch pilot employee-readiness UX (layout, scroll, attribution)
+
+**Goal:** Improve **Fetch pilot readiness** without widening rollout: **easier-to-read answers**, **clear source/metadata presentation**, **reliable viewport layout and scroll**, and **correct local routing** for PrintSmith-shaped questions despite typos; keep **narrow pilot flags**.
+
+**What happened:**
+
+- **Answer presentation:** Assistant turns use **Markdown → safe HTML** for structure (lists, emphasis, breaks) via **`app/fetch/answer_render.py`**; **per-message status line** (model label, general-questions toggle, context). Stored content stays plain text; rendering is display-only after sanitize.
+- **Broker metadata:** Conversation messages persist optional **JSON metadata** for **source/status/artifact-style cards** (repository + broker presentation path).
+- **Fetch UI:** Removed confusing **preview trust** and pilot boilerplate strips; tightened **top bar** spacing; transcript is the **primary scroll surface** anchored to **latest turns** with **optimistic user bubble** and scroll scripts in **`shell.html`**.
+- **Layout:** **`app.css`** + shell use **viewport-height flex/grid** so Fetch fills the window on varied resolutions (**not tied to one monitor**).
+- **Static/CSS delivery:** **`layout.html`** cache-busters `app.css` with **`git_sha`**; **`main.py`** serves static files from an **absolute** `static` root to avoid cwd drift on Windows.
+- **Routing:** **`local_routing.py`** tolerates PrintSmith-like misspellings and pairs **invoice/estimate-style** wording with **time cues** so fewer questions fall through to “general stub.”
+- **Deploy verified (prior arc):** Layout/CSS fixes shipped through commits including **`0e4f494`** and **`085b082`**; GitHub Actions run **`25705235002`**; live **Chrome** spot-checks at several viewport sizes including a short window.
+- **Wrap hygiene:** A local working tree had **accidental deletions** of core Fetch files and tests; **`git restore`** from **`HEAD`** brought them back; **`python3 -m pytest`** → **139 passed** on **`085b082`**.
+
+**Plain-English result:**
+
+Employees get a **calmer, more readable** Fetch thread, **attribution-friendly** metadata hooks, and **stable “stay at the bottom”** behavior; rollout posture stays **pilot-only**. **Next small win:** render **pipe tables** as real HTML tables (Markdown `tables` extension + allow-list + CSS), still inside the bubble.
+
+**Next recommended session:**
+
+`kickoff projects/retriever-rebuild` — goal: **Markdown pipe tables** in assistant answers + table styling; continue **docs summary + source cards** quality; **rotate OpenClaw gateway credential** if not done; do not enable **general internet** Fetch for everyone.
+
+---
+
+## 2026-05-11 — Live Fetch broker pilot verified (deploy lane + observability)
+
+**Goal:** Prove **live Retriever Fetch** talking to BooneOps broker end-to-end in a **pilot-only** configuration, with deploy feedback reliably **green**, legacy **8000** untouched, and **no broad rollout** yet.
+
+**What happened:**
+
+- **Deploy + feedback:** Auto-deploy and post-deploy feedback were already wired; remaining gaps closed with **version stamping**, **broker URL**, and **Windows runner service permissions** so latest feedback runs read as success.
+- **Engineering throughput this arc:** Deploy feedback/version fixes, **Windows restart / commit-SHA gate** hardening, **Fetch pilot spinner and smoke expectations** (`RETRIEVER_SMOKE_EXPECT_FETCH_ENABLED` alignment with live flags), **healthcheck alignment** with the pilot, and **Retriever-side broker error observability** (`4789cc3`, run **25693145755** verified: `/version` matches deployed SHA; smoke passed in pilot mode with **fetch**/ **modelProvider** and **broker health** okay; legacy **Retriever** on **8000** still responding; `/fetch` still **requires auth** and returns **401** when unauthenticated).
+- **BooneOps correlation:** Workspace commit **`0b21f1bb`** adds **broker request correlation** logging; LaunchAgent restarted on Whitaker broker host; broker health verified.
+- **Broker gateway misconfig:** BooneOps Deep Search / Fleet-style prompt initially failed with **gateway unavailable** because broker **`.env.broker`** aimed at Linux-default OpenClaw paths. **Whitaker broker** fixed by pointing env at **local OpenClaw gateway URL**, **gateway token file**, **device identity file**, **agent id**, **device family**; token file installed with restrictive permissions; broker restarted successfully.
+- **Security follow-up:** OpenClaw **gateway-equivalent credential** appeared in tool output during config search — **schedule rotation** of that credential; do not duplicate values in docs.
+- **Pilot flags (constrained):** `FETCH_ENABLED=true`, `BOONEOPS_BROKER_ENABLED=true`, `FETCH_GENERAL_QUESTIONS_ENABLED=false`, smoke expects Fetch on. General-questions path remains **stub**; local greeting **stub**; **PrintSmith / docs broker path** behaves usefully (**DSF proof-status** prompt returns a substantive BooneOps answer). **Telegram** and **Discord** stayed responsive through checks.
+- **Product notes:** Docs retrieval answers are **too raw** for employees — need **summary + source hygiene** before widening audience. Spinner is acceptable for now; **Cursor-style threaded progress/thinking** is **roadmap**, not required to ship pilot polish. Retriever Fetch should speak as **BooneOps**, not **private LordTate** (already in plan decisions).
+
+**Plain-English result:**
+
+The **live pilot** demonstrates broker-backed Fetch behind Access with observability and deploy feedback behaving; rollout stays **narrow** until **presentation and persona polish** catch up.
+
+**Next recommended session:**
+
+**Product/readiness**, not wider flags: **docs answer formatting** (summaries, **source cards**), optionally **clearer progress/status in the Fetch UI**, keep **general internet** Fetch off and **pilot posture** deliberate; **`kickoff projects/retriever-rebuild`** to continue.
+
+---
+
 ## 2026-05-11 — Automated feedback bridge documented (post auto-deploy)
 
 **Goal:** Plan the **automated feedback bridge** after GitHub self-hosted **push-to-`main`** deploy: agent-readable outcomes without clipboard mediation, Windows- and **`8000`**-safe.

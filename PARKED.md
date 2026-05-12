@@ -10,7 +10,25 @@ Tangents, deferred decisions, and ideas not on the active session goal.
 **Goal:** Long-term, give Retriever Fetch a **dedicated broker lane** (working name: RetrieverOps or Fetch-specific endpoint) with **its own logs**, **queue or concurrency limits**, **no instruction-update or write actions**, and **reduced competition** with Telegram/Discord BooneOps traffic.  
 **Constraints:** Must fit the existing trust model (read-heavy employee helper); evolves after observability is in place.  
 **Non-goal:** Do **not** treat this as “stand up a full **BooneOps clone** immediately.”  
-**Dependency:** **Correlation logging** across Fetch ask → broker → downstream should land **before** leaning on this lane for heavy tests or broad rollout.
+**Dependency:** **Correlation logging** across Fetch ask → broker → downstream should land **before** leaning on this lane for heavy tests or broad rollout.  
+**Update (2026-05-11):** BooneOps correlation + Retriever observability landed for the live pilot using the **existing** broker stack; opening a **new** Fetch-dedicated lane is still **not** the next sprint—**employee-facing docs formatting/source UX** leads first.
+
+---
+
+## OQ-11: Printing Press — Research for CLI / Skill Generation
+
+**Parked:** 2026-05-11
+**What it is:** printingpress.dev — a tool that takes any API spec (or website) and generates a token-efficient Go CLI, a Claude Code skill, an OpenClaw skill, and an MCP server from it in one command. Community library already has 77+ CLIs including `pp-fedex`.
+**Core philosophy:** Local SQLite mirror beats remote API round trips — same pattern Retriever already uses.
+**Why it's relevant:**
+- Could generate OpenClaw skills for vendor APIs we interact with (FedEx, UPS, suppliers) without writing them from scratch
+- The local mirror + compound query design is a direct parallel to Retriever's approach — worth studying their architecture
+- `pp-fedex` could feed shipping data into Retriever or the shipping dashboard
+**Research tasks (whenever we revisit integrations):**
+1. Evaluate `pp-fedex` for Boone's daily shipping workflow
+2. Check if PrintSmith Vision or MDSF have API specs that could be "printed"
+3. Review Printing Press's SQLite mirror pattern for lessons applicable to Retriever's data layer
+**Seed:** `memory/shared/seeds/2026-05-11-printing-press-agent-cli-generator.md`
 
 ---
 
