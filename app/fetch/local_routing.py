@@ -125,6 +125,22 @@ _PRINTSMITH_OPS_TIME_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+# Shop job / work-order wording + calendar window — before general_candidate ("Can you…").
+_PRINTSMITH_JOB_CONTEXT_RE: Final[re.Pattern[str]] = re.compile(
+    r"\bjobs?\b"
+    r"|work\s+orders?"
+    r"|job\s+tickets?"
+    r"|work\s+tickets?",
+    re.IGNORECASE,
+)
+
+
+def _looks_printsmith_dated_job_shop_query(low: str) -> bool:
+    """Operational job/work-order list or counts with a recognized time window."""
+    if _PRINTSMITH_JOB_CONTEXT_RE.search(low) is None:
+        return False
+    return _PRINTSMITH_OPS_TIME_RE.search(low) is not None
+
 
 def _looks_printsmith_invoice_shop_query(low: str) -> bool:
     """Operational invoice activity + calendar window — Boone PrintSmith-shaped; before general_candidate."""
@@ -185,6 +201,9 @@ def classify_fetch_intent(text: str) -> str:
             return "docs_candidate"
 
     if _looks_printsmith_invoice_shop_query(low):
+        return "printsmith_candidate"
+
+    if _looks_printsmith_dated_job_shop_query(low):
         return "printsmith_candidate"
 
     if "?" in cleaned or _GENERAL_START_RE.match(cleaned):

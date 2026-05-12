@@ -37,6 +37,13 @@ from app.fetch.local_routing import (
         ),
         ("How many invoices were posted during FY2024?", "printsmith_candidate"),
         ("Were more invoices entered in Sep 2026 or Nov 2026?", "printsmith_candidate"),
+        (
+            "Can you give me a list of job that were digital Color in the month of Jan, 2026",
+            "printsmith_candidate",
+        ),
+        ("List all jobs in digital color for February 2026.", "printsmith_candidate"),
+        ("How many jobs did we run in January 2026?", "printsmith_candidate"),
+        ("Who invented jobs?", "general_candidate"),
         ("read the xmpie manual for uproduce", "docs_candidate"),
         ("documentation for Switch", "docs_candidate"),
         (
