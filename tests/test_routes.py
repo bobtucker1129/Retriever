@@ -101,6 +101,42 @@ def test_seeded_admin_can_load_app_shell() -> None:
     assert "Retriever auth shell" in response.text
 
 
+def test_layout_stylesheet_includes_git_sha_cache_buster() -> None:
+    sha = "eb386f9deadbeef"
+    settings = make_settings().model_copy(update={"git_sha": sha})
+    client = make_client(settings)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert f'/static/app.css?v={sha}' in response.text
+
+
+def test_layout_stylesheet_default_git_sha_is_dev() -> None:
+    client = make_client(make_settings())
+    response = client.get("/")
+    assert response.status_code == 200
+    assert '/static/app.css?v=dev' in response.text
+
+
+def test_pending_layout_stylesheet_includes_git_sha_cache_buster() -> None:
+    sha = "pendingcache1"
+    settings = make_settings(email="new@boonegraphics.net").model_copy(update={"git_sha": sha})
+    client = make_client(settings)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert f'/static/app.css?v={sha}' in response.text
+
+
+def test_static_app_css_route_matches_resilient_layout_file() -> None:
+    """Served /static/app.css must match package static (cwd-independent mount)."""
+    client = make_client(make_settings())
+    response = client.get("/static/app.css")
+    assert response.status_code == 200
+    body = response.text
+    assert "7.35rem" not in body
+    assert "34rem" not in body
+    assert "calc(100vh -" not in body
+
+
 def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     client = make_client(make_settings())
 
@@ -128,8 +164,9 @@ _APP_CSS = Path(__file__).resolve().parent.parent / "app" / "static" / "app.css"
 def test_fetch_shell_css_no_brittle_viewport_height() -> None:
     """Fetch shell must not use fixed viewport subtraction or tall min-heights that trap laptops."""
     css = _APP_CSS.read_text(encoding="utf-8")
-    assert "calc(100vh - 7.35rem)" not in css
-    assert "min-height: 34rem" not in css
+    assert "7.35rem" not in css
+    assert "34rem" not in css
+    assert "calc(100vh -" not in css
 
 
 def test_fetch_shell_css_viewport_fill_chain() -> None:
@@ -164,15 +201,29 @@ def test_fetch_shell_css_viewport_fill_chain() -> None:
     assert "flex: 1" in content_inner
     assert "min-height: 0" in content_inner
 
-    shell_block = re.search(r"\.fetch-shell\s*\{([^}]*)\}", css, re.DOTALL)
-    assert shell_block is not None
-    shell_inner = shell_block.group(1)
-    assert "flex: 1" in shell_inner
+    shell_blocks = list(re.finditer(r"\.fetch-shell\s*\{([^}]*)\}", css, re.DOTALL))
+    assert shell_blocks, "expected at least one .fetch-shell { ... } block in app.css"
+    for sb in shell_blocks:
+        inner = sb.group(1)
+        assert "34rem" not in inner
+        assert "7.35rem" not in inner
+        assert "calc(100vh -" not in inner
+    shell_inner = shell_blocks[0].group(1)
+    assert re.search(r"flex:\s*1\s+1\s+0%", shell_inner)
     assert "min-height: 0" in shell_inner
     shell_declarations = [
         part.strip() for part in shell_inner.replace("\n", " ").split(";") if part.strip()
     ]
     assert not any(decl.startswith("height:") for decl in shell_declarations)
+
+    for sb in shell_blocks[1:]:
+        normalized = " ".join(sb.group(1).split())
+        assert normalized == "flex-direction: column;"
+    if len(shell_blocks) > 1:
+        media_idx = css.find("@media (max-width: 760px)")
+        base_idx = css.find(".fetch-shell {")
+        assert media_idx != -1 and base_idx != -1
+        assert base_idx < media_idx, "base .fetch-shell must precede @media so mobile only adds direction"
 
     chat_panel = re.search(r"\.fetch-chat-panel\s*\{([^}]*)\}", css, re.DOTALL)
     assert chat_panel is not None

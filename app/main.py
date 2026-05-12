@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -9,6 +11,8 @@ from app.config import get_settings
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.routes import admin, auth_shell, fetch, health
+
+_STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
 
 def create_app() -> FastAPI:
@@ -23,7 +27,7 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
-    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    app.mount("/static", StaticFiles(directory=str(_STATIC_ROOT)), name="static")
 
     app.include_router(health.router)
     app.include_router(auth_shell.router)
