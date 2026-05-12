@@ -125,6 +125,74 @@ _FETCH_SHELL_TEMPLATE = (
 _APP_CSS = Path(__file__).resolve().parent.parent / "app" / "static" / "app.css"
 
 
+def test_fetch_shell_css_no_brittle_viewport_height() -> None:
+    """Fetch shell must not use fixed viewport subtraction or tall min-heights that trap laptops."""
+    css = _APP_CSS.read_text(encoding="utf-8")
+    assert "calc(100vh - 7.35rem)" not in css
+    assert "min-height: 34rem" not in css
+
+
+def test_fetch_shell_css_viewport_fill_chain() -> None:
+    """Grid/flex fills available height under topbar; chains min-height: 0 for nested scrollers."""
+    css = _APP_CSS.read_text(encoding="utf-8")
+
+    grid_block = re.search(
+        r"\.app-shell:has\(\.fetch-shell\)\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert grid_block is not None, "expected .app-shell:has(.fetch-shell) block in app.css"
+    grid_inner = grid_block.group(1)
+    assert "minmax(0, 1fr)" in grid_inner
+    assert "100dvh" in grid_inner
+
+    main_block = re.search(
+        r"\.main-column:has\(\.fetch-shell\)\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert main_block is not None
+    assert "min-height: 0" in main_block.group(1)
+
+    content_block = re.search(
+        r"\.content:has\(\.fetch-shell\)\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert content_block is not None
+    content_inner = content_block.group(1)
+    assert "flex: 1" in content_inner
+    assert "min-height: 0" in content_inner
+
+    shell_block = re.search(r"\.fetch-shell\s*\{([^}]*)\}", css, re.DOTALL)
+    assert shell_block is not None
+    shell_inner = shell_block.group(1)
+    assert "flex: 1" in shell_inner
+    assert "min-height: 0" in shell_inner
+    shell_declarations = [
+        part.strip() for part in shell_inner.replace("\n", " ").split(";") if part.strip()
+    ]
+    assert not any(decl.startswith("height:") for decl in shell_declarations)
+
+    chat_panel = re.search(r"\.fetch-chat-panel\s*\{([^}]*)\}", css, re.DOTALL)
+    assert chat_panel is not None
+    panel_inner = chat_panel.group(1)
+    assert "flex-direction: column" in panel_inner
+    assert "flex: 1" in panel_inner
+    assert "min-height: 0" in panel_inner
+
+
+def test_fetch_shell_css_conversation_list_scroll_contract() -> None:
+    """Conversation rail scrolls internally when many threads; does not rely on page scroll."""
+    css = _APP_CSS.read_text(encoding="utf-8")
+    cl = re.search(r"\.fetch-conversation-list\s*\{([^}]*)\}", css, re.DOTALL)
+    assert cl is not None, "expected .fetch-conversation-list block in app.css"
+    inner = cl.group(1)
+    assert "flex: 1" in inner
+    assert "min-height: 0" in inner
+    assert "overflow-y: auto" in inner or "overflow: auto" in inner
+
+
 def test_fetch_shell_css_scroll_root_on_message_list() -> None:
     """`.fetch-message-list` scrolls transcript; `.fetch-thread` is a non-scrolling flex shell."""
     css = _APP_CSS.read_text(encoding="utf-8")
