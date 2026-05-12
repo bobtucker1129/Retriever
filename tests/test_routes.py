@@ -181,7 +181,17 @@ def test_fetch_shell_css_viewport_fill_chain() -> None:
     assert grid_block is not None, "expected .app-shell:has(.fetch-shell) block in app.css"
     grid_inner = grid_block.group(1)
     assert "minmax(0, 1fr)" in grid_inner
+    assert "100vh" in grid_inner
     assert "100dvh" in grid_inner
+    assert "overflow: hidden" in grid_inner
+    assert "min-height: 0" in grid_inner
+
+    body_fetch = re.search(r"body:has\(\.fetch-shell\)\s*\{([^}]*)\}", css, re.DOTALL)
+    assert body_fetch is not None, "expected body:has(.fetch-shell) block for viewport lock"
+    body_inner = body_fetch.group(1)
+    assert "overflow: hidden" in body_inner
+    assert "100vh" in body_inner
+    assert "100dvh" in body_inner
 
     main_block = re.search(
         r"\.main-column:has\(\.fetch-shell\)\s*\{([^}]*)\}",
@@ -189,7 +199,10 @@ def test_fetch_shell_css_viewport_fill_chain() -> None:
         re.DOTALL,
     )
     assert main_block is not None
-    assert "min-height: 0" in main_block.group(1)
+    main_inner = main_block.group(1)
+    assert "min-height: 0" in main_inner
+    assert "height: 100%" in main_inner
+    assert "overflow: hidden" in main_inner
 
     content_block = re.search(
         r"\.content:has\(\.fetch-shell\)\s*\{([^}]*)\}",
@@ -200,6 +213,25 @@ def test_fetch_shell_css_viewport_fill_chain() -> None:
     content_inner = content_block.group(1)
     assert "flex: 1" in content_inner
     assert "min-height: 0" in content_inner
+    assert "overflow: hidden" in content_inner
+
+    topbar_fetch = re.search(
+        r"\.main-column:has\(\.fetch-shell\) \.topbar\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert topbar_fetch is not None
+    assert "flex-shrink: 0" in topbar_fetch.group(1)
+
+    sidebar_fetch = re.search(
+        r"\.app-shell:has\(\.fetch-shell\) > \.sidebar\s*\{([^}]*)\}",
+        css,
+        re.DOTALL,
+    )
+    assert sidebar_fetch is not None
+    sb_inner = sidebar_fetch.group(1)
+    assert "min-height: 0" in sb_inner
+    assert "overflow-y: auto" in sb_inner or "overflow: auto" in sb_inner
 
     shell_blocks = list(re.finditer(r"\.fetch-shell\s*\{([^}]*)\}", css, re.DOTALL))
     assert shell_blocks, "expected at least one .fetch-shell { ... } block in app.css"

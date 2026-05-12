@@ -53,6 +53,17 @@ body {
   line-height: 1.5;
 }
 
+/* Fetch: pin document box so transcript growth scrolls inside panels, not the window. */
+html:has(.fetch-shell) {
+  height: 100%;
+}
+
+body:has(.fetch-shell) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 a {
   color: var(--color-primary);
 }
@@ -249,6 +260,7 @@ select:focus-visible,
 
 /* Fetch: tighter top bar without shrinking the logo. */
 .main-column:has(.fetch-shell) .topbar {
+  flex-shrink: 0;
   min-height: 0;
   padding-block: 0.2rem;
 }
@@ -527,18 +539,29 @@ label {
 /* Fetch: viewport fill via grid/flex + min-height: 0 (no fixed vh subtraction on shell). */
 .app-shell:has(.fetch-shell) {
   grid-template-rows: minmax(0, 1fr);
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell:has(.fetch-shell) > .sidebar {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .main-column:has(.fetch-shell) {
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .content:has(.fetch-shell) {
   flex: 1;
   max-width: none;
   min-height: 0;
+  overflow: hidden;
   padding-bottom: 0;
 }
 
