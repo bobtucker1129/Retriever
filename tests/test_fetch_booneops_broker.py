@@ -164,6 +164,60 @@ def test_build_broker_message_presentation_adds_docs_summary_steps_and_source_ca
     assert "detail" not in metadata["source_cards"][0]
 
 
+def test_build_broker_message_presentation_keeps_mcp_markdown_headings_for_fetch_docs() -> None:
+    """MCP employee docs ship **## Summary** / **### Sources**; avoid re-splitting into Summary/Details."""
+    raw = (
+        "## Summary\n\n"
+        "In **uCreate Print**, table ADOR maps to **Table Content Object**.\n\n"
+        "| You say | Help |\n| --- | --- |\n| Table ADOR | Table Content Object |\n\n"
+        "### Practical steps\n\n"
+        "1. Tag the frame\n2. Bind columns\n\n"
+        "### Sources\n\n"
+        "- **[Doc](https://help.xmpie.com/uCreatePrint/Latest/Help/en/Tagging/"
+        "Tagging_a_Design_Object_with_a_Table_Content_Object.htm)**"
+    )
+    text, metadata = build_broker_message_presentation({"ok": True, "message": raw}, "docs_candidate")
+    assert text.startswith("## Summary")
+    assert "\nDetails\n" not in text
+    assert "Summary\n## Summary" not in text
+    assert "### Sources" in text
+    assert metadata.get("source_cards") is None
+
+
+def test_build_broker_message_presentation_suppresses_help_chrome_in_details() -> None:
+    raw = (
+        "First paragraph is the intro with enough length to trigger shaping heuristics. " * 8
+        + "\n\n"
+        + "1. One step here\n2. Two steps here\n\n"
+        + "You are here: Home / Docs\n\nMore body."
+    )
+    text, _metadata = build_broker_message_presentation({"ok": True, "message": raw}, "docs_candidate")
+    assert "You are here:" not in text
+    assert "\nDetails\n" not in text
+
+
+@pytest.mark.parametrize(
+    "dirty_tail",
+    (
+        "Chrome link uses javascript:history.back(0) in the scraped footer.",
+        "Portal nav: My Account | Sign out | Help",
+        "Forgot your password? Reset it from the login page.",
+    ),
+)
+def test_build_broker_message_presentation_suppresses_details_for_js_and_auth_chrome(
+    dirty_tail: str,
+) -> None:
+    """Details that still look like help-site chrome (JS URLs, account/sign-in boilerplate) are dropped."""
+    raw = (
+        "First paragraph is the intro with enough length to trigger shaping heuristics. " * 8
+        + "\n\n"
+        + "1. One step here\n2. Two steps here\n\n"
+        + dirty_tail
+    )
+    text, _metadata = build_broker_message_presentation({"ok": True, "message": raw}, "docs_candidate")
+    assert "\nDetails\n" not in text
+
+
 def test_build_broker_message_presentation_docs_route_has_no_synthetic_source_cards() -> None:
     text, metadata = build_broker_message_presentation(
         {"ok": True, "message": "Short docs answer."},

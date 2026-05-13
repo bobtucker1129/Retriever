@@ -402,7 +402,46 @@ def _paragraph_is_mostly_list(p: str) -> bool:
     return hits >= 2 and hits >= (len(lines) + 1) // 2
 
 
+def _message_is_mcp_structured_fetch_docs(raw_message: str) -> bool:
+    """MCP employee docs answers already ship labeled markdown (**## Summary**, **### Sources**)."""
+    base = (raw_message or "").strip()
+    if not base.startswith("## Summary"):
+        return False
+    return "### Sources" in base
+
+
+_HELP_DETAILS_AUTH_BOILERPLATE = re.compile(
+    r"(?i)"
+    r"\b(?:sign out|log out|logout|my account|account settings|"
+    r"forgot (?:your )?password|create (?:an? )?account)\b"
+    r"|\bsign in\s*[|•]|[|•]\s*sign in\b"
+)
+
+
+def _details_looks_like_help_portal_chrome(details: str) -> bool:
+    text = details or ""
+    low = text.lower()
+    if "<script" in low:
+        return True
+    if "javascript:" in low:
+        return True
+    markers = (
+        "you are here:",
+        "filter: all files",
+        "submit search",
+        "skip to main content",
+        "skip navigation",
+        "chatbase",
+    )
+    if any(m in low for m in markers):
+        return True
+    return bool(_HELP_DETAILS_AUTH_BOILERPLATE.search(text))
+
+
 def _docs_should_shape_heavily(raw_message: str) -> bool:
+    base = (raw_message or "").strip()
+    if _message_is_mcp_structured_fetch_docs(base):
+        return False
     if len(raw_message) >= 520:
         return True
     if raw_message.count("\n") >= 5:
@@ -436,6 +475,8 @@ def _shape_docs_message_body(raw_message: str) -> str:
         used.add(steps_idx)
     detail_paras = [paras[i] for i in range(len(paras)) if i not in used]
     details = "\n\n".join(detail_paras).strip()
+    if details and _details_looks_like_help_portal_chrome(details):
+        details = ""
 
     parts: list[str] = []
     if summary:
