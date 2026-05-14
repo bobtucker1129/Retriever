@@ -4,6 +4,28 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-14 — BooneOps broker live on Whitaker; Fetch docs quality up; follow-up kinks
+
+**Goal (this arc):** Retriever Fetch should ride the same **BooneOps / OpenClaw** path as Discord for docs-style questions, not the old catalog title-dump.
+
+**What landed:**
+
+- **LordTate `main`:** Broker skips MCP fast path when `sessionMetadata.source` is `retriever-fetch`; gateway envelope gets **Discord-style parity** text when `retrieverDiscordAnswerParity` is set. Whitaker: **`git pull`**, **`brew`** repair for **Node/merve/simdutf** dyld crash, **`install-macos-launchagent.sh`** so broker + proxy on **3487** actually run current code.
+- **Retriever `main`:** Payload sends **`retrieverDiscordAnswerParity`**; logs **`BooneOps broker turn … actions=…`** and stores **`booneops_actions`** on assistant metadata for operator visibility.
+- **Memory:** `memory/business/boone-graphics.md` + **`PROJECT_INDEX`** updated with **one-tree workspace** map (`/Users/whitakertate/Whitaker/workspace`, nested `retriever-rebuild` vs sibling `booneops-bots`).
+
+**Pilot feedback (Master Tate):** First **`/docs`** answer after broker fix was **much better structured** (clearly BooneOps-shaped) but **substance was still wrong** on at least one try. **Follow-up** in the same thread **reverted** to the old **“general question / download charts…”** stub behavior. Prefixing **`/docs`** on the follow-up produced **“BooneOps encountered a server error”** (broker or upstream failed that turn).
+
+**Next session (priority):**
+
+1. **Harden the BooneOps link** — treat Fetch → broker as **first-class**: retries, clearer user copy on 5xx, maybe correlation id in UI for support.
+2. **Follow-up routing** — ensure **continuations** of a **`docs_candidate`** (or recent BooneOps) thread **stay** on broker/docs lane instead of falling through to **`general_candidate`** stub (`followup_routing.py`, `resolve_fetch_ask_route`, prior message `route_key`).
+3. **Reproduce `/docs` follow-up 500** — check Retriever logs for **`BooneOps broker turn`** + **`booneops_actions`**, Whitaker **`logs/broker-node.log`** / gateway for that `request_id`; fix root cause (timeout, gateway, envelope size, etc.).
+
+**Verification:** Retriever **`pytest`** green on broker paths after metadata logging commit; Whitaker **`curl 127.0.0.1:3487/health`** OK post-restart.
+
+---
+
 ## 2026-05-14 — Docs trust presentation + local artifact lifecycle
 
 **Goal:** Pilot-ready **`/docs`** readability (summary lead-in for long answers, collapsed sources), **30-day** default for local HTML/PDF snapshots, **delete snapshot files when a conversation is deleted**, user-facing retention copy, plan/trust doc updates (gateway rotation marked done; answer-snapshot PDF explicitly deferred).
