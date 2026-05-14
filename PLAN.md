@@ -203,19 +203,22 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 ## Next Recommended Session
 
-**Pilot is useful — keep tightening trust, context, and docs quality before widening audience.**
+**Pilot is useful — confirm Discord parity, then keep polishing docs trust before widening audience.**
 
-Plain English goal: keep **narrow pilot flags** (**no** `FETCH_GENERAL_QUESTIONS_ENABLED`, **no** “turn it on for everyone”); continue **readable, trustworthy Fetch answers**, especially **`/docs`**: **summaries**, **short source cards**, and less wall-of-text. The report/export path is now useful enough for pilot feedback, so the next wins are cleanup, retention, and trust polish rather than more broad capability.
+Plain English: **Broker ↔ OpenClaw** on Whitaker now **reuses one gateway session per Fetch conversation**, so first-turn **`/docs`** answers should line up closer to **Discord** than before. **Next:** run the same **Switch / email approval** (or other vendor) question **side by side** in Discord and a **fresh** Fetch thread; if the first Fetch answer is still weaker, the fix is likely **prompt / tool / gateway** tuning on the OpenClaw side—not Retriever routing (sticky follow-ups and broker retry are already on **`main`**).
+
+Keep **narrow pilot flags** (**no** broad `FETCH_GENERAL_QUESTIONS_ENABLED`).
 
 Recommended scope:
 
-1. **Docs answer UX:** shaping + implementation for **summarized** replies and **clean source presentation** (see **`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**). Keep source cards short and only show them when real metadata exists.
-2. **Artifact lifecycle:** decide and implement cleanup/retention for local HTML exports and broker-generated artifacts. Keep download links same-origin and authenticated.
-3. **PDF expectation:** decide whether Fetch should add a local “answer snapshot PDF” path, separate from BooneOps chart/report PDFs.
-4. **Progress UX:** improve slow broker-turn feedback beyond the spinner without blocking on full streaming or delayed-report UX.
-5. **Security hygiene:** OpenClaw **gateway / broker token** — **done** (2026-05-14 operator confirmation); keep rotation out of docs and session logs.
-6. **Keep:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`** handy for regressions and smoke.
-7. **Defer:** Dedicated **RetrieverOps** broker clone / new lane (**`PARKED.md` OQ-10**); widen pilot only after docs formatting/persona/trust bar is met.
+1. **Parity check:** Discord vs Fetch **first message** quality after **`3eef1323`** broker deploy on Whitaker; note any remaining gap with one saved thread id.
+2. **Docs answer UX:** **summarized** replies and **clean source presentation** (**`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**); short source cards only when real metadata exists.
+3. **Artifact lifecycle:** cleanup/retention for local HTML exports and broker artifacts; same-origin download links.
+4. **PDF expectation:** product decision on local “answer snapshot PDF” vs BooneOps-only PDFs.
+5. **Progress UX:** slow broker-turn feedback beyond the spinner (without full streaming scope creep).
+6. **Operator cadence (Cursor):** while building, **push Retriever `main` → wait deploy → test `https://retriever.boonegraphics.net`**; see **`memory/shared/seeds/2026-05-14-master-tate-cursor-session-discipline.md`**.
+7. **Keep runbooks:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`**, Whitaker **`docs/MACOS_BROKER_LAUNCHAGENT.md`**.
+8. **Defer:** **RetrieverOps** dedicated broker lane (**`PARKED.md` OQ-10**); widen pilot only after trust bar is met.
 
 ## Later Work
 

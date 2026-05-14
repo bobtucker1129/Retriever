@@ -4,6 +4,26 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-14 — Wrap: Fetch broker parity, gateway session continuity, operator defaults
+
+**Goal (this session arc):** Fetch should feel like **Discord BooneOps** for docs and shop questions—**follow-ups** stay on the broker lane, **errors** are clearer, and **first answers** use the same kind of OpenClaw continuity Discord gets.
+
+**What landed (engineering):**
+
+- **Retriever (`main`):** Sticky routing so **`general_candidate` / `unknown`** follow-ups after a successful **`docs_candidate`** or **`printsmith_candidate`** BooneOps turn inherit that lane (fixes **`?`** → general stub). **One** broker HTTP retry on transient failure or **5xx**; calmer errors with **`request_id`** in metadata for support.
+- **LordTate workspace (`main`):** Broker builds OpenClaw gateway **`sessionKey`** from **Fetch `conversationId`** for **`retriever-fetch`** so one employee thread **reuses** the same gateway session across asks (Whitaker broker + gateway; see `projects/booneops-bots`). **Whitaker:** `git pull` at **`3eef1323`**, **`launchctl kickstart`**, **`/health`** OK.
+- **Live check:** Chrome MCP against production Fetch—**new chat** repro showed **no** general stub and **no** BooneOps error on the skeptical follow-up after deploy **`9375099`**.
+
+**What landed (governance / next sessions):**
+
+- **Canonical operator defaults** for Cursor: **`memory/shared/seeds/2026-05-14-master-tate-cursor-session-discipline.md`** (act first, prefer Chrome/Retriever verification, same-session retry loop with **five-try cap**, **push `main` → deploy → live test** cadence while building). **Cursor rule:** **`.cursor/rules/master-tate-session-discipline.mdc`** (always-on summary + pointer to seed). **`PROJECT_INDEX`** row for **retriever-rebuild** / **booneops-bots** nudged.
+
+**Next recommended focus:** Re-compare **first-turn `/docs`** answers to **Discord** on the same Switch question after gateway session fix; if substance still drifts, tune **gateway prompt / tools** (not Retriever routing). Continue **docs summary + source** UX per **`FETCH_TRUST_PLAN.md`**.
+
+**Retriever git:** `main` clean for tracked files; only local **untracked** noise (e.g. `.cursor/`, favicon package) if present—operators can ignore or `.gitignore` when ready.
+
+---
+
 ## 2026-05-14 — BooneOps broker live on Whitaker; Fetch docs quality up; follow-up kinks
 
 **Goal (this arc):** Retriever Fetch should ride the same **BooneOps / OpenClaw** path as Discord for docs-style questions, not the old catalog title-dump.
