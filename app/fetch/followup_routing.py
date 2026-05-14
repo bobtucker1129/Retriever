@@ -1,7 +1,9 @@
-"""History-aware overrides for Fetch ask routing (export follow-ups).
+"""History-aware overrides for Fetch ask routing.
 
 Pure classification stays in ``local_routing.classify_fetch_intent``; this module
-applies only when recent broker-backed context should carry the route forward.
+routes follow-ups when recent broker-backed context should carry forward the
+prior lane — export refinement, downloadable formats, or sticky continuation
+after ``general_candidate`` / ``unknown`` classification.
 """
 
 from __future__ import annotations
@@ -86,6 +88,10 @@ _PRIOR_REFERENT_RE: Final[re.Pattern[str]] = re.compile(
 _NO_OVERRIDE_ROUTES: Final[frozenset[str]] = frozenset(
     {"help", "sources", "health", "blocked_write", "email_cleanup"}
 )
+
+# ``classify_fetch_intent`` lands here for many natural follow-ups (``?``, "can you…", etc.);
+# inherit prior successful docs/PrintSmith broker turn instead of the general stub.
+_STICKY_BASE_ROUTES: Final[frozenset[str]] = frozenset({"general_candidate", "unknown"})
 
 
 def _has_export_action(low: str) -> bool:
@@ -251,23 +257,33 @@ def resolve_fetch_ask_route(
     base_route: str,
     prior_records: Sequence[FetchMessageRecord],
 ) -> tuple[str, dict[str, Any]]:
-    """Return effective route and optional broker metadata when this turn continues report/export work.
+    """Return effective route and optional broker metadata when conversation context pins the lane.
 
-    Applies to explicit PDF/Excel/CSV export follow-ups and to natural-language artifact
-    refinement (styling, formatting, cleanup) after a recent successful PrintSmith/docs broker turn.
+    Handles explicit PDF/Excel/CSV export follow-ups, artifact refinement (styling, cleanup),
+    and sticky continuation when classification is ``general_candidate`` or ``unknown`` but a
+    recent successful docs/PrintSmith broker turn exists.
     """
     if base_route in _NO_OVERRIDE_ROUTES:
         return base_route, {}
     export_followup = is_export_download_followup_text(cleaned)
     refinement_followup = is_artifact_refinement_followup_text(cleaned)
-    if not export_followup and not refinement_followup:
+    if export_followup or refinement_followup:
+        prior_assistant = latest_inheritable_assistant_record(prior_records)
+        inherited = _assistant_inheritable_route(prior_assistant) if prior_assistant else None
+        if inherited is None:
+            return base_route, {}
+        extra = inheritable_session_metadata_from_assistant(prior_assistant)
+        style_hint = styled_spreadsheet_hint_for_refinement(cleaned)
+        if style_hint is not None and style_hint in _ALLOWED_REPORT_STYLE_HINTS:
+            extra = {**extra, "reportStyle": style_hint}
+        return inherited, extra
+
+    if base_route not in _STICKY_BASE_ROUTES:
         return base_route, {}
+
     prior_assistant = latest_inheritable_assistant_record(prior_records)
-    inherited = _assistant_inheritable_route(prior_assistant) if prior_assistant else None
-    if inherited is None:
+    sticky = _assistant_inheritable_route(prior_assistant) if prior_assistant else None
+    if sticky is None:
         return base_route, {}
-    extra = inheritable_session_metadata_from_assistant(prior_assistant)
-    style_hint = styled_spreadsheet_hint_for_refinement(cleaned)
-    if style_hint is not None and style_hint in _ALLOWED_REPORT_STYLE_HINTS:
-        extra = {**extra, "reportStyle": style_hint}
-    return inherited, extra
+
+    return sticky, inheritable_session_metadata_from_assistant(prior_assistant)

@@ -669,7 +669,113 @@ def test_sanitized_broker_error_summary_truncates_long_message() -> None:
     assert len(msg) == 200
 
 
+def test_call_booneops_broker_retries_once_on_500_then_succeeds(monkeypatch) -> None:
+    """Second POST succeeds after one 5xx; same correlation headers on both attempts."""
+    monkeypatch.setattr("app.fetch.booneops_broker.time.sleep", lambda _s: None)
+    settings = _make_settings()
+    user = _make_user()
+    calls: list[dict[str, object]] = []
+
+    ok_body = b'{"ok":true,"message":"Recovered","errors":[]}'
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        calls.append({"headers": dict(headers)})
+        n = len(calls)
+
+        class Resp:
+            def __init__(self, status_code: int, content: bytes) -> None:
+                self.status_code = status_code
+                self.content = content
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        if n == 1:
+            return Resp(500, b'{"ok":false,"error":{"code":"tmp","message":"busy"}}')
+        return Resp(200, ok_body)
+
+    result = call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="c",
+        user_message="hi",
+        route_label="printsmith_candidate",
+        request_id="req-retry-ok",
+        prior_messages=[],
+        http_post=fake_post,
+    )
+    assert result.assistant_text == "Recovered"
+    assert result.context_state == "booneops"
+    assert len(calls) == 2
+    assert calls[0]["headers"]["X-Correlation-Id"] == "req-retry-ok"
+    assert calls[1]["headers"]["X-Correlation-Id"] == "req-retry-ok"
+    assert calls[0]["headers"]["X-Retriever-Request-Id"] == "req-retry-ok"
+    assert calls[1]["headers"]["X-Retriever-Request-Id"] == "req-retry-ok"
+
+
+def test_call_booneops_broker_two_500_responses_single_user_error(monkeypatch) -> None:
+    monkeypatch.setattr("app.fetch.booneops_broker.time.sleep", lambda _s: None)
+    settings = _make_settings()
+    body = b'{"ok":false,"error":{"code":"upstream_bad_gateway","message":"still down"}}'
+
+    call_count = {"n": 0}
+
+    def fake_post(_url: str, **_kw: object):
+        call_count["n"] += 1
+
+        class Resp:
+            status_code = 502
+            content = body
+
+            def json(self):
+                return json.loads(body.decode())
+
+        return Resp()
+
+    result = call_booneops_broker(
+        settings,
+        user=_make_user(),
+        conversation_id="c",
+        user_message="hi",
+        route_label="printsmith_candidate",
+        request_id="req-two-500",
+        prior_messages=[],
+        http_post=fake_post,
+    )
+    assert call_count["n"] == 2
+    assert "server problem" in result.assistant_text.lower()
+    assert "retried" in result.assistant_text.lower()
+    assert result.metadata.get("request_id") == "req-two-500"
+    assert result.metadata["status_cards"][0].get("request_id") == "req-two-500"
+
+
+def test_call_booneops_broker_retries_network_error_once_then_timeout_user_message(monkeypatch) -> None:
+    monkeypatch.setattr("app.fetch.booneops_broker.time.sleep", lambda _s: None)
+    settings = _make_settings()
+    n = {"c": 0}
+
+    def fake_post(_url: str, **_kw: object):
+        n["c"] += 1
+        raise httpx.ReadTimeout("timed out", request=None)
+
+    result = call_booneops_broker(
+        settings,
+        user=_make_user(),
+        conversation_id="c",
+        user_message="hi",
+        route_label="printsmith_candidate",
+        request_id="req-2-timeout",
+        prior_messages=[],
+        http_post=fake_post,
+    )
+    assert n["c"] == 2
+    lowered = result.assistant_text.lower()
+    assert "time" in lowered or "timeout" in lowered
+    assert result.metadata.get("request_id") == "req-2-timeout"
+
+
 def test_call_booneops_broker_502_logs_sanitized_fields_not_secret_details(caplog, monkeypatch) -> None:
+    monkeypatch.setattr("app.fetch.booneops_broker.time.sleep", lambda _s: None)
     caplog.set_level(logging.WARNING, logger="app.fetch.booneops_broker")
     secret_in_details = "sk_live_dummy_never_log_this"
     body = json.dumps(
@@ -704,15 +810,14 @@ def test_call_booneops_broker_502_logs_sanitized_fields_not_secret_details(caplo
         prior_messages=[],
         http_post=None,
     )
-    expected_user = (
-        "BooneOps encountered a server error.\n\n"
-        "Your message was saved; try again later."
-    )
-    assert result.assistant_text == expected_user
+    assert "temporary server problem" in result.assistant_text.lower()
+    assert "retried" in result.assistant_text.lower()
+    assert result.metadata.get("request_id") == "req-502-test"
 
     joined = " ".join(r.message for r in caplog.records)
     assert "req-502-test" in joined
     assert "502" in joined
+    assert "retrying once" in joined.lower()
     assert "upstream_bad_gateway" in joined
     assert "Broker upstream failed" in joined
     assert "internalToken,route" in joined
@@ -722,9 +827,12 @@ def test_call_booneops_broker_502_logs_sanitized_fields_not_secret_details(caplo
 
 
 def test_call_booneops_broker_network_error_is_user_safe(monkeypatch) -> None:
+    monkeypatch.setattr("app.fetch.booneops_broker.time.sleep", lambda _s: None)
     settings = _make_settings()
+    n = {"c": 0}
 
     def boom(_url: str, **_kw: object):
+        n["c"] += 1
         raise httpx.ConnectError("nope", request=None)
 
     monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", boom)
@@ -739,9 +847,12 @@ def test_call_booneops_broker_network_error_is_user_safe(monkeypatch) -> None:
         prior_messages=[],
         http_post=None,
     )
+    assert n["c"] == 2
     lowered = result.assistant_text.lower()
     assert "broker" in lowered
+    assert "network" in lowered or "connectivity" in lowered
     assert result.context_state == "booneops_error"
+    assert result.metadata.get("request_id") == "r1"
 
 
 def test_safe_fetch_download_href_accepts_root_paths_only() -> None:

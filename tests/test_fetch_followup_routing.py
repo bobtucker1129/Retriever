@@ -34,7 +34,7 @@ def _rec(
     )
 
 
-def test_resolve_inherits_after_success_printsmith_broker_turn() -> None:
+def test_is_answer_snapshot_pdf_followup_text_matches_intent_phrases() -> None:
     assert is_answer_snapshot_pdf_followup_text("please save this answer as a PDF") is True
     assert is_answer_snapshot_pdf_followup_text("download the previous answer as pdf") is True
     assert is_answer_snapshot_pdf_followup_text("export the last reply as a pdf please") is True
@@ -128,7 +128,8 @@ def test_resolve_does_not_inherit_after_stub_assistant_even_if_printsmith_labele
     assert route == "general_candidate"
 
 
-def test_resolve_does_not_inherit_vague_export_despite_successful_prior() -> None:
+def test_resolve_sticky_inherits_vague_export_that_skips_explicit_export_override() -> None:
+    """``is_export_download_followup_text`` stays false without a referent, but sticky still."""
     prior = [
         _rec(
             "assistant",
@@ -138,9 +139,9 @@ def test_resolve_does_not_inherit_vague_export_despite_successful_prior() -> Non
         ),
     ]
     route, _ = resolve_fetch_ask_route("save as excel", "general_candidate", prior)
-    assert route == "general_candidate"
+    assert route == "printsmith_candidate"
     route2, _ = resolve_fetch_ask_route("export as pdf", "general_candidate", prior)
-    assert route2 == "general_candidate"
+    assert route2 == "printsmith_candidate"
 
 
 def test_resolve_does_not_inherit_after_booneops_error() -> None:
@@ -307,7 +308,8 @@ def test_resolve_refinement_pdf_clean_up_inherits_without_spreadsheet_style_hint
     assert "reportStyle" not in extra
 
 
-def test_resolve_refinement_does_not_trigger_for_unrelated_questions_after_report() -> None:
+def test_resolve_sticky_general_followups_continue_printsmith_lane() -> None:
+    """Vague ``?`` / general-classified turns inherit the latest successful broker lane."""
     prior = [
         _rec(
             "assistant",
@@ -317,16 +319,17 @@ def test_resolve_refinement_does_not_trigger_for_unrelated_questions_after_repor
         ),
     ]
     route, _ = resolve_fetch_ask_route("why is the sky blue?", "general_candidate", prior)
-    assert route == "general_candidate"
+    assert route == "printsmith_candidate"
     route2, _ = resolve_fetch_ask_route(
         "what is the capital of France?",
         "general_candidate",
         prior,
     )
-    assert route2 == "general_candidate"
+    assert route2 == "printsmith_candidate"
 
 
-def test_resolve_refinement_definition_question_not_inherited_even_with_format_words() -> None:
+def test_resolve_sticky_inherits_even_when_not_artifact_refinement() -> None:
+    """Sticky lane continues without matching artifact-refinement regexes."""
     prior = [
         _rec(
             "assistant",
@@ -335,12 +338,47 @@ def test_resolve_refinement_definition_question_not_inherited_even_with_format_w
             content="Report rows.",
         ),
     ]
+    assert is_artifact_refinement_followup_text("what is spreadsheet formatting?") is False
     route, _ = resolve_fetch_ask_route(
         "what is spreadsheet formatting?",
         "general_candidate",
         prior,
     )
-    assert route == "general_candidate"
+    assert route == "printsmith_candidate"
+
+
+def test_resolve_sticky_docs_candidate_natural_followup_question() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="docs_candidate",
+            context_state="ready",
+            content="Summarized Switch scripting topics.",
+            metadata={"sessionContext": {"thread": "t1"}},
+        ),
+    ]
+    text = (
+        "are you sure? can you look again, I think there is an element "
+        "I missed about private data?"
+    )
+    route, extra = resolve_fetch_ask_route(text, "general_candidate", prior)
+    assert route == "docs_candidate"
+    assert extra == {"sessionContext": {"thread": "t1"}}
+
+
+def test_resolve_sticky_printsmith_unknown_base_route_carries_prior_metadata() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="printsmith_candidate",
+            context_state="ready",
+            content="Totals by rep.",
+            metadata={"reportContext": {"saved": True}},
+        ),
+    ]
+    route, extra = resolve_fetch_ask_route("hmm, double-check that?", "unknown", prior)
+    assert route == "printsmith_candidate"
+    assert extra == {"reportContext": {"saved": True}}
 
 
 def test_resolve_refinement_skips_general_stub_to_find_prior_broker_success() -> None:

@@ -10,6 +10,7 @@ import hmac
 import json
 import logging
 import re
+import time
 from urllib.parse import unquote
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -55,6 +56,7 @@ BOONEOPS_MESSAGE_PATH = "/v1/booneops/message"
 BOONEOPS_BROKER_ARTIFACT_PATH_TEMPLATE = "/v1/booneops/artifacts/{artifact_id}"
 _DEFAULT_HTTP_TIMEOUT = 115.0
 _BROKER_ARTIFACT_HTTP_TIMEOUT = 120.0
+_BROKER_TRANSIENT_RETRY_BACKOFF_SEC = 0.35
 
 _UUID_ARTIFACT_ID = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -922,6 +924,41 @@ def default_http_post(url: str, *, content: bytes, headers: dict[str, str], time
     return httpx.post(url, content=content, headers=headers, timeout=timeout)
 
 
+def _booneops_broker_http_error_kind(exc: httpx.HTTPError) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    return "network"
+
+
+def _booneops_broker_client_error(
+    *,
+    request_id: str,
+    headline: str,
+    detail_line: str,
+    status_card_state: str,
+    status_card_detail: str,
+) -> BooneOpsBrokerTurnResult:
+    assistant_text = (
+        f"{headline}\n\n"
+        f"{detail_line}\n\n"
+        "Your message was saved. You can try again in a little while."
+    )
+    return BooneOpsBrokerTurnResult(
+        assistant_text=assistant_text,
+        context_state="booneops_error",
+        metadata={
+            "request_id": request_id,
+            "status_cards": [
+                {
+                    "state": status_card_state,
+                    "detail": status_card_detail,
+                    "request_id": request_id,
+                }
+            ],
+        },
+    )
+
+
 def call_booneops_broker(
     settings: AppSettings,
     *,
@@ -971,22 +1008,75 @@ def call_booneops_broker(
     post = http_post or default_http_post
     url = broker_message_url(settings)
 
-    try:
-        response = post(
-            url,
-            content=body_bytes,
-            headers=headers,
-            timeout=_DEFAULT_HTTP_TIMEOUT,
-        )
-    except httpx.HTTPError as exc:
-        logger.warning("BooneOps broker HTTP error request_id=%s err=%s", request_id, type(exc).__name__)
-        return BooneOpsBrokerTurnResult(
-            assistant_text=(
-                "Fetch could not reach the BooneOps broker (network error).\n\n"
-                "Your message was saved. Try again shortly, or contact an operator if this persists."
+    response: Any = None
+    for attempt in (0, 1):
+        try:
+            response = post(
+                url,
+                content=body_bytes,
+                headers=headers,
+                timeout=_DEFAULT_HTTP_TIMEOUT,
+            )
+        except httpx.HTTPError as exc:
+            if attempt == 0:
+                logger.warning(
+                    "BooneOps broker HTTP error request_id=%s err=%s (retrying once)",
+                    request_id,
+                    type(exc).__name__,
+                )
+                time.sleep(_BROKER_TRANSIENT_RETRY_BACKOFF_SEC)
+                continue
+            kind = _booneops_broker_http_error_kind(exc)
+            logger.warning(
+                "BooneOps broker HTTP error request_id=%s err=%s kind=%s",
+                request_id,
+                type(exc).__name__,
+                kind,
+            )
+            if kind == "timeout":
+                return _booneops_broker_client_error(
+                    request_id=request_id,
+                    headline="BooneOps did not respond in time.",
+                    detail_line=(
+                        "The request timed out while Fetch was waiting for the BooneOps broker. "
+                        "That usually reflects a temporary slowdown, not a mistake in what you sent."
+                    ),
+                    status_card_state="Timeout",
+                    status_card_detail="The broker did not answer before the client timeout.",
+                )
+            return _booneops_broker_client_error(
+                request_id=request_id,
+                headline="Fetch could not reach the BooneOps broker.",
+                detail_line=(
+                    "This looks like a network or connectivity issue between Fetch and BooneOps "
+                    "(for example a connection error), not a problem with your message."
+                ),
+                status_card_state="Network issue",
+                status_card_detail="Fetch could not complete the HTTP call to the broker.",
+            )
+
+        if response.status_code >= 500 and attempt == 0:
+            logger.warning(
+                "BooneOps broker server error request_id=%s status=%s (retrying once)",
+                request_id,
+                response.status_code,
+            )
+            time.sleep(_BROKER_TRANSIENT_RETRY_BACKOFF_SEC)
+            continue
+        break
+    assert response is not None
+
+    if response.status_code == 401:
+        logger.warning("BooneOps broker auth rejected request_id=%s", request_id)
+        return _booneops_broker_client_error(
+            request_id=request_id,
+            headline="Fetch could not authenticate to the BooneOps broker.",
+            detail_line=(
+                "This is almost always a service configuration issue on Fetch's side, "
+                "not something you can fix by signing in again."
             ),
-            context_state="booneops_error",
-            metadata={"status_cards": [{"state": "Network issue", "detail": "BooneOps did not receive this turn."}]},
+            status_card_state="Configuration issue",
+            status_card_detail="Fetch was rejected when calling the broker (HTTP 401).",
         )
 
     try:
@@ -995,24 +1085,15 @@ def call_booneops_broker(
             data = {}
     except json.JSONDecodeError:
         logger.warning("BooneOps broker non-JSON request_id=%s status=%s", request_id, response.status_code)
-        return BooneOpsBrokerTurnResult(
-            assistant_text=(
-                "BooneOps returned an unexpected response.\n\n"
-                "Your message was saved; try again later."
+        return _booneops_broker_client_error(
+            request_id=request_id,
+            headline="BooneOps returned an unreadable response.",
+            detail_line=(
+                "The payload was not valid JSON, so Fetch could not interpret BooneOps's reply. "
+                "That can happen when an error page or proxy body is returned instead of the normal API shape."
             ),
-            context_state="booneops_error",
-            metadata={"status_cards": [{"state": "Unexpected response", "detail": "BooneOps returned data Fetch could not read."}]},
-        )
-
-    if response.status_code == 401:
-        logger.warning("BooneOps broker auth rejected request_id=%s", request_id)
-        return BooneOpsBrokerTurnResult(
-            assistant_text=(
-                "Fetch could not authenticate to the BooneOps broker.\n\n"
-                "Your message was saved. This is a service configuration issue—contact an operator."
-            ),
-            context_state="booneops_error",
-            metadata={"status_cards": [{"state": "Configuration issue", "detail": "Fetch could not authenticate to BooneOps."}]},
+            status_card_state="Unexpected response format",
+            status_card_detail="Broker response was not JSON.",
         )
 
     if response.status_code >= 500:
@@ -1026,13 +1107,15 @@ def call_booneops_broker(
             b_msg if b_msg is not None else "-",
             ",".join(b_detail_keys) if b_detail_keys else "-",
         )
-        return BooneOpsBrokerTurnResult(
-            assistant_text=(
-                "BooneOps encountered a server error.\n\n"
-                "Your message was saved; try again later."
+        return _booneops_broker_client_error(
+            request_id=request_id,
+            headline="BooneOps reported a temporary server problem.",
+            detail_line=(
+                "The broker returned a server error after Fetch retried the request once. "
+                "That usually means BooneOps or an upstream dependency was overloaded or failing briefly."
             ),
-            context_state="booneops_error",
-            metadata={"status_cards": [{"state": "BooneOps server error", "detail": "The broker or an upstream dependency failed."}]},
+            status_card_state="BooneOps server error",
+            status_card_detail="The broker returned HTTP 5xx after one automatic retry.",
         )
 
     if response.status_code >= 400:
