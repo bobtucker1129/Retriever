@@ -25,6 +25,32 @@ from app.fetch.local_routing import broker_message_after_slash_route_prefix
 
 logger = logging.getLogger(__name__)
 
+_MAX_BOONEOPS_ACTION_TYPES = 12
+
+
+def _broker_action_types_from_payload(data: dict[str, Any]) -> list[str]:
+    """Compact list of broker ``actionsTaken[].type`` for logs and stored assistant metadata."""
+    raw = data.get("actionsTaken")
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw[:_MAX_BOONEOPS_ACTION_TYPES]:
+        if isinstance(item, dict):
+            t = str(item.get("type") or "").strip()
+            if t:
+                out.append(t)
+    return out
+
+
+def _metadata_with_booneops_actions(
+    metadata: Optional[dict[str, Any]], data: dict[str, Any]
+) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(metadata) if metadata else {}
+    actions = _broker_action_types_from_payload(data)
+    if actions:
+        merged["booneops_actions"] = actions
+    return merged
+
 BOONEOPS_MESSAGE_PATH = "/v1/booneops/message"
 BOONEOPS_BROKER_ARTIFACT_PATH_TEMPLATE = "/v1/booneops/artifacts/{artifact_id}"
 _DEFAULT_HTTP_TIMEOUT = 115.0
@@ -1011,6 +1037,7 @@ def call_booneops_broker(
 
     if response.status_code >= 400:
         text, metadata = build_broker_message_presentation(data, route_label)
+        metadata = _metadata_with_booneops_actions(metadata, data)
         if text.strip():
             return BooneOpsBrokerTurnResult(
                 assistant_text=text, context_state="booneops_error", metadata=metadata
@@ -1024,11 +1051,20 @@ def call_booneops_broker(
         )
 
     text, metadata = build_broker_message_presentation(data, route_label)
+    metadata = _metadata_with_booneops_actions(metadata, data)
     errs = data.get("errors") if isinstance(data.get("errors"), list) else []
     ok = bool(data.get("ok", True))
     policy = any(
         isinstance(e, dict) and str(e.get("code") or "") == "policy_denied" for e in errs
     )
     ctx = "booneops_error" if policy or ok is False else "booneops"
+
+    logger.info(
+        "BooneOps broker turn request_id=%s route=%s ok=%s actions=%s",
+        request_id,
+        route_label,
+        ok,
+        ",".join(metadata.get("booneops_actions") or []) or "-",
+    )
 
     return BooneOpsBrokerTurnResult(assistant_text=text, context_state=ctx, metadata=metadata)

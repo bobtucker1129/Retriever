@@ -426,7 +426,10 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
 
         class Resp:
             status_code = 200
-            content = b'{"ok":true,"message":"Broker ok","errors":[]}'
+            content = (
+                b'{"ok":true,"message":"Broker ok","errors":[],'
+                b'"actionsTaken":[{"type":"execution.forwarded","status":"executed"}]}'
+            )
 
             def json(self):
                 return json.loads(self.content.decode())
@@ -450,6 +453,7 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
 
     assert result.assistant_text == "Broker ok"
     assert result.context_state == "booneops"
+    assert result.metadata.get("booneops_actions") == ["execution.forwarded"]
     headers = captured["headers"]
     assert headers["Authorization"] == "Bearer unit-test-bearer"
     sig = headers["X-BooneOps-Signature"]
