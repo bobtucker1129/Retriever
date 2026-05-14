@@ -23,7 +23,11 @@ from app.config import AppSettings
 from app.db.connection import create_connection
 from app.db.repositories.fetch import FetchRepository
 from app.dependencies import settings_dependency
-from app.fetch.answer_render import assistant_body_html, build_assistant_status_line
+from app.fetch.answer_render import (
+    assistant_body_html,
+    build_assistant_status_line,
+    docs_aware_assistant_body_html,
+)
 from app.fetch.safe_links import safe_fetch_download_href
 from app.fetch.booneops_broker import (
     BooneOpsBrokerTurnResult,
@@ -43,6 +47,7 @@ from app.fetch.followup_routing import (
 from app.fetch.artifact_retention import (
     filter_message_metadata_for_local_retention,
     prune_expired_local_html_exports,
+    unlink_local_snapshot_files_from_messages,
 )
 from app.fetch.html_export import (
     HTML_EXPORT_NEED_PRIOR_REPLY,
@@ -69,6 +74,7 @@ booneops_artifact_compat_router = APIRouter(tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["fetch_assistant_body"] = assistant_body_html
 templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
+templates.env.filters["fetch_assistant_body_display"] = docs_aware_assistant_body_html
 templates.env.filters["fetch_safe_artifact_href"] = safe_fetch_download_href
 
 
@@ -275,6 +281,8 @@ async def delete_conversation_route(
         raise HTTPException(status_code=503, detail=_NO_DB_MSG)
     if repo.get_conversation(user.id, conversation_id) is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    messages = repo.list_messages(user.id, conversation_id)
+    unlink_local_snapshot_files_from_messages(messages, settings)
     repo.soft_delete_conversation(user.id, conversation_id)
     return RedirectResponse(url="/fetch", status_code=303)
 

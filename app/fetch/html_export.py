@@ -88,7 +88,7 @@ def build_local_pdf_export_artifact_entry(
     description: str = "PDF snapshot of the prior answer (rendered from the same HTML export template).",
     issued_at: datetime | None = None,
 ) -> dict[str, str]:
-    """Metadata for one Retriever-local PDF export (shared 7-day lifecycle with HTML exports)."""
+    """Metadata for one Retriever-local PDF export (same TTL as HTML exports)."""
     return build_local_html_export_artifact_entry(
         download_path,
         settings,

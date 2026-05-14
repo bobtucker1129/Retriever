@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from app.config import AppSettings
+from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.html_export import (
     FETCH_HTML_ARTIFACT_PATH_PREFIX,
     FETCH_PDF_ARTIFACT_PATH_PREFIX,
@@ -200,6 +201,36 @@ def prune_expired_local_html_exports(
                 continue
             mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
             if when >= mtime + ttl:
+                path.unlink(missing_ok=True)
+                removed += 1
+    return removed
+
+
+def unlink_local_snapshot_files_from_messages(
+    messages: Iterable[FetchMessageRecord],
+    settings: AppSettings,
+) -> int:
+    """Remove on-disk HTML/PDF answer snapshots linked from message metadata (safe paths only)."""
+    removed = 0
+    for record in messages:
+        meta = record.metadata
+        if not isinstance(meta, dict):
+            continue
+        raw = meta.get("artifacts")
+        if not isinstance(raw, list):
+            continue
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            parts = local_answer_snapshot_parts_from_download_path(entry.get("downloadPath"))
+            if parts is None:
+                continue
+            stem, suffix = parts
+            if suffix == "html":
+                path = resolve_export_disk_path(settings, stem)
+            else:
+                path = resolve_pdf_export_disk_path(settings, stem)
+            if path is not None and path.is_file():
                 path.unlink(missing_ok=True)
                 removed += 1
     return removed

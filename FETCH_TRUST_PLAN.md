@@ -7,13 +7,18 @@
 ## Live pilot findings (concise)
 
 - **Identity:** Retriever Fetch should use the **BooneOps** employee-facing operations voice, not private LordTate.
-- **`/docs` answers:** The pilot surfaced **raw retrieval-style dumps**. Before wider rollout, docs answers need a **human-friendly summary** and **clear source cleanup** in how they are presented (see roadmap note below).
+- **`/docs` answers:** Retriever now adds a **short HTML lead-in summary** for long **`docs_candidate`** answers (over **`FETCH_DOCS_SUMMARY_MIN_CHARS`**), skips duplicate shaping when broker already sent **`## Summary` / `### Sources`**, and shows **Sources** inside a **collapsed** `<details>` when metadata exists. **PrintSmith** lane unchanged this sprint.
 - **Observability gate:** Add **correlation logging end-to-end** (Fetch ask → broker → downstream) **before** heavier tests or broad rollout so incidents are traceable.
 - **Longer-term lane:** A **RetrieverOps / Fetch-dedicated broker lane** (separate logs, queue or concurrency limits, no instruction-update or write actions, less contention with Telegram/Discord) is the direction—not an immediate second copy of BooneOps. Detail is parked in **`PARKED.md`** (RetrieverOps / Fetch broker lane).
 
 ### `/docs` presentation roadmap note
 
 Treat pilot `/docs` output as **evidence of retrieval**, not ship-ready copy: plan a presentation layer (short summary, cleaned citations, consistent source labels) before scaling `/docs` traffic.
+
+### Local snapshots vs BooneOps broker artifacts (retention)
+
+- **Retriever-local** HTML/PDF answer snapshots live under the configured report directory (`fetch_html_exports/`). Default **time-on-disk** is controlled by **`FETCH_LOCAL_ARTIFACT_RETENTION_DAYS`** (app default **30**). **Deleting a conversation** removes snapshot files linked from that thread’s messages (same safe path rules as download).
+- **BooneOps** PDF/XLSX/CSV (and similar) remain **broker-owned** bytes and lifecycle; Retriever **proxies** downloads and **drops** expired or missing local snapshot cards from stored metadata so users do not see dead links. Operators set broker-side retention independently.
 
 ## Plain-English Summary
 

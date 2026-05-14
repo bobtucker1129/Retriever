@@ -85,7 +85,7 @@
           <div class="fetch-message {{ m.role }}">
             <div class="fetch-message-role">{{ m.role }}</div>
             {% if m.role == 'assistant' %}
-            <div class="fetch-message-body">{{ m.content | fetch_assistant_body }}</div>
+            <div class="fetch-message-body">{{ m | fetch_assistant_body_display(settings) }}</div>
             <div class="fetch-assistant-status-line" aria-label="Answer status">{{ m | fetch_assistant_status(settings) }}</div>
             {% else %}
             <p>{{ m.content }}</p>
@@ -93,8 +93,9 @@
             {% if m.metadata and ((m.metadata.source_cards or [])|length > 0 or (m.metadata.artifacts or [])|length > 0 or (m.metadata.status_cards or [])|length > 0) %}
             <div class="fetch-message-metadata" aria-label="Answer details">
               {% if m.metadata.source_cards %}
-              <div class="fetch-source-cards" aria-label="Sources">
-                <div class="fetch-metadata-title">Sources</div>
+              <details class="fetch-source-details">
+                <summary class="fetch-source-summary">Sources ({{ (m.metadata.source_cards or [])|length }})</summary>
+                <div class="fetch-source-cards" aria-label="Sources">
                 <ul class="fetch-source-card-list">
                 {% for source in m.metadata.source_cards %}
                   <li class="fetch-source-card {{ source.kind|default('source') }}">
@@ -111,7 +112,8 @@
                   </li>
                 {% endfor %}
                 </ul>
-              </div>
+                </div>
+              </details>
               {% endif %}
               {% if m.metadata.artifacts %}
               <div class="fetch-artifact-cards" aria-label="Attachments">
@@ -197,12 +199,19 @@
       </div>
     </form>
 
-    <div class="fetch-suggestions" aria-label="Fetch suggestions preview">
-      <button type="button" disabled>/help</button>
-      <button type="button" disabled>/sources</button>
-      <button type="button" disabled>Draft a short customer email</button>
-      <button type="button" disabled>Show a delayed report example</button>
+    <div class="fetch-suggestions" aria-label="Slash commands (insert into composer)">
+      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/docs" {% if not fetch_can_use_composer %}disabled{% endif %}>/docs</button>
+      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/printsmith" {% if not fetch_can_use_composer %}disabled{% endif %}>/printsmith</button>
+      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/help" {% if not fetch_can_use_composer %}disabled{% endif %}>/help</button>
+      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/sources" {% if not fetch_can_use_composer %}disabled{% endif %}>/sources</button>
+      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/health" {% if not fetch_can_use_composer %}disabled{% endif %}>/health</button>
     </div>
+
+    <p class="fetch-retention-note muted" role="note">
+      Deleting a chat removes its saved HTML/PDF snapshots from this server.
+      Snapshots older than {{ settings.fetch_local_artifact_retention_days }} days may be removed automatically.
+      Report and spreadsheet downloads from BooneOps follow Boone retention rules.
+    </p>
   </div>
 </section>
 <script>
@@ -234,6 +243,18 @@
       });
     }
     syncToggle();
+
+    shell.querySelectorAll("[data-fetch-suggestion]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var ta = document.getElementById("fetch-question");
+        if (!ta || ta.disabled) return;
+        var insert = (btn.getAttribute("data-fetch-suggestion") || "").trim();
+        if (!insert) return;
+        var cur = (ta.value || "").trim();
+        ta.value = cur ? cur + " " + insert : insert;
+        ta.focus();
+      });
+    });
 
     var scrollRoot = shell.querySelector("[data-fetch-scroll-root]");
     var scrollMore = shell.querySelector("[data-fetch-scroll-more]");

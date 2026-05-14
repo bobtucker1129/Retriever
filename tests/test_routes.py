@@ -155,6 +155,8 @@ def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     assert "Connect MySQL to save conversations" in response.text
     assert "+ New Chat" in response.text
     assert "Preview trust states" not in response.text
+    assert 'data-fetch-suggestion="/docs"' in response.text
+    assert 'data-fetch-suggestion="/printsmith"' in response.text
 
 
 _FETCH_SHELL_REMOVED_PHRASES = (
@@ -354,6 +356,8 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     assert "scrollHeight" in template_text
     assert "URLSearchParams" in template_text
     assert "scrollRestoration" in template_text
+    assert "data-fetch-suggestion" in template_text
+    assert 'querySelectorAll("[data-fetch-suggestion]")' in template_text
 
 
 def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
@@ -713,6 +717,36 @@ def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
     assert "/help" in db.fetch_messages[1]["content"]
     assert "offline stub" in db.fetch_messages[1]["content"].lower()
     assert "slash" in db.fetch_messages[1]["content"].lower()
+
+
+def test_fetch_post_ask_slash_docs_and_printsmith(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Cmd lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    r_docs = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "/docs Switch checkpoint"},
+    )
+    assert r_docs.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "docs_candidate"
+    assert "stub" in db.fetch_messages[-1]["content"].lower()
+
+    r_ps = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "/printsmith"},
+    )
+    assert r_ps.status_code == 303
+    assert db.fetch_messages[-1]["route_key"] == "printsmith_candidate"
+    assert "stub" in db.fetch_messages[-1]["content"].lower()
 
 
 def test_fetch_post_ask_slash_sources_and_health(monkeypatch) -> None:

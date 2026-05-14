@@ -63,10 +63,18 @@ _DOCS_HINTS: Final[tuple[str, ...]] = (
     "xmpie",
     "uplan",
     "ucreate",
+    "ucreate print",
     "uproduce",
     "switch manual",
+    "switch elements",
+    "switch element",
+    "enfocus",
+    "checkpoint",
+    "web portal",
+    "flow element",
     "the manual",
     "qlingo",
+    "scripting guide",
 )
 
 _EMAIL_CLEANUP_HINTS: Final[tuple[str, ...]] = (
@@ -168,6 +176,26 @@ def normalize_user_text(text: str) -> str:
     return " ".join(text.split()).strip()
 
 
+def broker_message_after_slash_route_prefix(text: str, route_label: str) -> str:
+    """Text sent to BooneOps for docs/PrintSmith lanes: drop leading ``/docs`` or ``/printsmith`` when present.
+
+    Classification already pinned the route; the broker should see the substantive question only.
+    If the user sent only the slash command, substitute a short neutral line so the payload is never empty.
+    """
+    cleaned = normalize_user_text(text)
+    if not cleaned:
+        return cleaned
+    parts = cleaned.split(maxsplit=1)
+    head = parts[0].lower()
+    if route_label == "docs_candidate" and head == "/docs":
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        return rest or "Documentation question."
+    if route_label == "printsmith_candidate" and head == "/printsmith":
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        return rest or "PrintSmith shop data question."
+    return cleaned
+
+
 def classify_fetch_intent(text: str) -> str:
     """Assign a single route label. First matching rule wins (deterministic order)."""
     cleaned = normalize_user_text(text)
@@ -176,6 +204,10 @@ def classify_fetch_intent(text: str) -> str:
 
     low = cleaned.lower()
     slash_key = low.split()[0] if low else ""
+    if slash_key == "/docs":
+        return "docs_candidate"
+    if slash_key == "/printsmith":
+        return "printsmith_candidate"
     if slash_key in _SLASH_COMMANDS:
         return slash_key[1:]  # help | sources | health
 
@@ -236,8 +268,8 @@ _STATUS_OFFLINE: Final[str] = (
 
 _FUTURE_ROUTES: Final[str] = (
     "When routing is turned on, planned labels include: local, help, sources, health, "
-    "email_cleanup, printsmith_candidate, docs_candidate, general_candidate; "
-    "blocked_write stays safety-screened."
+    "docs, printsmith (slash commands), email_cleanup, printsmith_candidate, docs_candidate, "
+    "general_candidate; blocked_write stays safety-screened."
 )
 
 
@@ -250,7 +282,7 @@ def build_fetch_stub_reply(route: str) -> str:
         return (
             "/help — Fetch shell (offline stub)\n\n"
             f"{_STATUS_OFFLINE}\n\n"
-            "Slash commands available in the stub: /help, /sources, /health. "
+            "Slash commands available in the stub: /docs, /printsmith, /help, /sources, /health. "
             "They only return this static guidance; there is no live assistant behind them yet.\n\n"
             f"{_FUTURE_ROUTES}"
         )

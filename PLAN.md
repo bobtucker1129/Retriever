@@ -175,9 +175,9 @@ Resolved:
 Open:
 
 - **Fetch pilot — `/docs` presentation:** Confirmed live pilot: answers still skew **raw / hard to skim**; **summary + source cards / cleanup** is the **next engineering priority** before any broad rollout (`FETCH_TRUST_PLAN.md` pilot section).
-- **OpenClaw gateway credential:** Rotate the **broker gateway token** (or equivalent) after inadvertent exposure in agent/tool output during Whitaker broker config fixes.
+- **OpenClaw gateway credential:** **Rotated / closed** (operator confirmation 2026-05-14); do not paste gateway tokens into chat or agent logs.
 - **Fetch artifact lifecycle:** Local HTML exports and broker artifacts now work through Retriever links, but retention/cleanup policy for generated HTML files and long-lived broker artifacts still needs an operator decision.
-- **Fetch PDF behavior:** PDF follow-ups are broker/report-runtime artifacts. If employees expect a document-style PDF snapshot of the previous answer, not a chart/report PDF, that is a future product slice.
+- **Fetch answer snapshot PDF (product):** **Not this sprint.** BooneOps-owned PDFs remain chart/report/runtime exports. A separate “snapshot this assistant answer as PDF” path would be Retriever-local product work only after an explicit go decision.
 - **RetrieverOps / Fetch-specific broker lane:** Deferred direction—**separate** lane (logs, limits, no instruction-update/write actions, less competition with chat surfaces)—**not** “clone BooneOps now.” See **`PARKED.md`**.
 - **Automated feedback:** exact **artifact format** and size cap for Phase A; whether Phase B public URL checks run on **every push** or a slower cadence; **rotation owner** for the Cloudflare Access service token on `bggol-vesko01`.
 - Whether general outside-world Fetch answers are enabled for all active users at launch or only beta users.
@@ -213,7 +213,7 @@ Recommended scope:
 2. **Artifact lifecycle:** decide and implement cleanup/retention for local HTML exports and broker-generated artifacts. Keep download links same-origin and authenticated.
 3. **PDF expectation:** decide whether Fetch should add a local “answer snapshot PDF” path, separate from BooneOps chart/report PDFs.
 4. **Progress UX:** improve slow broker-turn feedback beyond the spinner without blocking on full streaming or delayed-report UX.
-5. **Security hygiene:** rotate **OpenClaw gateway credential** used by Whitaker broker if not already done (**no secrets in commits or session logs**).
+5. **Security hygiene:** OpenClaw **gateway / broker token** — **done** (2026-05-14 operator confirmation); keep rotation out of docs and session logs.
 6. **Keep:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`** handy for regressions and smoke.
 7. **Defer:** Dedicated **RetrieverOps** broker clone / new lane (**`PARKED.md` OQ-10**); widen pilot only after docs formatting/persona/trust bar is met.
 
@@ -242,6 +242,7 @@ Reference: `memory/shared/seeds/2026-05-05-cursor-security-model.md`
 ## Guardrails
 
 - Do not edit `projects/Retriever/` unless explicitly asked.
+- **Project `wrap`** (not workspace `/end`) closes a retriever-rebuild Cursor session: update PLAN/SESSION-LOG, then give a **copy-ready next-session prompt** that includes **kickoff**, **goal**, **notes**, and instructions to run **`.cursor/skills/retriever-test-ready/SKILL.md`** plus **open Retriever in a browser** before coding (see `.cursor/rules/retriever-rebuild.mdc` § Wrap).
 - **Post-deploy feedback** automation must **never** stop, reinstall, or retarget legacy **`Retriever`** on **`8000`**; read-only liveness only unless an operator explicitly uses **`skip_legacy_liveness`** for controlled maintenance.
 - Treat old Fetch as a reference for ideas, not a compatibility target.
 - Keep LLMs away from direct write credentials.

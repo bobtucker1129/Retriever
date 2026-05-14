@@ -5,6 +5,8 @@
 
 This project exists to rebuild Retriever deliberately instead of continuing to bolt new behavior onto the old application. Each session should stay narrow: read this file, then `PLAN.md`, `PARKED.md`, the active architecture artifacts listed in `PLAN.md`, and the newest `SESSION-LOG.md` entry.
 
+**Before substantive Retriever work** (auth, admin, Fetch, pre-press, DSF, deploy, migrations): run the test-readiness preflight in `.cursor/skills/retriever-test-ready/SKILL.md` (or say `kickoff projects/retriever-rebuild` and treat that as the cue). Goal: confirm how you will **observe** the running app (local curl, public URL, Chrome MCP, or user paste-back) *before* a long coding loop, and run **pytest** early.
+
 ## Why This Project Exists
 
 Retriever is becoming the employee-facing front door for Boone operational help, starting with a new Fetch. Old Fetch does not work well enough and nobody depends on it today, so the rebuild should not spend effort preserving old Fetch compatibility. New Fetch is still the trust barrier: if it feels buggy, employees will distrust the rest of Retriever.
@@ -50,7 +52,7 @@ Do not run Impeccable as a substitute for the auth/security plan.
 3. **Fetch is a trust barrier.** Any Fetch plan must include explicit routing, failure states, delayed-report behavior, and the useful product features new Fetch should intentionally include.
 4. **Old Retriever stays reference-only.** Do not edit `projects/Retriever/` unless Master Tate explicitly asks to patch the old LAN repo copy.
 5. **Plain English first.** Translate architecture choices into operational consequences before technical detail.
-6. **Wrap ends with the next kickoff prompt.** Every project wrap should end with a copy-ready prompt for the next session, including `kickoff projects/retriever-rebuild`, the next goal, and any critical notes/artifacts.
+6. **Wrap ends with the next kickoff prompt.** Every project wrap should end with a copy-ready prompt for the next session: `kickoff projects/retriever-rebuild`, the next goal, critical notes — and **explicit instructions** for the next agent to run the Retriever test-readiness preflight (`.cursor/skills/retriever-test-ready/SKILL.md`), **open a browser** to local `http://127.0.0.1:8810/` or deployed `https://retriever.boonegraphics.net/` (Access as needed), then proceed. `wrap` is project-local; workspace-wide save is `/end`, not `wrap`.
 
 ## File Conventions
 

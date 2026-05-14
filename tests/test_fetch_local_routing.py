@@ -6,6 +6,7 @@ import pytest
 
 from app.fetch.local_routing import (
     FETCH_ROUTE_LABELS,
+    broker_message_after_slash_route_prefix,
     build_fetch_stub_reply,
     classify_fetch_intent,
     normalize_user_text,
@@ -20,6 +21,12 @@ from app.fetch.local_routing import (
         ("  /sources  ", "sources"),
         ("/health", "health"),
         ("/help more", "help"),
+        ("/docs Are there Switch elements for email approval?", "docs_candidate"),
+        ("/printsmith open invoices last week", "printsmith_candidate"),
+        (
+            "Are there any Switch elements that let you approve a step via email?",
+            "docs_candidate",
+        ),
         ("delete my account records please", "blocked_write"),
         ("Please send email to vendor@example.com", "blocked_write"),
         ("clean my inbox today", "email_cleanup"),
@@ -92,3 +99,21 @@ def test_general_stub_explains_downloads_need_broker_or_routed_paths() -> None:
 
 def test_normalize_user_text() -> None:
     assert normalize_user_text("  a  b  ") == "a b"
+
+
+def test_broker_message_after_slash_route_prefix() -> None:
+    assert broker_message_after_slash_route_prefix("/docs Switch checkpoints", "docs_candidate") == (
+        "Switch checkpoints"
+    )
+    assert broker_message_after_slash_route_prefix("/printsmith open invoices", "printsmith_candidate") == (
+        "open invoices"
+    )
+    assert broker_message_after_slash_route_prefix("/DOCS only", "docs_candidate") == "only"
+    assert broker_message_after_slash_route_prefix("/docs", "docs_candidate") == "Documentation question."
+    assert (
+        broker_message_after_slash_route_prefix("/printsmith", "printsmith_candidate")
+        == "PrintSmith shop data question."
+    )
+    assert broker_message_after_slash_route_prefix("read the Switch manual", "docs_candidate") == (
+        "read the Switch manual"
+    )

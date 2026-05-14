@@ -8,10 +8,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import AppSettings
+from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.artifact_retention import (
     filter_message_metadata_for_local_retention,
     local_html_stem_from_download_path,
     prune_expired_local_html_exports,
+    unlink_local_snapshot_files_from_messages,
 )
 from app.fetch.html_export import (
     artifact_download_path_for_stem,
@@ -28,7 +30,7 @@ def test_build_local_html_export_artifact_entry_includes_expiry_and_scope() -> N
     entry = build_local_html_export_artifact_entry(path, settings, issued_at=issued)
     assert entry["storageScope"] == "retriever_local"
     assert entry["issuedAtUtc"].startswith("2026-01-01T12:00:00")
-    assert entry["expiresAtUtc"].startswith("2026-01-08T12:00:00")
+    assert entry["expiresAtUtc"].startswith("2026-01-31T12:00:00")
     assert entry["downloadPath"] == path
 
 
@@ -132,3 +134,38 @@ def test_write_html_export_then_prune_does_not_remove_brand_new_file(tmp_path: P
     prune_expired_local_html_exports(settings)
     export_dir = tmp_path / "fetch_html_exports"
     assert len(list(export_dir.glob("*.html"))) == 1
+
+
+def test_unlink_local_snapshots_removes_html_and_pdf(tmp_path: Path) -> None:
+    settings = AppSettings(retriever_report_dir=tmp_path)
+    stem_html = uuid.uuid4().hex
+    stem_pdf = uuid.uuid4().hex
+    export_dir = tmp_path / "fetch_html_exports"
+    export_dir.mkdir(parents=True)
+    html_path = export_dir / f"{stem_html}.html"
+    pdf_path = export_dir / f"{stem_pdf}.pdf"
+    html_path.write_text("<html/>", encoding="utf-8")
+    pdf_path.write_bytes(b"%PDF-1.4")
+
+    msg = FetchMessageRecord(
+        message_id="m1",
+        conversation_id="c1",
+        user_id=1,
+        role="assistant",
+        content="x",
+        route_key="local",
+        metadata={
+            "artifacts": [
+                {"filename": "a.html", "downloadPath": artifact_download_path_for_stem(stem_html)},
+                {"filename": "b.pdf", "downloadPath": artifact_pdf_download_path_for_stem(stem_pdf)},
+                {
+                    "filename": "broker.xlsx",
+                    "downloadPath": "/fetch/artifacts/broker/550e8400-e29b-41d4-a716-446655440000",
+                },
+            ]
+        },
+    )
+    removed = unlink_local_snapshot_files_from_messages([msg], settings)
+    assert removed == 2
+    assert not html_path.exists()
+    assert not pdf_path.exists()

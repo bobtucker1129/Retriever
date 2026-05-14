@@ -62,7 +62,8 @@ class AppSettings(BaseSettings):
     fetch_general_questions_enabled: bool = False
     fetch_uploads_enabled: bool = False
     fetch_delayed_reports_enabled: bool = True
-    fetch_local_artifact_retention_days: int = 7
+    fetch_local_artifact_retention_days: int = 30
+    fetch_docs_summary_min_chars: int = 900
 
     model_provider: Optional[str] = None
     anthropic_api_key: Optional[str] = None

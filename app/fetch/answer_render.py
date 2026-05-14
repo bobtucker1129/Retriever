@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from typing import Optional
 
@@ -77,10 +78,59 @@ def assistant_body_html(plain_text: str) -> Markup:
         return Markup("")
     # Markdown preserves readable structure; nh3 strips scripts, event handlers, iframes, inline styles, etc.
     md = markdown.Markdown(extensions=_MD_EXTENSIONS)
-    html = md.convert(plain_text)
+    raw_html = md.convert(plain_text)
     clean = nh3.clean(
-        html,
+        raw_html,
         tags=nh3.ALLOWED_TAGS,
         attributes=nh3.ALLOWED_ATTRIBUTES,
     )
     return Markup(clean)
+
+
+def _mcp_structured_docs_answer(content: str) -> bool:
+    """True when broker already shipped labeled Summary / Sources markdown."""
+    base = (content or "").strip()
+    return base.startswith("## Summary") and "### Sources" in base
+
+
+def _lead_paragraph_for_summary(text: str, max_len: int = 520) -> str:
+    """First paragraph or block, trimmed for a short plain-text lead-in."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    first = t.split("\n\n")[0].strip()
+    if len(first) > max_len:
+        cut = first[:max_len]
+        last_sp = cut.rfind(" ")
+        if last_sp > max_len // 2:
+            cut = cut[:last_sp]
+        first = cut + "…"
+    return first
+
+
+def docs_aware_assistant_body_html(m: FetchMessageRecord, settings: AppSettings) -> Markup:
+    """Assistant bubble HTML: optional short summary lead-in for long ``docs_candidate`` answers."""
+    plain = (m.content or "").strip()
+    if m.role != "assistant" or not plain:
+        return assistant_body_html(m.content or "")
+    if (m.route_key or "").strip() != "docs_candidate":
+        return assistant_body_html(m.content or "")
+    if _mcp_structured_docs_answer(plain):
+        return assistant_body_html(m.content or "")
+    low_start = plain.lower()
+    if low_start.startswith("summary\n") or low_start.startswith("summary\r\n"):
+        return assistant_body_html(m.content or "")
+    threshold = max(200, int(getattr(settings, "fetch_docs_summary_min_chars", 900)))
+    if len(plain) < threshold:
+        return assistant_body_html(m.content or "")
+    lead = _lead_paragraph_for_summary(plain, max_len=500)
+    if len(lead) < 80:
+        return assistant_body_html(m.content or "")
+    if len(lead) / max(len(plain), 1) > 0.88:
+        return assistant_body_html(m.content or "")
+    escaped = html.escape(lead, quote=True)
+    summary_block = (
+        '<div class="fetch-docs-summary-lead" role="region" aria-label="Short summary">'
+        f"<p>{escaped}</p></div>"
+    )
+    return Markup(summary_block) + assistant_body_html(m.content or "")

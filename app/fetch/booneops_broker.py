@@ -21,6 +21,7 @@ from starlette.responses import Response
 from app.auth.permissions import CurrentUser
 from app.config import AppSettings
 from app.db.repositories.fetch import FetchMessageRecord
+from app.fetch.local_routing import broker_message_after_slash_route_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ def augment_fetch_broker_user_message_for_turn(
     session_metadata_extra: Optional[dict[str, Any]] = None,
 ) -> str:
     """Normalize Fetch broker text (styled spreadsheet follow-ups) before route-specific augmentation."""
-    base = (user_message or "").strip()
+    base = broker_message_after_slash_route_prefix(user_message or "", route_label)
     extra = session_metadata_extra or {}
     if extra.get("reportStyle") == "basic_styled_excel":
         base = (

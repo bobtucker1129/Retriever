@@ -419,6 +419,51 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     assert "unit-test-hmac" not in result.assistant_text
 
 
+def test_call_booneops_broker_payload_strips_forced_slash_prefix(monkeypatch) -> None:
+    settings = _make_settings()
+    user = _make_user()
+    captured: dict = {}
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        captured["content"] = content
+
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"message":"ok","errors":[]}'
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message="/docs  Switch checkpoints",
+        route_label="docs_candidate",
+        request_id="req-strip",
+        prior_messages=[],
+        http_post=None,
+    )
+    payload = json.loads(captured["content"].decode())
+    assert payload["message"] == "Switch checkpoints"
+
+    call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message="/printsmith",
+        route_label="printsmith_candidate",
+        request_id="req-strip2",
+        prior_messages=[],
+        http_post=None,
+    )
+    payload2 = json.loads(captured["content"].decode())
+    assert payload2["message"] == "PrintSmith shop data question."
+
+
 def test_call_booneops_broker_merges_session_metadata_extra(monkeypatch) -> None:
     settings = _make_settings()
     user = _make_user()

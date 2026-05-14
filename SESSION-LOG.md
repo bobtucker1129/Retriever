@@ -4,6 +4,43 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-14 — Docs trust presentation + local artifact lifecycle
+
+**Goal:** Pilot-ready **`/docs`** readability (summary lead-in for long answers, collapsed sources), **30-day** default for local HTML/PDF snapshots, **delete snapshot files when a conversation is deleted**, user-facing retention copy, plan/trust doc updates (gateway rotation marked done; answer-snapshot PDF explicitly deferred).
+
+**What happened:**
+
+- **Config:** `fetch_local_artifact_retention_days` default **30**; **`fetch_docs_summary_min_chars`** (default **900**); `.env.example` documents both.
+- **Retention:** `unlink_local_snapshot_files_from_messages` before conversation soft-delete; existing mtime-based prune unchanged.
+- **UI:** `docs_aware_assistant_body_html` + Jinja filter; **`<details>`** around source cards; summary-lead CSS; Fetch shell **retention note**.
+- **Docs:** `FETCH_TRUST_PLAN.md` pilot bullets + **Local snapshots vs broker** subsection; `PLAN.md` open items updated.
+
+**Verification:** `python3 -m pytest -q` → **233 passed** (Whitaker).
+
+**Next:** Windows **`smoke.ps1`** + Chrome after deploy per runbook.
+
+---
+
+## 2026-05-13 — Fetch routing polish, test-readiness discipline, wrap vs /end
+
+**Goal:** Make **`/docs`** and **`/printsmith`** reliable forced routes and widen docs-keyword routing without turning on general questions; surface slash commands in the Fetch UI; add a favicon; strip those slash prefixes in the broker payload; add **project-wide** test-readiness preflight (skill + rule + KICKOFF); clarify that **`wrap`** owns the next-session handoff (browser + preflight) while workspace **`/end`** stays LordTate-wide only.
+
+**What happened:**
+
+- **Local routing:** `classify_fetch_intent` handles `/docs` → docs lane, `/printsmith` → PrintSmith lane; expanded `_DOCS_HINTS` for Switch/Enfocus-style questions; help stub lists new slash commands.
+- **UI:** Composer chips for `/docs`, `/printsmith`, `/help`, `/sources`, `/health` with insert-into-composer behavior; `fetch-favicon.svg` + layout cache-bust link; workspace `.gitignore` exception for `projects/retriever-rebuild/app/static/*.svg`.
+- **Broker:** `broker_message_after_slash_route_prefix` strips forced slash prefix before BooneOps message; placeholders if the user sends only the command.
+- **Operator tooling:** `retriever-test-ready` skill, `retriever-preflight` rule (globs app/tests/migrations/deploy), KICKOFF preflight note; **wrap** rule updated so every handoff prompt mandates preflight + browser; **reverted** adding that handoff to `/end` so OpenClaw-wide save stays separate.
+- **Tests:** Retriever `pytest` suite green at **229** on the committed paths; LordTate `main` includes commits through **`f33254e2`** for this arc.
+
+**Plain-English result:** Employees (and you) can force docs vs PrintSmith lanes with slash commands; the next agent is steered to **prove** they can see Retriever before another long code loop. **`wrap`** and **`/end`** are no longer mixed up.
+
+**Still open:** Same pilot priorities as **PLAN.md** (docs answer UX, artifact lifecycle, gateway rotation). **Working tree:** many `projects/retriever-rebuild/` paths are still **modified or untracked** locally versus `git status`—reconcile, test, and commit when you are ready (this wrap does not commit).
+
+**Next recommended session:** See PLAN **Next Recommended Session**; add **reconcile local retriever-rebuild git state** if you need a clean deploy branch.
+
+---
+
 ## 2026-05-12 — Fetch tables, artifacts, follow-up context, and styled exports
 
 **Goal:** Continue **Fetch pilot employee-readiness** without widening rollout: make answers easier to read, route PrintSmith/report questions more naturally, make downloads work, and let normal follow-up language act on the previous report instead of falling into the general stub.
