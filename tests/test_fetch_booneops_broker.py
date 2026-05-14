@@ -460,6 +460,7 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     payload = json.loads(body.decode())
     assert payload["requestId"] == "req-fixed"
     assert payload["sessionMetadata"]["routeLabel"] == "printsmith_candidate"
+    assert payload["sessionMetadata"].get("retrieverDiscordAnswerParity") is True
     assert "unit-test-bearer" not in result.assistant_text
     assert "unit-test-hmac" not in result.assistant_text
 

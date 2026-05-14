@@ -168,6 +168,8 @@ def build_broker_payload(
         "routeLabel": route_label,
         "booneopsLevel": user.booneops_level or "none",
         "retrieverCapabilities": caps,
+        # Broker gateway envelope: ask BooneOps to answer like Discord channel turns.
+        "retrieverDiscordAnswerParity": True,
     }
     if session_metadata_extra:
         for key, value in session_metadata_extra.items():
