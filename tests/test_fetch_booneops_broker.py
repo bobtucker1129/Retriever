@@ -25,6 +25,7 @@ from app.fetch.booneops_broker import (
     normalize_and_validate_booneops_artifact_id,
     sanitized_broker_error_summary,
     sign_body_hmac_sha256,
+    strip_redundant_markdown_sources_section,
 )
 from app.fetch.followup_routing import resolve_fetch_ask_route
 from app.fetch.local_routing import should_delegate_ask_to_booneops_broker
@@ -129,6 +130,50 @@ def test_format_assistant_only_uses_safe_fields(payload: dict, expect_substr: st
     assert expect_substr in text
     assert "evil-leak" not in text
     assert "Bearer" not in text
+
+
+def test_strip_redundant_markdown_sources_section_noop_without_cards() -> None:
+    body = "### Sources\n\n- x\n"
+    assert strip_redundant_markdown_sources_section(body, []) == body
+
+
+def test_strip_redundant_markdown_sources_section_removes_sources_block() -> None:
+    body = "Answer line.\n\n### Sources\n\n- [One](https://a.example)\n"
+    cards = [{"title": "One", "url": "https://a.example"}]
+    out = strip_redundant_markdown_sources_section(body, cards)
+    assert "Answer line" in out
+    assert "### Sources" not in out
+
+
+def test_strip_redundant_markdown_sources_section_stops_at_next_heading() -> None:
+    body = "Intro\n\n## Sources\n\n- a\n\n## See also\n\nMore text\n"
+    cards = [{"title": "Doc", "url": "https://d"}]
+    out = strip_redundant_markdown_sources_section(body, cards)
+    assert "Intro" in out
+    assert "## See also" in out
+    assert "More text" in out
+    assert "## Sources" not in out
+
+
+def test_build_broker_message_presentation_strips_inline_sources_when_cards_present() -> None:
+    raw = (
+        "First paragraph is the intro with enough length to trigger shaping heuristics. " * 8
+        + "\n\n1. One step\n2. Two steps\n\n"
+        + "### Sources\n\n- [Guide](https://docs/switch)\n"
+    )
+    text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": raw,
+            "sources": [
+                {"kind": "docs", "title": "Guide", "url": "https://docs/switch"},
+            ],
+        },
+        "docs_candidate",
+    )
+    assert metadata.get("source_cards")
+    assert "### Sources" not in text
+    assert "https://docs/switch" not in text
 
 
 def test_build_broker_message_presentation_adds_docs_summary_steps_and_source_cards() -> None:

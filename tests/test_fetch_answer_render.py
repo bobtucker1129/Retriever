@@ -5,7 +5,7 @@ from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.answer_render import (
     assistant_body_html,
     build_assistant_status_line,
-    docs_aware_assistant_body_html,
+    fetch_assistant_body_display,
     human_model_label,
 )
 
@@ -123,12 +123,29 @@ def test_build_assistant_status_line_respects_flags_and_context() -> None:
     assert "Context: 0% error" in build_assistant_status_line(m_err, s)
 
 
-def test_docs_aware_prepends_summary_for_long_docs_candidate() -> None:
-    s = _settings(fetch_docs_summary_min_chars=200)
-    lead = "This opening paragraph is meant to be readable as a short summary for the pilot. " * 2
-    tail = "Detail line.\n" * 120
-    body = f"{lead}\n\n{tail}"
-    assert len(body) >= 200
+def test_fetch_assistant_body_display_strips_sources_when_cards_present() -> None:
+    s = _settings()
+    body = "Summary\n\nSome answer text.\n\n### Sources\n\n- [One](https://a)\n- Two\n"
+    m = FetchMessageRecord(
+        message_id="m1",
+        conversation_id="c1",
+        user_id=1,
+        role="assistant",
+        content=body,
+        route_key="docs_candidate",
+        model_label=None,
+        context_percent=0,
+        context_state="ready",
+        metadata={"source_cards": [{"title": "One", "url": "https://a"}]},
+    )
+    html = str(fetch_assistant_body_display(m, s))
+    assert "Some answer text" in html
+    assert "### Sources" not in html
+
+
+def test_fetch_assistant_body_display_passes_through_without_cards() -> None:
+    s = _settings()
+    body = "### Sources\n\n- x\n"
     m = FetchMessageRecord(
         message_id="m1",
         conversation_id="c1",
@@ -141,44 +158,5 @@ def test_docs_aware_prepends_summary_for_long_docs_candidate() -> None:
         context_state="ready",
         metadata=None,
     )
-    html = str(docs_aware_assistant_body_html(m, s))
-    assert "fetch-docs-summary-lead" in html
-    assert "This opening paragraph" in html
-
-
-def test_docs_aware_skips_when_mcp_structured() -> None:
-    s = _settings(fetch_docs_summary_min_chars=100)
-    body = "## Summary\n\nShort.\n\n### Sources\n\n- a\n- b\n\n" + ("x" * 500)
-    m = FetchMessageRecord(
-        message_id="m1",
-        conversation_id="c1",
-        user_id=1,
-        role="assistant",
-        content=body,
-        route_key="docs_candidate",
-        model_label=None,
-        context_percent=0,
-        context_state="ready",
-        metadata=None,
-    )
-    html = str(docs_aware_assistant_body_html(m, s))
-    assert "fetch-docs-summary-lead" not in html
-
-
-def test_docs_aware_no_summary_for_non_docs_route() -> None:
-    s = _settings(fetch_docs_summary_min_chars=100)
-    body = "Intro.\n\n" + ("y" * 400)
-    m = FetchMessageRecord(
-        message_id="m1",
-        conversation_id="c1",
-        user_id=1,
-        role="assistant",
-        content=body,
-        route_key="printsmith_candidate",
-        model_label=None,
-        context_percent=0,
-        context_state="ready",
-        metadata=None,
-    )
-    html = str(docs_aware_assistant_body_html(m, s))
-    assert "fetch-docs-summary-lead" not in html
+    html = str(fetch_assistant_body_display(m, s))
+    assert "Sources" in html

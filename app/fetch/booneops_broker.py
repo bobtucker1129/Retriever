@@ -515,6 +515,39 @@ def _append_artifact_section(body: str, data: dict[str, Any]) -> str:
     return "\n".join(fragments).strip()
 
 
+def strip_redundant_markdown_sources_section(body: str, source_cards: object) -> str:
+    """Remove a trailing Markdown **Sources** section when ``source_cards`` will show the same links.
+
+    Used for ``docs_candidate`` turns so the shell does not duplicate sources in the body and metadata.
+    """
+    if not isinstance(source_cards, list) or len(source_cards) == 0:
+        return body
+    text = body or ""
+    if not text.strip():
+        return text
+    lines = text.splitlines()
+    heading_re = re.compile(r"^#{1,4}\s*sources\s*$", re.IGNORECASE)
+    plain_re = re.compile(r"^sources\s*:\s*$", re.IGNORECASE)
+    next_heading_re = re.compile(r"^#{1,6}\s+\S")
+    start_idx: Optional[int] = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if heading_re.match(s) or plain_re.match(s):
+            start_idx = i
+            break
+    if start_idx is None:
+        return body
+    end_idx = len(lines)
+    for j in range(start_idx + 1, len(lines)):
+        if next_heading_re.match(lines[j].strip()):
+            end_idx = j
+            break
+    new_lines = lines[:start_idx] + lines[end_idx:]
+    out = "\n".join(new_lines).strip()
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out if out else body
+
+
 def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]:
     artifacts = data.get("artifacts") or []
     if not isinstance(artifacts, list):
@@ -648,6 +681,9 @@ def build_broker_message_presentation(
             source_cards = _extract_broker_source_cards(data)
             if source_cards:
                 metadata["source_cards"] = source_cards
+                assistant_text = strip_redundant_markdown_sources_section(
+                    assistant_text, source_cards
+                )
         artifact_cards = _extract_broker_artifact_cards(data)
         if artifact_cards:
             metadata["artifacts"] = artifact_cards

@@ -1065,21 +1065,6 @@ a.fetch-row-action:hover {
   text-transform: uppercase;
 }
 
-.fetch-docs-summary-lead {
-  border-left: 3px solid var(--brand-blue, oklch(52% 0.14 248));
-  margin-bottom: var(--space-sm);
-  padding: 0.35rem 0 0.35rem 0.65rem;
-}
-
-.fetch-docs-summary-lead p {
-  color: oklch(28% 0.02 248 / 0.92);
-  font-size: 0.82rem;
-  font-weight: 600;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.fetch-source-details {
   border-radius: var(--radius-sm);
   max-width: 100%;
 }
@@ -1102,7 +1087,9 @@ a.fetch-row-action:hover {
   font-size: 0.68rem;
   line-height: 1.4;
   margin: var(--space-sm) 0 0;
-  max-width: 52ch;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
 .fetch-source-cards,

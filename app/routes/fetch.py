@@ -26,7 +26,7 @@ from app.dependencies import settings_dependency
 from app.fetch.answer_render import (
     assistant_body_html,
     build_assistant_status_line,
-    docs_aware_assistant_body_html,
+    fetch_assistant_body_display,
 )
 from app.fetch.safe_links import safe_fetch_download_href
 from app.fetch.booneops_broker import (
@@ -74,7 +74,7 @@ booneops_artifact_compat_router = APIRouter(tags=["fetch"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["fetch_assistant_body"] = assistant_body_html
 templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
-templates.env.filters["fetch_assistant_body_display"] = docs_aware_assistant_body_html
+templates.env.filters["fetch_assistant_body_display"] = fetch_assistant_body_display
 templates.env.filters["fetch_safe_artifact_href"] = safe_fetch_download_href
 
 
