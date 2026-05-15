@@ -125,13 +125,26 @@ _INVOICE_VOLUME_OR_COMPARE_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
-# Month names, numeric years, and coarse calendar buckets for shop-report questions.
+# Month names, numeric years, coarse calendar buckets, and common relative shop windows.
 _PRINTSMITH_OPS_TIME_RE: Final[re.Pattern[str]] = re.compile(
     r"\b(month|months|year|years|quarter|quarters|fiscal\b|weekly|daily)"
     r"|\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may\b|jun(?:e)?"
     r"|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b"
     r"|\bfy[-\s]?\d{2,4}\b"
-    r"|\b(?:19|20)\d{2}\b",
+    r"|\b(?:19|20)\d{2}\b"
+    r"|\b(most\s+recent|latest|newest)\b"
+    r"|\b(last|previous)\s+(?:job|jobs|invoice|invoices|order|orders)\b",
+    re.IGNORECASE,
+)
+
+# Known outsource / trade vendors + shop nouns — routes MIS lookups away from general_candidate.
+_OUTSOURCE_OR_TRADE_VENDOR_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(outsource|outsourced|subcontract(?:ed|ing)?)\b"
+    r"|\b(b2\s*signs|b2signs|4\s*over|4over|four\s*over|western\s+trade)\b",
+    re.IGNORECASE,
+)
+_SHOP_RECORD_NOUN_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(invoice|invoices|job|jobs|order|orders|ticket|tickets)\b",
     re.IGNORECASE,
 )
 
@@ -143,6 +156,13 @@ _PRINTSMITH_JOB_CONTEXT_RE: Final[re.Pattern[str]] = re.compile(
     r"|work\s+tickets?",
     re.IGNORECASE,
 )
+
+
+def _looks_printsmith_outsource_vendor_shop_query(low: str) -> bool:
+    """Outsource / trade-vendor questions about invoices, jobs, or orders (PrintSmith-shaped)."""
+    if _OUTSOURCE_OR_TRADE_VENDOR_RE.search(low) is None:
+        return False
+    return _SHOP_RECORD_NOUN_RE.search(low) is not None
 
 
 def _looks_printsmith_dated_job_shop_query(low: str) -> bool:
@@ -218,6 +238,9 @@ def classify_fetch_intent(text: str) -> str:
     for hint in _EMAIL_CLEANUP_HINTS:
         if hint in low:
             return "email_cleanup"
+
+    if _looks_printsmith_outsource_vendor_shop_query(low):
+        return "printsmith_candidate"
 
     if _collapsed_printsmith_hint(low):
         return "printsmith_candidate"

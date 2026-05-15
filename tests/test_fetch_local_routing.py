@@ -50,6 +50,13 @@ from app.fetch.local_routing import (
         ),
         ("List all jobs in digital color for February 2026.", "printsmith_candidate"),
         ("How many jobs did we run in January 2026?", "printsmith_candidate"),
+        (
+            "Can you give me the invoice number of the most recent job that we have outsourced "
+            "to B2Signs, 4Over, and western trade printing? Give me two invoices for each",
+            "printsmith_candidate",
+        ),
+        ("What are the last three invoices we sent to 4over?", "printsmith_candidate"),
+        ("Most recent job ticket for western trade — who entered it?", "printsmith_candidate"),
         ("Who invented jobs?", "general_candidate"),
         ("read the xmpie manual for uproduce", "docs_candidate"),
         ("documentation for Switch", "docs_candidate"),
