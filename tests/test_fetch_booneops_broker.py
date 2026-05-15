@@ -781,7 +781,7 @@ def test_call_booneops_broker_two_500_responses_single_user_error(monkeypatch) -
         http_post=fake_post,
     )
     assert call_count["n"] == 2
-    assert "server problem" in result.assistant_text.lower()
+    assert "server error" in result.assistant_text.lower()
     assert "retried" in result.assistant_text.lower()
     assert result.metadata.get("request_id") == "req-two-500"
     assert result.metadata["status_cards"][0].get("request_id") == "req-two-500"
@@ -848,7 +848,7 @@ def test_call_booneops_broker_502_logs_sanitized_fields_not_secret_details(caplo
         prior_messages=[],
         http_post=None,
     )
-    assert "temporary server problem" in result.assistant_text.lower()
+    assert "server error" in result.assistant_text.lower()
     assert "retried" in result.assistant_text.lower()
     assert result.metadata.get("request_id") == "req-502-test"
 

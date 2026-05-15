@@ -22,6 +22,14 @@ from starlette.responses import Response
 from app.auth.permissions import CurrentUser
 from app.config import AppSettings
 from app.db.repositories.fetch import FetchMessageRecord
+from app.fetch.broker_user_visible_copy import (
+    copy_booneops_denied_no_body,
+    copy_http_401,
+    copy_http_5xx_after_retry,
+    copy_http_network,
+    copy_http_non_json,
+    copy_http_timeout,
+)
 from app.fetch.local_routing import broker_message_after_slash_route_prefix
 
 logger = logging.getLogger(__name__)
@@ -54,6 +62,8 @@ def _metadata_with_booneops_actions(
 
 BOONEOPS_MESSAGE_PATH = "/v1/booneops/message"
 BOONEOPS_BROKER_ARTIFACT_PATH_TEMPLATE = "/v1/booneops/artifacts/{artifact_id}"
+# Keep a few seconds above broker ``BOONEOPS_GATEWAY_TIMEOUT_MS`` (default 110s) so structured
+# broker errors usually arrive before the client aborts; see ``DISCORD_FETCH_PARITY.md``.
 _DEFAULT_HTTP_TIMEOUT = 115.0
 _BROKER_ARTIFACT_HTTP_TIMEOUT = 120.0
 _BROKER_TRANSIENT_RETRY_BACKOFF_SEC = 0.35
@@ -1050,25 +1060,21 @@ def call_booneops_broker(
                 kind,
             )
             if kind == "timeout":
+                c = copy_http_timeout(request_id=request_id)
                 return _booneops_broker_client_error(
                     request_id=request_id,
-                    headline="BooneOps did not respond in time.",
-                    detail_line=(
-                        "The request timed out while Fetch was waiting for the BooneOps broker. "
-                        "That usually reflects a temporary slowdown, not a mistake in what you sent."
-                    ),
-                    status_card_state="Timeout",
-                    status_card_detail="The broker did not answer before the client timeout.",
+                    headline=c.headline,
+                    detail_line=c.detail_line,
+                    status_card_state=c.status_card_state,
+                    status_card_detail=c.status_card_detail,
                 )
+            c = copy_http_network(request_id=request_id)
             return _booneops_broker_client_error(
                 request_id=request_id,
-                headline="Fetch could not reach the BooneOps broker.",
-                detail_line=(
-                    "This looks like a network or connectivity issue between Fetch and BooneOps "
-                    "(for example a connection error), not a problem with your message."
-                ),
-                status_card_state="Network issue",
-                status_card_detail="Fetch could not complete the HTTP call to the broker.",
+                headline=c.headline,
+                detail_line=c.detail_line,
+                status_card_state=c.status_card_state,
+                status_card_detail=c.status_card_detail,
             )
 
         if response.status_code >= 500 and attempt == 0:
@@ -1084,15 +1090,13 @@ def call_booneops_broker(
 
     if response.status_code == 401:
         logger.warning("BooneOps broker auth rejected request_id=%s", request_id)
+        c = copy_http_401(request_id=request_id)
         return _booneops_broker_client_error(
             request_id=request_id,
-            headline="Fetch could not authenticate to the BooneOps broker.",
-            detail_line=(
-                "This is almost always a service configuration issue on Fetch's side, "
-                "not something you can fix by signing in again."
-            ),
-            status_card_state="Configuration issue",
-            status_card_detail="Fetch was rejected when calling the broker (HTTP 401).",
+            headline=c.headline,
+            detail_line=c.detail_line,
+            status_card_state=c.status_card_state,
+            status_card_detail=c.status_card_detail,
         )
 
     try:
@@ -1101,15 +1105,13 @@ def call_booneops_broker(
             data = {}
     except json.JSONDecodeError:
         logger.warning("BooneOps broker non-JSON request_id=%s status=%s", request_id, response.status_code)
+        c = copy_http_non_json(request_id=request_id)
         return _booneops_broker_client_error(
             request_id=request_id,
-            headline="BooneOps returned an unreadable response.",
-            detail_line=(
-                "The payload was not valid JSON, so Fetch could not interpret BooneOps's reply. "
-                "That can happen when an error page or proxy body is returned instead of the normal API shape."
-            ),
-            status_card_state="Unexpected response format",
-            status_card_detail="Broker response was not JSON.",
+            headline=c.headline,
+            detail_line=c.detail_line,
+            status_card_state=c.status_card_state,
+            status_card_detail=c.status_card_detail,
         )
 
     if response.status_code >= 500:
@@ -1123,15 +1125,13 @@ def call_booneops_broker(
             b_msg if b_msg is not None else "-",
             ",".join(b_detail_keys) if b_detail_keys else "-",
         )
+        c = copy_http_5xx_after_retry(request_id=request_id)
         return _booneops_broker_client_error(
             request_id=request_id,
-            headline="BooneOps reported a temporary server problem.",
-            detail_line=(
-                "The broker returned a server error after Fetch retried the request once. "
-                "That usually means BooneOps or an upstream dependency was overloaded or failing briefly."
-            ),
-            status_card_state="BooneOps server error",
-            status_card_detail="The broker returned HTTP 5xx after one automatic retry.",
+            headline=c.headline,
+            detail_line=c.detail_line,
+            status_card_state=c.status_card_state,
+            status_card_detail=c.status_card_detail,
         )
 
     if response.status_code >= 400:
@@ -1142,12 +1142,13 @@ def call_booneops_broker(
             return BooneOpsBrokerTurnResult(
                 assistant_text=text, context_state="booneops_error", metadata=metadata
             )
-        return BooneOpsBrokerTurnResult(
-            assistant_text=(
-                "BooneOps denied this request.\n\n"
-                "Your message was saved; contact an operator if you need access."
-            ),
-            context_state="booneops_error",
+        c = copy_booneops_denied_no_body(request_id=request_id)
+        return _booneops_broker_client_error(
+            request_id=request_id,
+            headline=c.headline,
+            detail_line=c.detail_line,
+            status_card_state=c.status_card_state,
+            status_card_detail=c.status_card_detail,
         )
 
     text, metadata = build_broker_message_presentation(data, route_label)
@@ -1160,12 +1161,24 @@ def call_booneops_broker(
     )
     ctx = "booneops_error" if policy or ok is False else "booneops"
 
+    err_codes_log = ",".join(
+        str(e.get("code") or "").strip()
+        for e in errs
+        if isinstance(e, dict) and str(e.get("code") or "").strip()
+    ) or "-"
+    arts = data.get("artifacts")
+    artifact_count = len(arts) if isinstance(arts, list) else 0
+    gw_slug = str((metadata or {}).get("gateway_model_id") or "").strip() or "-"
+
     logger.info(
-        "BooneOps broker turn request_id=%s route=%s ok=%s actions=%s",
+        "BooneOps broker turn request_id=%s route=%s ok=%s actions=%s gateway_model=%s err_codes=%s artifact_count=%s",
         request_id,
         route_label,
         ok,
-        ",".join(metadata.get("booneops_actions") or []) or "-",
+        ",".join((metadata or {}).get("booneops_actions") or []) or "-",
+        gw_slug,
+        err_codes_log,
+        artifact_count,
     )
 
     return BooneOpsBrokerTurnResult(assistant_text=text, context_state=ctx, metadata=metadata)

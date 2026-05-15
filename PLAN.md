@@ -176,7 +176,7 @@ Resolved:
 
 Open:
 
-- **Discord–Fetch behavioral parity (active program):** Employees still see **divergence** (typos, first-turn luck, report phrasing) between **Discord BooneOps** and **Fetch** even when both use BooneOps. Drive the nine-track program under **Next Recommended Session** (shared envelope, session rules, kill accidental forks, identical caps/tools, shared retry/error copy, automated parity harness, unified traces, explicit nondeterminism budget, written non-goals). Expect work in **`projects/booneops-bots`**, **OpenClaw gateway**, **Retriever `app/fetch`**, and **Discord ingest** if the contract must change there too.
+- **Discord–Fetch behavioral parity (active program):** Foundation in **`projects/booneops-bots`**: shared **`isRetrieverFetchBrokerRequest`**, neutral **non-Fetch** transcript labels, MCP **`source`** metadata, **`lib/parity-outcome.cjs`** + harness tests, **`docs/DISCORD_FETCH_PARITY.md`**. **LordTate `main` commits `6ac5568b` / `88f8e2e3`:** **`booneops.message.complete`** now emits **`traceV`** + **`parity*`** fields (conversation id, session source, route, action/error fingerprint); Retriever **`BooneOps broker turn`** log line adds **gateway model slug**, **error codes**, **artifact count** for grep alignment. **Still to do:** tier/timeouts vs Discord, user-facing error copy parity, golden / live harness runs, Discord ingest if the envelope must be built there, OpenClaw **`agent.wait`** model field if **“not recorded”** persists; **operator:** pull broker on Whitaker + restart LaunchAgent; Retriever prod via **Retriever** repo deploy when ready.
 - **Gateway structured model (residual):** Fetch shows **friendly name + raw slug** when the broker returns **`gatewayModelId`** from **structured** WebSocket payloads; if operators still see **“not recorded”**, extend **OpenClaw `agent.wait` / stream events** to emit a stable **`model` / `modelId`** field (no parsing answer text).
 - **Fetch pilot — `/docs` presentation:** Confirmed live pilot: answers still skew **raw / hard to skim**; **summary + source cards / cleanup** is the **next engineering priority** before any broad rollout (`FETCH_TRUST_PLAN.md` pilot section).
 - **OpenClaw gateway credential:** **Rotated / closed** (operator confirmation 2026-05-14); do not paste gateway tokens into chat or agent logs.
@@ -224,6 +224,14 @@ Keep **narrow pilot flags** unless a parity decision explicitly requires widenin
 7. **Unified observability** — One trace row per ask: **`requestId`**, session suffix, route, **structured model** when present, tool/stream counts, latency, outcome — enough to answer “why different?” without log archaeology.
 8. **Nondeterminism budget** — Document that **identical inputs can still branch**; set an **acceptable divergence threshold** (e.g. outcome class match rate) after 1–7 are done.
 9. **Intentional non-goals** — Short list of **Fetch-only** or **Discord-only** behaviors (Access, audit, HTML safety, download UX) that **will not** be matched so the program does not chase impossible parity.
+
+**Immediate next session (this wrap’s punch list):**
+
+1. **Tier parity** — Walk **`BOT_POLICIES`** / role handling next to whatever **Discord** sends (`botId` / `role`); document or fix mismatches; reconcile **broker gateway timeout** (~110s env default) vs **Retriever HTTP client** (115s).
+2. **Retriever ↔ broker error copy** — Map HTTP failures and broker **`errors[].code`** to the same **user-facing phrases** as Discord where that makes sense.
+3. **Harness on real responses** — Record or script golden **`POST /v1/booneops/message`** pairs; assert **fingerprint** equality or an **allowed diff** table (not prose).
+4. **Gateway model** — If **“not recorded”** still appears, add stable **`model` / `modelId`** on **OpenClaw** structured events (live gateway — outside this repo).
+5. **Deploy** — **Whitaker:** `git pull` + restart BooneOps broker so **`booneops.message.complete`** carries the new trace fields. **Retriever prod:** still via **Retriever** GitHub repo / **Windows runner** when you want the expanded **`BooneOps broker turn`** log line on **`bggol-vesko01`**.
 
 **Still on the runway (not the same program):** **`/docs` summary + source UX`**, **artifact lifecycle**, **PDF snapshot product decision**, **slow-turn progress UX**, runbooks in **`deploy/`** / **`docs/runbooks/`**, **`PARKED.md` OQ-10** RetrieverOps lane **after** parity foundations exist.
 

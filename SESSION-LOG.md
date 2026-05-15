@@ -4,6 +4,37 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-16 — Wrap: unified broker trace row + parity handoff
+
+**Goal (this wrap):** Continue **Discord–Fetch parity** — ship **one trace row** on every broker message completion and align **Retriever** operator logs; close the session with a clear **next-session punch list**.
+
+**What landed (LordTate workspace `main`):**
+
+- **`6ac5568b`** — Parity **foundation**: single **`retriever-fetch`** source check, honest **transcript labels** for non-Fetch gateway envelopes, correct **MCP caller `source`**, **`parity-outcome`** + harness tests, **`DISCORD_FETCH_PARITY.md`** (+ Retriever pointer).
+- **`88f8e2e3`** — **`traceSummaryForMessageComplete`** merged into **`booneops.message.complete`** JSON (`traceV`, `conversationId`, `sessionSource`, `routeLabel`, **`parity*`** fingerprint fields). Retriever **`app/fetch/booneops_broker.py`** **`BooneOps broker turn`** line adds **gateway model**, **error codes**, **artifact count** for cross-log grepping.
+
+**Verification:** **`npm test`** in **`projects/booneops-bots`** (98 passed); **`pytest`** in **`projects/retriever-rebuild`** (246 passed).
+
+**What we learned (plain English):** Matching Discord and Fetch is easier when **logs speak the same language** — one broker JSON line plus a Fetch line that carries the same **route, outcome shape, and correlation** beats comparing prose answers alone.
+
+**Next session:** See **`PLAN.md` → Next Recommended Session → Immediate next session`** (tier parity, error copy, golden harness, gateway model if needed, Whitaker broker pull + Retriever deploy when you want prod logs).
+
+**Retriever git:** This wrap updates **`PLAN.md`** + **`SESSION-LOG.md`** only in the workspace; other paths may still be dirty — run **`git status`** before shipping unrelated work.
+
+---
+
+## 2026-05-14 — Parity program: broker envelope + harness foundation
+
+**Goal:** Start executing the **Discord–Fetch parity** plan: single source for Fetch-stamped requests, honest transcript labels for non-Fetch broker posts, MCP observability metadata, structured outcome diff helper + tests, canonical docs.
+
+**What landed:** `projects/booneops-bots` — `lib/broker-request-source.cjs`, `lib/parity-outcome.cjs`, `test/parity-harness.test.cjs`, envelope transcript heading fix, MCP `source` from `sessionMetadata`; `docs/DISCORD_FETCH_PARITY.md`; `BROKER.md` link. `projects/retriever-rebuild` — `docs/DISCORD_FETCH_PARITY.md` pointer, `PLAN.md` open-item refresh.
+
+**Verification:** `npm test` in `booneops-bots` (97 passed); `pytest` in `retriever-rebuild` (246 passed).
+
+**Next:** Tier/timeouts/denials, unified trace row, Retriever retry/error copy sweep, golden prompts against live broker, OpenClaw gateway model telemetry if needed.
+
+---
+
 ## 2026-05-15 — Wrap: honest Fetch status + broker telemetry shipped; next = nine-track Discord parity
 
 **Goal (this wrap):** Close the **model/context footer honesty** work and **broker-side** grounding/logging; hand off with a **single next arc**: **Discord–Fetch behavioral parity** (nine engineering tracks).
