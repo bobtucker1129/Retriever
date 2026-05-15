@@ -940,6 +940,43 @@ a.fetch-row-action:hover {
   margin: 0;
 }
 
+.fetch-message.assistant .fetch-message-body h2 {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0.85rem 0 0.4rem;
+  padding-bottom: 0.25rem;
+}
+
+.fetch-message.assistant .fetch-message-body h2:first-child {
+  margin-top: 0;
+}
+
+.fetch-message.assistant .fetch-message-body h3 {
+  font-size: 0.98rem;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 0.65rem 0 0.3rem;
+}
+
+.fetch-message.assistant .fetch-message-body h3:first-child {
+  margin-top: 0;
+}
+
+.fetch-message.assistant .fetch-message-body blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--brand-blue) 55%, var(--color-border));
+  color: var(--color-muted);
+  margin: 0.4rem 0;
+  padding: 0.15rem 0 0.15rem 0.65rem;
+}
+
+.fetch-message.assistant .fetch-message-body hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 0.65rem 0;
+}
+
 /* Assistant markdown: compact pipe tables, scroll in narrow panes without blowing bubble layout */
 .fetch-message.assistant .fetch-message-body {
   overflow-x: auto;
