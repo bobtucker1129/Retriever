@@ -12,6 +12,8 @@ Recent **employee-facing Fetch** work improved **readable answers** (Markdown + 
 
 Latest pilot polish shipped **safe pipe tables**, **compact metadata/source cards**, **downloadable artifacts**, **context-aware report follow-ups**, **authenticated BooneOps artifact download proxying**, **local HTML exports**, and **styled Excel exports**. Live Chrome verified deployed Retriever **`8867ff6`** on **`BGGOL-VESKO01`** and BooneOps broker styled Excel commit **`8bd5db0e`** after broker restart.
 
+**2026-05-15 (evening):** Shipped **honest per-answer status** (friendly model + raw slug from broker when the gateway exposes structured **`gatewayModelId`**; **not recorded** when it does not), **thread load hint** (char estimate + “not a model context %” + conservative new-chat nudge), broker **`/docs` Switch grounding** prompt lines + **gateway telemetry** on broker JSON and **`booneops.message.complete`** logs, **`runGatewayPrompt`** return shape fix for report planners. **Retriever `35a5d45`** verified on production **`/version`**; **LordTate `278ec9a5`** broker on Whitaker **pulled + LaunchAgent kickstart**; operator reports pilot **“in a good place.”**
+
 **Do not widen flags** until **`/docs`-style answers** stay **summarized and well-attributed**; **`FETCH_TRUST_PLAN.md`** pilot notes stay the guide.
 
 Architecture artifacts remain authoritative for auth, Fetch trust, and runtime boundaries.
@@ -174,6 +176,8 @@ Resolved:
 
 Open:
 
+- **Discord–Fetch behavioral parity (active program):** Employees still see **divergence** (typos, first-turn luck, report phrasing) between **Discord BooneOps** and **Fetch** even when both use BooneOps. Drive the nine-track program under **Next Recommended Session** (shared envelope, session rules, kill accidental forks, identical caps/tools, shared retry/error copy, automated parity harness, unified traces, explicit nondeterminism budget, written non-goals). Expect work in **`projects/booneops-bots`**, **OpenClaw gateway**, **Retriever `app/fetch`**, and **Discord ingest** if the contract must change there too.
+- **Gateway structured model (residual):** Fetch shows **friendly name + raw slug** when the broker returns **`gatewayModelId`** from **structured** WebSocket payloads; if operators still see **“not recorded”**, extend **OpenClaw `agent.wait` / stream events** to emit a stable **`model` / `modelId`** field (no parsing answer text).
 - **Fetch pilot — `/docs` presentation:** Confirmed live pilot: answers still skew **raw / hard to skim**; **summary + source cards / cleanup** is the **next engineering priority** before any broad rollout (`FETCH_TRUST_PLAN.md` pilot section).
 - **OpenClaw gateway credential:** **Rotated / closed** (operator confirmation 2026-05-14); do not paste gateway tokens into chat or agent logs.
 - **Fetch artifact lifecycle:** Local HTML exports and broker artifacts now work through Retriever links, but retention/cleanup policy for generated HTML files and long-lived broker artifacts still needs an operator decision.
@@ -203,22 +207,25 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 ## Next Recommended Session
 
-**Pilot is useful — confirm Discord parity, then keep polishing docs trust before widening audience.**
+**Discord–Fetch parity program (nine tracks — owner-picked for next session).**
 
-Plain English: **Broker ↔ OpenClaw** on Whitaker now **reuses one gateway session per Fetch conversation**, so first-turn **`/docs`** answers should line up closer to **Discord** than before. **Next:** run the same **Switch / email approval** (or other vendor) question **side by side** in Discord and a **fresh** Fetch thread; if the first Fetch answer is still weaker, the fix is likely **prompt / tool / gateway** tuning on the OpenClaw side—not Retriever routing (sticky follow-ups and broker retry are already on **`main`**).
+Plain English: **Fetch and Discord both use BooneOps**, but **small differences** in history, envelope, fast paths, retries, and randomness still produce **different answers** for the same human intent. The next session is to **close that gap as far as engineering allows**, then measure what is left (LLM variance) honestly.
 
-Keep **narrow pilot flags** (**no** broad `FETCH_GENERAL_QUESTIONS_ENABLED`).
+Keep **narrow pilot flags** unless a parity decision explicitly requires widening (**`FETCH_GENERAL_QUESTIONS_ENABLED`** still does **not** fix **`/printsmith`** routing — it only unlocks **`general_candidate`**).
 
-Recommended scope:
+**Nine tracks (do all in the arc; order within the arc is negotiable):**
 
-1. **Parity check:** Discord vs Fetch **first message** quality after **`3eef1323`** broker deploy on Whitaker; note any remaining gap with one saved thread id.
-2. **Docs answer UX:** **summarized** replies and **clean source presentation** (**`FETCH_TRUST_PLAN.md`**, **`PRODUCT.md`**); short source cards only when real metadata exists.
-3. **Artifact lifecycle:** cleanup/retention for local HTML exports and broker artifacts; same-origin download links.
-4. **PDF expectation:** product decision on local “answer snapshot PDF” vs BooneOps-only PDFs.
-5. **Progress UX:** slow broker-turn feedback beyond the spinner (without full streaming scope creep).
-6. **Operator cadence (Cursor):** while building, **push Retriever `main` → wait deploy → test `https://retriever.boonegraphics.net`**; see **`memory/shared/seeds/2026-05-14-master-tate-cursor-session-discipline.md`**.
-7. **Keep runbooks:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/automated-feedback-bridge-windows.md`**, **`docs/runbooks/booneops-broker-fetch-windows.md`**, Whitaker **`docs/MACOS_BROKER_LAUNCHAGENT.md`**.
-8. **Defer:** **RetrieverOps** dedicated broker lane (**`PARKED.md` OQ-10**); widen pilot only after trust bar is met.
+1. **Single conversation contract** — One written spec for transcript shape, prior-turn cap, slash mapping, attachment rules, and metadata; one **shared builder** feeding both Discord and Fetch broker calls so envelopes are not hand-tweaked twice.
+2. **Session semantics** — Align **when** the gateway session is created, reset, or fork so Fetch thread behavior matches **Discord channel + user** continuity (today Fetch keys off **`conversationId`**; verify parity against Discord’s policy and adjust both sides if needed).
+3. **Kill accidental path splits** — Audit every **`retriever-fetch`** (or “source”) branch that changes MCP vs gateway vs fast path; each fork is either **removed**, **mirrored in Discord**, or **documented as intentional**.
+4. **Identical tools and denials** — Same **capability matrix**, **policy refusals**, **tool allowlist**, and **timeouts** for the same employee tier on both surfaces.
+5. **Standardized errors and retries** — Same **retry count**, **backoff**, and **operator-facing copy** for transient failures; same **correlation id** surfacing in logs and UI where applicable.
+6. **Parity harness** — Golden prompts (PrintSmith/DSF, **`/docs`**, typos, follow-ups) run **against both pipelines** with a **structured diff** (outcome class, artifact presence, tool counts — not byte-identical prose).
+7. **Unified observability** — One trace row per ask: **`requestId`**, session suffix, route, **structured model** when present, tool/stream counts, latency, outcome — enough to answer “why different?” without log archaeology.
+8. **Nondeterminism budget** — Document that **identical inputs can still branch**; set an **acceptable divergence threshold** (e.g. outcome class match rate) after 1–7 are done.
+9. **Intentional non-goals** — Short list of **Fetch-only** or **Discord-only** behaviors (Access, audit, HTML safety, download UX) that **will not** be matched so the program does not chase impossible parity.
+
+**Still on the runway (not the same program):** **`/docs` summary + source UX`**, **artifact lifecycle**, **PDF snapshot product decision**, **slow-turn progress UX**, runbooks in **`deploy/`** / **`docs/runbooks/`**, **`PARKED.md` OQ-10** RetrieverOps lane **after** parity foundations exist.
 
 ## Later Work
 

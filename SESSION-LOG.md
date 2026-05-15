@@ -4,6 +4,51 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-15 — Wrap: honest Fetch status + broker telemetry shipped; next = nine-track Discord parity
+
+**Goal (this wrap):** Close the **model/context footer honesty** work and **broker-side** grounding/logging; hand off with a **single next arc**: **Discord–Fetch behavioral parity** (nine engineering tracks).
+
+**What landed (engineering):**
+
+- **Retriever (`Retriever` repo `main`):** **`35a5d45`** — per-answer line uses **broker `gatewayModelId`** when present (**friendly + raw slug**); **not recorded** when absent; **thread load** metadata (char estimate, bucket, conservative new-chat hint) on BooneOps turns; **`/printsmith`** unchanged by **General Question** flag (still only **`general_candidate`**).
+- **LordTate workspace (`main`):** **`278ec9a5`** — **`retriever-docs-guidance`**: **`/docs`** Switch **grounding** prompt block for **`retriever-fetch` + `docs_candidate`**; **`broker-runtime`**: structured **`pickGatewayModelFromStructuredPayload`**, WebSocket **stream/chat counts**, **`gatewayModelId` / `gatewayRunId` / session suffix`** on broker JSON + **`createSuccessResponse`**; **`broker-server`**: **`booneops.message.complete`** carries **capped** telemetry; **`report-runtime`**: unwrap **`runGatewayPrompt`** object return. **Whitaker:** repo **already on** broker commit; **`launchctl kickstart`** **`com.boonegraphics.booneops-broker`**; **`/health`** OK on **3487** and **3488** after brief startup delay.
+- **Deploy:** GitHub Actions **Deploy RetrieverRebuild** run **25895650494** **success**; production **`/version`** shows **`gitSha`** prefix **`35a5d45`**, host **`BGGOL-VESKO01`**.
+
+**What we learned (plain English):**
+
+- **General Question On** does **not** help **`/printsmith`** typos — that flag only unlocks **`general_candidate`** to the broker; **PrintSmith** routes already use BooneOps when the broker is on.
+- **“Copy the same settings”** fails because parity is a **chain** (history, envelope, fast paths, retries, randomness), not one knob.
+- Operator **feel**: pilot is **“in a really good place”**; remaining pain is **Discord vs Fetch variance**, not the footer lie.
+
+**Next session (owner-picked):** Execute the **nine-track Discord–Fetch parity program** spelled in **`PLAN.md` → Next Recommended Session`** (shared contract, session semantics, kill forks, identical tools/denials, shared errors/retries, parity harness, unified traces, nondeterminism budget, intentional non-goals).
+
+**Retriever git:** **`PLAN.md`** + **`SESSION-LOG.md`** updated this wrap; other local noise may exist — next agent **`git status`** in **`projects/retriever-rebuild`** before shipping.
+
+---
+
+## 2026-05-15 — Wrap: Discord vs Fetch first-turn capture, wrong element repro, next fixes
+
+**Goal (this session arc):** Prove **first-turn** Fetch **`/docs`** vs **Discord `#general`** after conv-scoped gateway session; capture **broker + OpenClaw** evidence; line up **next engineering**.
+
+**What we learned (plain English):**
+
+- **Side-by-side in Chrome:** DevTools MCP can drive **Retriever** and **Discord web** by **switching tabs**; not one fused split view unless both are in one browser layout.
+- **Paired capture (no operator paste):** New Fetch thread **`fb2ab908-2bcd-4b96-8ccf-ea2d0b86bae7`**, single ask: `/docs Are there any switch elements that let you approve a step via email?` **First answer was confidently wrong** — invented **“Approve via Email” / “Approval submit point”** (not **Checkpoint via mail**). Discord BooneOps on the same question named **Checkpoint via mail** correctly.
+- **Broker (Whitaker):** `projects/booneops-bots/logs/broker-node.log` → **`requestId` `3b13c5a0-5ef3-4b4a-930c-dca216dd12c9`**, **`elapsedMs` ~24508**, **`ok` true** for that turn.
+- **OpenClaw gateway (`~/.openclaw/logs/gateway.log`):** Same wall-clock window shows **`useResume=false session=none`**, **`claude-sonnet-4-6` via `claude-cli`**, **`promptChars=3267`**, **`rawLines=55`**, then the wrong answer text logged. Earlier **same day** another cold Fetch run (`19:48` block) with **same `promptChars=3267`** produced a **correct Checkpoint via Mail** answer (**`rawLines=179`**) — so failure is **not** “Fetch is always cold”; it is **unreliable first-turn grounding** / variance.
+- **UI honesty gap:** Fetch footer still shows **“Model: Opus 4.7”** while gateway runs **Sonnet**; **context percent** stays **0%** in UI — both mislead operators about **when to start a new chat**.
+
+**What landed in repo earlier this arc (reminder):** LordTate **`main`** broker commit **`d8785870`** — extra **Discord parity** lines in `projects/booneops-bots/lib/retriever-docs-guidance.cjs` (anti title-dump); **`pytest`** broker-runtime tests green.
+
+**Next session (owner-picked):**
+
+1. **Truthful status line:** show **actual model / provider** from broker or gateway metadata when available; replace hard-coded Opus label where wrong; add a **defensible context-window hint** (estimate from message count + rough chars, or broker `session_context` if exposed) so “0% forever” is not the only story.
+2. **Broker / gateway grounding:** small **prompt + logging** change with **tests** — e.g. require **retrieved element names** before asserting, log **tool turn counts** / session flags next to **`requestId`** — Tier 1 in **`projects/booneops-bots`**.
+
+**Retriever git:** wrap does not imply commit; workspace may carry unrelated dirty paths — next agent should **`git status`** in **`projects/retriever-rebuild`** before shipping.
+
+---
+
 ## 2026-05-14 — Wrap: Fetch broker parity, gateway session continuity, operator defaults
 
 **Goal (this session arc):** Fetch should feel like **Discord BooneOps** for docs and shop questions—**follow-ups** stay on the broker lane, **errors** are clearer, and **first answers** use the same kind of OpenClaw continuity Discord gets.
