@@ -162,10 +162,14 @@ def assistant_body_html(plain_text: str) -> Markup:
 
 def fetch_assistant_body_display(m: FetchMessageRecord, _settings: AppSettings) -> Markup:
     """Assistant bubble HTML: strip duplicate Markdown Sources when metadata cards exist (docs route)."""
-    from app.fetch.booneops_broker import strip_redundant_markdown_sources_section
+    from app.fetch.booneops_broker import (
+        scrub_gateway_host_file_paths_from_employee_fetch_text,
+        strip_redundant_markdown_sources_section,
+    )
 
     text = m.content or ""
     if m.role == "assistant":
+        text = scrub_gateway_host_file_paths_from_employee_fetch_text(text)
         route = (m.route_key or "").strip()
         meta = m.metadata if isinstance(m.metadata, dict) else {}
         cards = meta.get("source_cards")

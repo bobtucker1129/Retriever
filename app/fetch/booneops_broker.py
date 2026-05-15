@@ -557,6 +557,41 @@ def _append_artifact_section(body: str, data: dict[str, Any]) -> str:
     return "\n".join(fragments).strip()
 
 
+_RE_MEDIA_FULL_LINE = re.compile(r"(?im)^\s*MEDIA:\S*\s*$")
+_RE_MEDIA_INLINE = re.compile(r"\bMEDIA:\S+", re.IGNORECASE)
+_RE_FILE_URI = re.compile(r"\bfile://[^\s)>`'\"]+", re.IGNORECASE)
+_RE_UNIX_USERS_EXPORT_PATH = re.compile(
+    r"/Users/[^\s\n<'\"`]+\.(?:xlsx|xlsm|xls|csv|pdf|html)\b",
+    re.IGNORECASE,
+)
+_RE_UNIX_HOME_EXPORT_PATH = re.compile(
+    r"/home/[^\s\n<'\"`]+\.(?:xlsx|xlsm|xls|csv|pdf|html)\b",
+    re.IGNORECASE,
+)
+_RE_WIN_USERS_EXPORT_PATH = re.compile(
+    r"(?:[A-Za-z]:\\Users\\[^\s\n<'\"`]+\.(?:xlsx|xlsm|xls|csv|pdf|html))\b",
+    re.IGNORECASE,
+)
+
+
+def scrub_gateway_host_file_paths_from_employee_fetch_text(text: str) -> str:
+    """Remove OpenClaw ``MEDIA:`` paths and obvious gateway-host absolute paths from assistant prose.
+
+    Employees only have Retriever same-origin download links (artifact cards). Paths on the
+    operator or gateway machine are useless and leak host layout.
+    """
+    raw = text or ""
+    out = _RE_MEDIA_FULL_LINE.sub("", raw)
+    out = _RE_MEDIA_INLINE.sub("", out)
+    out = _RE_FILE_URI.sub("", out)
+    out = _RE_UNIX_USERS_EXPORT_PATH.sub("", out)
+    out = _RE_UNIX_HOME_EXPORT_PATH.sub("", out)
+    out = _RE_WIN_USERS_EXPORT_PATH.sub("", out)
+    out = re.sub(r"[ \t]+\n", "\n", out)
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out
+
+
 def strip_redundant_markdown_sources_section(body: str, source_cards: object) -> str:
     """Remove a trailing Markdown **Sources** section when ``source_cards`` will show the same links.
 
@@ -680,6 +715,18 @@ def _merge_gateway_telemetry_into_metadata(
     return merged
 
 
+def _finalize_employee_visible_assistant_text(
+    body: str, *, has_downloadable_artifacts: bool
+) -> str:
+    before = (body or "").strip()
+    cleaned = scrub_gateway_host_file_paths_from_employee_fetch_text(before)
+    if not cleaned.strip():
+        if has_downloadable_artifacts:
+            return "Your file is ready — use the Download link below."
+        return cleaned
+    return cleaned
+
+
 def build_broker_message_presentation(
     data: dict[str, Any], route_label: str
 ) -> tuple[str, dict[str, Any]]:
@@ -695,6 +742,7 @@ def build_broker_message_presentation(
                 msg = str(e.get("message") or "").strip()
                 break
         if msg:
+            msg = scrub_gateway_host_file_paths_from_employee_fetch_text(msg)
             return (
                 "BooneOps policy blocked this request.\n\n"
                 f"{msg}\n\n"
@@ -718,6 +766,7 @@ def build_broker_message_presentation(
             elif e:
                 parts.append(str(e))
         body = "\n".join(parts) if parts else "BooneOps could not complete this turn."
+        body = scrub_gateway_host_file_paths_from_employee_fetch_text(body)
         return (
             f"{body}\n\n"
             "Your message was saved. You can try again or rephrase the question."
@@ -751,6 +800,10 @@ def build_broker_message_presentation(
         structured = _structured_context_metadata_from_broker(data)
         if structured:
             metadata.update(structured)
+        has_dl = any(isinstance(c, dict) and c.get("downloadPath") for c in artifact_cards)
+        assistant_text = _finalize_employee_visible_assistant_text(
+            assistant_text, has_downloadable_artifacts=has_dl
+        )
         return assistant_text, metadata
 
     lines = [raw_message]
@@ -779,6 +832,10 @@ def build_broker_message_presentation(
     structured = _structured_context_metadata_from_broker(data)
     if structured:
         metadata.update(structured)
+    has_dl = any(isinstance(c, dict) and c.get("downloadPath") for c in artifact_cards)
+    assistant_text = _finalize_employee_visible_assistant_text(
+        assistant_text, has_downloadable_artifacts=has_dl
+    )
     return assistant_text, metadata
 
 

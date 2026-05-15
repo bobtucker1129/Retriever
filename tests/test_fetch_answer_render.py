@@ -102,6 +102,8 @@ def test_build_assistant_status_line_booneops_without_gateway_model() -> None:
     )
     line = build_assistant_status_line(m, s)
     assert "Model: not recorded" in line
+
+
 def test_assistant_body_html_allows_markdown_strips_scripts() -> None:
     html = assistant_body_html(
         "**Hi**\n\n- one\n- two\n\n<script>alert(1)</script>"
@@ -110,6 +112,26 @@ def test_assistant_body_html_allows_markdown_strips_scripts() -> None:
     assert "<strong>Hi</strong>" in text
     assert "<ul>" in text and "<li>" in text
     assert "<script>" not in text.lower()
+
+
+def test_fetch_assistant_body_display_strips_gateway_media_paths_from_stored_content() -> None:
+    s = _settings()
+    m = FetchMessageRecord(
+        message_id="m1",
+        conversation_id="c1",
+        user_id=1,
+        role="assistant",
+        content="See MEDIA:/Users/o/workspace/a.xlsx below.",
+        route_key="printsmith_candidate",
+        model_label=None,
+        context_percent=0,
+        context_state="booneops",
+        metadata={},
+    )
+    html = str(fetch_assistant_body_display(m, s))
+    assert "MEDIA:" not in html
+    assert "/Users/o" not in html
+    assert "See" in html
 
 
 def test_assistant_body_html_renders_pipe_table_with_safe_structure() -> None:

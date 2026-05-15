@@ -25,6 +25,7 @@ from app.fetch.booneops_broker import (
     map_user_to_broker_principal,
     normalize_and_validate_booneops_artifact_id,
     sanitized_broker_error_summary,
+    scrub_gateway_host_file_paths_from_employee_fetch_text,
     sign_body_hmac_sha256,
     strip_redundant_markdown_sources_section,
 )
@@ -1004,3 +1005,45 @@ def test_build_broker_message_presentation_canonical_download_path_for_artifacts
     )
     expect = f"/fetch/artifacts/broker/{uid}"
     assert metadata["artifacts"][0]["downloadPath"] == expect
+
+
+def test_scrub_gateway_host_file_paths_removes_media_and_users_export_paths() -> None:
+    raw = (
+        "Here's your file:\n\n"
+        "MEDIA:/Users/someone/Whitaker/workspace/outsourced-invoices.xlsx\n\n"
+        "Styled headers.\n"
+        "Also file:///tmp/z.pdf ok.\n"
+    )
+    out = scrub_gateway_host_file_paths_from_employee_fetch_text(raw)
+    assert "MEDIA:" not in out
+    assert "/Users/someone" not in out
+    assert "file://" not in out
+    assert "Styled headers." in out
+
+
+def test_scrub_gateway_host_file_paths_removes_windows_users_exports() -> None:
+    raw = "Workbook: C:\\Users\\Dev\\Documents\\wb.xlsx — done."
+    out = scrub_gateway_host_file_paths_from_employee_fetch_text(raw)
+    assert "Users\\Dev" not in out
+    assert "done" in out.lower()
+
+
+def test_build_broker_message_presentation_strips_local_media_paths_non_docs() -> None:
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": (
+                "Here's your styled Excel file:\n\n"
+                "MEDIA:/Users/dev/workspace/outsourced-invoices.xlsx\n\n"
+                "Bold headers."
+            ),
+            "artifacts": [{"filename": "outsourced-invoices.xlsx", "artifactId": uid}],
+        },
+        "printsmith_candidate",
+    )
+    assert "MEDIA:" not in text
+    assert "/Users/dev" not in text
+    assert "Bold headers." in text
+    assert "outsourced-invoices.xlsx" in text
+    assert metadata["artifacts"][0]["downloadPath"] == f"/fetch/artifacts/broker/{uid}"
