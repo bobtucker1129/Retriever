@@ -200,6 +200,7 @@ def build_broker_payload(
     prior_messages: list[dict[str, str]],
     session_metadata_extra: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    """Wire JSON key order matches ``projects/booneops-bots/lib/broker-message-build.cjs``."""
     caps = sorted(user.capabilities) if user.capabilities else []
     session_metadata: dict[str, Any] = {
         "source": "retriever-fetch",
@@ -210,7 +211,8 @@ def build_broker_payload(
         "retrieverDiscordAnswerParity": True,
     }
     if session_metadata_extra:
-        for key, value in session_metadata_extra.items():
+        for key in sorted(session_metadata_extra.keys()):
+            value = session_metadata_extra[key]
             if value is not None:
                 session_metadata[key] = value
     return {

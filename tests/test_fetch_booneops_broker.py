@@ -19,6 +19,7 @@ from app.fetch.booneops_broker import (
     augment_fetch_broker_user_message_for_turn,
     broker_message_url,
     build_broker_message_presentation,
+    build_broker_payload,
     call_booneops_broker,
     format_assistant_text_from_broker_json,
     map_user_to_broker_principal,
@@ -904,6 +905,43 @@ def test_safe_fetch_download_href_accepts_root_paths_only() -> None:
     assert safe_fetch_download_href("/ok\\windows") is None
     assert safe_fetch_download_href("/ok\tbad") is None
     assert safe_fetch_download_href("/ok\x0bbad") is None
+
+
+def test_build_broker_payload_key_order_matches_booneops_canonical_contract() -> None:
+    user = _make_user()
+    payload = build_broker_payload(
+        bot_id="booneops.production",
+        role="production",
+        user=user,
+        conversation_id="conv-1",
+        user_message="hi",
+        request_id="r1",
+        route_label="docs_candidate",
+        prior_messages=[],
+        session_metadata_extra={"zebra": 1, "alpha": 2},
+    )
+    assert list(payload.keys()) == [
+        "botId",
+        "userId",
+        "displayName",
+        "role",
+        "conversationId",
+        "message",
+        "requestId",
+        "timestamp",
+        "priorMessages",
+        "sessionMetadata",
+    ]
+    sm = payload["sessionMetadata"]
+    assert list(sm.keys()) == [
+        "source",
+        "routeLabel",
+        "booneopsLevel",
+        "retrieverCapabilities",
+        "retrieverDiscordAnswerParity",
+        "alpha",
+        "zebra",
+    ]
 
 
 def test_normalize_and_validate_booneops_artifact_id() -> None:

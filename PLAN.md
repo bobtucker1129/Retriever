@@ -207,31 +207,26 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 
 ## Next Recommended Session
 
-**Discord–Fetch parity program (nine tracks — owner-picked for next session).**
+**Discord–Fetch parity — “same answer class as Discord,” not just shared logs.**
 
-Plain English: **Fetch and Discord both use BooneOps**, but **small differences** in history, envelope, fast paths, retries, and randomness still produce **different answers** for the same human intent. The next session is to **close that gap as far as engineering allows**, then measure what is left (LLM variance) honestly.
+Plain English: **instrumentation and calmer errors helped**, but **live Fetch** can still **miss on the first `/docs` turn** (example: Enfocus Review story first, **Checkpoint via mail** only after pushback) while **Discord** was **right the first time**. **PrintSmith** can still show **generic query failed** with **footer copy that does not match the failure**. The next arc is to treat **one real Discord broker POST + one real assistant reply** as the **golden contract**, then **remove every fork** (builder, session key, MCP vs gateway, envelope extras, model policy) until **both surfaces send the same pipeline inputs** and a **shadow harness** proves **outcome-class** match before UI polish.
 
 Keep **narrow pilot flags** unless a parity decision explicitly requires widening (**`FETCH_GENERAL_QUESTIONS_ENABLED`** still does **not** fix **`/printsmith`** routing — it only unlocks **`general_candidate`**).
 
-**Nine tracks (do all in the arc; order within the arc is negotiable):**
+**Owner eight-step program (next sessions — execute in order):**
 
-1. **Single conversation contract** — One written spec for transcript shape, prior-turn cap, slash mapping, attachment rules, and metadata; one **shared builder** feeding both Discord and Fetch broker calls so envelopes are not hand-tweaked twice.
-2. **Session semantics** — Align **when** the gateway session is created, reset, or fork so Fetch thread behavior matches **Discord channel + user** continuity (today Fetch keys off **`conversationId`**; verify parity against Discord’s policy and adjust both sides if needed).
-3. **Kill accidental path splits** — Audit every **`retriever-fetch`** (or “source”) branch that changes MCP vs gateway vs fast path; each fork is either **removed**, **mirrored in Discord**, or **documented as intentional**.
-4. **Identical tools and denials** — Same **capability matrix**, **policy refusals**, **tool allowlist**, and **timeouts** for the same employee tier on both surfaces.
-5. **Standardized errors and retries** — Same **retry count**, **backoff**, and **operator-facing copy** for transient failures; same **correlation id** surfacing in logs and UI where applicable.
-6. **Parity harness** — Golden prompts (PrintSmith/DSF, **`/docs`**, typos, follow-ups) run **against both pipelines** with a **structured diff** (outcome class, artifact presence, tool counts — not byte-identical prose).
-7. **Unified observability** — One trace row per ask: **`requestId`**, session suffix, route, **structured model** when present, tool/stream counts, latency, outcome — enough to answer “why different?” without log archaeology.
-8. **Nondeterminism budget** — Document that **identical inputs can still branch**; set an **acceptable divergence threshold** (e.g. outcome class match rate) after 1–7 are done.
-9. **Intentional non-goals** — Short list of **Fetch-only** or **Discord-only** behaviors (Access, audit, HTML safety, download UX) that **will not** be matched so the program does not chase impossible parity.
+1. **Prove what “Discord” is on the wire** — Capture **one real Discord BooneOps turn**: full redacted **`POST /v1/booneops/message`** JSON (body only) **plus** the **assistant text Discord showed**. That pair is the **contract**, not vibes or parity flags alone.
+2. **Same POST from Fetch** — **One shared builder** for Discord and Fetch: same field order, defaults, **`botId` / `role`**, **`priorMessages`** shape and cap, slash handling, and **`sessionMetadata`** keys that affect routing (`source`, `routeLabel`, parity toggles, docs hints).
+3. **Kill intentional path splits** — Any **`if Fetch then X, if Discord then Y`** (MCP fast path, different envelope regions, extra grounding blocks, different **sessionKey** rules) is a fork. **Match Discord’s fork** for the same message class, or **change Discord** so both use **one** pipeline.
+4. **Gateway session identity** — Align Fetch’s **`conversationId`** (or whatever Retriever sends) to **Discord’s real continuity key** (e.g. channel + user) so **tool memory** matches; **do not approximate** if first-turn answers depend on it.
+5. **Identical model stack** — Same **agent id**, **model policy**, **tool allowlist**, **temperature / top‑p** (whatever the gateway enforces), and **system + envelope** after the shared builder. Strip Fetch-only prompt splices **or** add the **same** splices to Discord.
+6. **Same retrieval and tools** — Same **tools**, **indexes**, and **call order** as Discord; different retrieval ⇒ different answers even with identical prompts.
+7. **Shadow parity harness (continuous)** — Fixed employee prompts (including **`/docs`** email checkpoint); run **Discord path** and **Fetch path** through the unified builder; compare **outcome class** (route, tools, errors, artifacts) then spot-check prose; set an **acceptable match threshold**; accept **wording** variance.
+8. **UI copy last** — Status lines, **“not recorded,”** error cards: trust-critical, but **not** the lever that makes first-turn answers match Discord if steps **1–7** are still split.
 
-**Immediate next session (this wrap’s punch list):**
+**Reference (older nine-track checklist)** — Still valid as a **map**, but the **eight steps above** are the **execution spine** for the next few sessions: `projects/booneops-bots/docs/DISCORD_FETCH_PARITY.md`, **`BROKER.md`**, Retriever **`app/fetch/booneops_broker.py`**, OpenClaw gateway host for **model telemetry** if **“not recorded”** persists.
 
-1. **Tier parity** — Walk **`BOT_POLICIES`** / role handling next to whatever **Discord** sends (`botId` / `role`); document or fix mismatches; reconcile **broker gateway timeout** (~110s env default) vs **Retriever HTTP client** (115s).
-2. **Retriever ↔ broker error copy** — Map HTTP failures and broker **`errors[].code`** to the same **user-facing phrases** as Discord where that makes sense.
-3. **Harness on real responses** — Record or script golden **`POST /v1/booneops/message`** pairs; assert **fingerprint** equality or an **allowed diff** table (not prose).
-4. **Gateway model** — If **“not recorded”** still appears, add stable **`model` / `modelId`** on **OpenClaw** structured events (live gateway — outside this repo).
-5. **Deploy** — **Whitaker:** `git pull` + restart BooneOps broker so **`booneops.message.complete`** carries the new trace fields. **Retriever prod:** still via **Retriever** GitHub repo / **Windows runner** when you want the expanded **`BooneOps broker turn`** log line on **`bggol-vesko01`**.
+**Deploy reminders (when you cut releases):** **Whitaker** broker **`git pull` + `launchctl kickstart`** after broker commits; **Retriever prod** via **Retriever** repo **`main`** / **Windows runner** on **`bggol-vesko01`**.
 
 **Still on the runway (not the same program):** **`/docs` summary + source UX`**, **artifact lifecycle**, **PDF snapshot product decision**, **slow-turn progress UX**, runbooks in **`deploy/`** / **`docs/runbooks/`**, **`PARKED.md` OQ-10** RetrieverOps lane **after** parity foundations exist.
 

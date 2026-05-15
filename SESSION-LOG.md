@@ -4,6 +4,23 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-17 — Wrap: parity spine reset (golden Discord contract + kill forks)
+
+**Goal (this wrap):** Close the session after **live pilot feedback**: Fetch **`/docs`** first answers can still **diverge hard from Discord** (example: **Enfocus Review** story first, **Checkpoint via mail** only after operator pushback); **PrintSmith** can still show **generic failure** with **footer that does not match the error**. **Whitaker** broker **`launchctl kickstart`** + **`/health` 200** confirmed after broker updates.
+
+**What landed (earlier in this arc — repos):**
+
+- **LordTate `main`:** Broker **parity docs**, **golden fingerprint fixtures**, **`BROKER.md`** timeout note (**`a2bceccf`**); **Fetch `/docs` grounding** tighten against invented elements + meta-preface (**`e8565fad`**).
+- **Retriever `main`:** **Transport error copy** centralized (**`broker_user_visible_copy`**), **`booneops_broker`** wiring, tests, **`docs/DISCORD_FETCH_PARITY.md`** pointer, **PLAN/SESSION** updates (**`09a097a`**).
+
+**What we learned (plain English):** Shared **logs and calmer HTTP errors** do not equal **same first-turn answer**. **Discord is defined by the exact broker POST + the pipeline behind it**; until Fetch sends the **same inputs** through the **same forks** (MCP vs gateway, session key, envelope, model policy, retrieval), **operators will still feel “old Fetch.”** **UI polish is last** once outcome-class match is proven.
+
+**Next session:** **`PLAN.md` → Next Recommended Session`** — owner **eight-step program**: (1) capture **one real Discord** redacted **`POST /v1/booneops/message` + assistant text**; (2) **one shared builder** with Discord; (3) **remove path splits** or align Discord; (4) **session key parity**; (5) **identical model stack**; (6) **same tools/retrieval**; (7) **shadow harness** on fixed prompts; (8) **UI copy last**. Run **Retriever test-readiness preflight** before code.
+
+**Retriever git (nested repo):** This wrap updates **`PLAN.md`** + **`SESSION-LOG.md`** in **`projects/retriever-rebuild`**; run **`git status`** there and in **LordTate workspace** before unrelated commits.
+
+---
+
 ## 2026-05-16 — Wrap: unified broker trace row + parity handoff
 
 **Goal (this wrap):** Continue **Discord–Fetch parity** — ship **one trace row** on every broker message completion and align **Retriever** operator logs; close the session with a clear **next-session punch list**.
