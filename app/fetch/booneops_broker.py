@@ -652,6 +652,22 @@ def _structured_context_metadata_from_broker(data: dict[str, Any]) -> dict[str, 
     return meta
 
 
+def _merge_gateway_telemetry_into_metadata(
+    metadata: Optional[dict[str, Any]], data: dict[str, Any]
+) -> Optional[dict[str, Any]]:
+    """Persist OpenClaw gateway identifiers from broker JSON (structured fields only)."""
+    gw_model = _safe_text(data.get("gatewayModelId"), max_len=120)
+    gw_run = _safe_text(data.get("gatewayRunId"), max_len=80)
+    if not gw_model and not gw_run:
+        return metadata
+    merged = dict(metadata) if metadata else {}
+    if gw_model:
+        merged["gateway_model_id"] = gw_model
+    if gw_run:
+        merged["gateway_run_id"] = gw_run
+    return merged
+
+
 def build_broker_message_presentation(
     data: dict[str, Any], route_label: str
 ) -> tuple[str, dict[str, Any]]:
@@ -1121,6 +1137,7 @@ def call_booneops_broker(
     if response.status_code >= 400:
         text, metadata = build_broker_message_presentation(data, route_label)
         metadata = _metadata_with_booneops_actions(metadata, data)
+        metadata = _merge_gateway_telemetry_into_metadata(metadata, data)
         if text.strip():
             return BooneOpsBrokerTurnResult(
                 assistant_text=text, context_state="booneops_error", metadata=metadata
@@ -1135,6 +1152,7 @@ def call_booneops_broker(
 
     text, metadata = build_broker_message_presentation(data, route_label)
     metadata = _metadata_with_booneops_actions(metadata, data)
+    metadata = _merge_gateway_telemetry_into_metadata(metadata, data)
     errs = data.get("errors") if isinstance(data.get("errors"), list) else []
     ok = bool(data.get("ok", True))
     policy = any(

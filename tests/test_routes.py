@@ -887,7 +887,8 @@ def test_fetch_post_ask_printsmith_calls_broker_when_enabled(monkeypatch) -> Non
 
     page = client.get(response.headers["location"])
     assert page.status_code == 200
-    assert "Context: 0% ready" in page.text
+    assert "Model: not recorded" in page.text
+    assert "Thread load:" in page.text
     assert "Anchored BooneOps reply text." in page.text
 
 

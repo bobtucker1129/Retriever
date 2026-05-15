@@ -469,6 +469,44 @@ def test_call_booneops_broker_sends_signature_headers(monkeypatch) -> None:
     assert "unit-test-hmac" not in result.assistant_text
 
 
+def test_call_booneops_broker_metadata_includes_gateway_telemetry(monkeypatch) -> None:
+    settings = _make_settings()
+    user = _make_user()
+
+    def fake_post(url: str, *, content: bytes, headers: dict[str, str], timeout: float):
+        class Resp:
+            status_code = 200
+            content = json.dumps(
+                {
+                    "ok": True,
+                    "message": "Hello",
+                    "errors": [],
+                    "gatewayModelId": "claude-sonnet-4-6",
+                    "gatewayRunId": "run-abc-123",
+                    "actionsTaken": [{"type": "execution.forwarded", "status": "executed"}],
+                }
+            ).encode()
+
+            def json(self):
+                return json.loads(self.content.decode())
+
+        return Resp()
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_http_post", fake_post)
+    result = call_booneops_broker(
+        settings,
+        user=user,
+        conversation_id="conv-1",
+        user_message="What is DSF?",
+        route_label="printsmith_candidate",
+        request_id="req-gw",
+        prior_messages=[],
+        http_post=None,
+    )
+    assert result.metadata.get("gateway_model_id") == "claude-sonnet-4-6"
+    assert result.metadata.get("gateway_run_id") == "run-abc-123"
+
+
 def test_call_booneops_broker_payload_strips_forced_slash_prefix(monkeypatch) -> None:
     settings = _make_settings()
     user = _make_user()

@@ -27,6 +27,7 @@ from app.fetch.answer_render import (
     assistant_body_html,
     build_assistant_status_line,
     fetch_assistant_body_display,
+    fetch_thread_load_metadata_for_turn,
 )
 from app.fetch.safe_links import safe_fetch_download_href
 from app.fetch.booneops_broker import (
@@ -476,8 +477,20 @@ async def ask_in_conversation(
         )
         assistant_text = broker_result.assistant_text
         context_state = broker_result.context_state
-        model_label = settings.model_default
         assistant_metadata = broker_result.metadata
+        if assistant_metadata is None:
+            assistant_metadata = {}
+        else:
+            assistant_metadata = dict(assistant_metadata)
+        assistant_metadata.update(
+            fetch_thread_load_metadata_for_turn(prior_records, cleaned, assistant_text)
+        )
+        slug = str(assistant_metadata.get("gateway_model_id") or "").strip()
+        model_label = (
+            slug
+            if slug
+            else (None if context_state in ("booneops", "booneops_error") else settings.model_default)
+        )
     else:
         assistant_text = build_fetch_stub_reply(route)
         context_state = "stub"
