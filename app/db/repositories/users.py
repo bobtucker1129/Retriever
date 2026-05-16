@@ -165,6 +165,7 @@ class UserRepository:
                 FROM users u
                 LEFT JOIN roles r ON r.id = u.role_id
                 WHERE u.status IN ('pending', 'active', 'suspended', 'blocked')
+                  AND COALESCE(u.cloudflare_email, u.email, u.username) IS NOT NULL
                 ORDER BY FIELD(u.status, 'pending', 'active', 'suspended', 'blocked'),
                          u.id ASC
                 """
@@ -532,7 +533,8 @@ class UserRepository:
 
     def _record_from_row(self, row) -> UserRecord:
         user_id = int(row["id"])
-        email = normalize_email(row.get("cloudflare_email") or row.get("email") or row.get("username"))
+        identity_email = row.get("cloudflare_email") or row.get("email") or row.get("username")
+        email = normalize_email(identity_email) if identity_email else f"user-{user_id}@unknown.local"
         raw_seen = row.get("last_seen_at")
         last_seen: Optional[datetime] = None
         if raw_seen is not None and not isinstance(raw_seen, datetime):

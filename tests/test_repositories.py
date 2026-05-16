@@ -103,3 +103,21 @@ def test_user_repository_uses_email_for_legacy_rows_without_cloudflare_email() -
     assert user is not None
     assert user.email == "state@boonegraphics.net"
     assert user.display_name == "State"
+
+
+def test_user_repository_handles_legacy_rows_without_any_email() -> None:
+    db = FakeDb()
+    db.add_user(
+        email="blank@boonegraphics.net",
+        display_name="",
+        status="active",
+    )
+    row = db.users["blank@boonegraphics.net"]
+    row["cloudflare_email"] = None
+    row["email"] = None
+    row["username"] = None
+
+    user = UserRepository(db.connection).get_by_id(row["id"])
+
+    assert user is not None
+    assert user.email == f"user-{row['id']}@unknown.local"
