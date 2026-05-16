@@ -14,6 +14,8 @@ ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 _DEFAULT_TIMEOUT_SECONDS = 45.0
 _DEFAULT_MAX_TOKENS = 1200
+_GENERAL_CHAT_ROUTE_KEYS = frozenset({"general_candidate", "local", "unknown"})
+_GENERAL_CHAT_ASSISTANT_STATES = frozenset({"llm", "ready"})
 
 HttpPostFn = Callable[..., Any]
 
@@ -76,6 +78,17 @@ def call_general_conversation_llm(
         "max_tokens": _DEFAULT_MAX_TOKENS,
         "system": _general_chat_system_prompt(),
         "messages": _anthropic_messages_from_history(prior_records, user_message),
+        "tools": [
+            {
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "user_location": {
+                    "type": "approximate",
+                    "country": "US",
+                    "timezone": "America/New_York",
+                },
+            }
+        ],
     }
     headers = {
         "anthropic-version": ANTHROPIC_VERSION,
@@ -130,6 +143,11 @@ def call_general_conversation_llm(
         for key in ("input_tokens", "output_tokens"):
             if isinstance(usage.get(key), int):
                 metadata[f"general_llm_{key}"] = usage[key]
+        server_tool_use = usage.get("server_tool_use")
+        if isinstance(server_tool_use, dict):
+            web_search_requests = server_tool_use.get("web_search_requests")
+            if isinstance(web_search_requests, int):
+                metadata["general_llm_web_search_requests"] = web_search_requests
     return GeneralLlmTurnResult(
         assistant_text=text,
         context_state="llm",
@@ -147,6 +165,8 @@ def _anthropic_messages_from_history(
     messages: list[dict[str, str]] = []
     for rec in prior_records[-limit:]:
         if rec.role not in {"user", "assistant"}:
+            continue
+        if not _is_general_chat_history_record(rec):
             continue
         text = (rec.content or "").strip()
         if not text:
@@ -189,15 +209,25 @@ def _normalize_provider(provider: Optional[str]) -> str:
     return (provider or "").strip().lower()
 
 
+def _is_general_chat_history_record(rec: FetchMessageRecord) -> bool:
+    route_key = (rec.route_key or "").strip()
+    if route_key not in _GENERAL_CHAT_ROUTE_KEYS:
+        return False
+    if rec.role == "user":
+        return True
+    state = (rec.context_state or "").strip().lower()
+    return state in _GENERAL_CHAT_ASSISTANT_STATES
+
+
 def _general_chat_system_prompt() -> str:
     return (
         "You are Fetch, a friendly assistant inside Boone Graphics' Retriever app. "
         "For ordinary conversation, answer naturally and helpfully like Claude. "
-        "Do not claim you used BooneOps, PrintSmith, MIS, web search, or live sports/news tools "
-        "unless the user explicitly asks for an internal routed task and the app routes it there. "
-        "If a question needs real-time information, be clear that you may not have live data and "
-        "answer with that limitation. Do not redirect ordinary chat back to PrintSmith, BooneOps, "
-        "or production work unless the user asks for that."
+        "Use web search when the user asks about current events, sports, news, weather, prices, "
+        "or anything else that may need up-to-date information. Do not claim you used BooneOps, "
+        "PrintSmith, or MIS unless the user explicitly asks for an internal routed task and the app "
+        "routes it there. Do not redirect ordinary chat back to PrintSmith, BooneOps, or production "
+        "work unless the user asks for that."
     )
 
 

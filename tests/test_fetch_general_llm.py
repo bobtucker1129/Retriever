@@ -48,7 +48,11 @@ def test_call_general_conversation_llm_posts_anthropic_messages_payload() -> Non
             200,
             json={
                 "content": [{"type": "text", "text": "The Kings question needs live data."}],
-                "usage": {"input_tokens": 12, "output_tokens": 8},
+                "usage": {
+                    "input_tokens": 12,
+                    "output_tokens": 8,
+                    "server_tool_use": {"web_search_requests": 1},
+                },
             },
             request=httpx.Request("POST", url),
         )
@@ -72,6 +76,16 @@ def test_call_general_conversation_llm_posts_anthropic_messages_payload() -> Non
                 role="assistant",
                 content="Hi there.",
                 route_key="local",
+                context_state="llm",
+            ),
+            FetchMessageRecord(
+                message_id="m3",
+                conversation_id="c1",
+                user_id=1,
+                role="assistant",
+                content="Sports are outside my lane.",
+                route_key="general_candidate",
+                context_state="booneops",
             ),
         ],
         http_post=fake_post,
@@ -80,6 +94,18 @@ def test_call_general_conversation_llm_posts_anthropic_messages_payload() -> Non
     assert seen["url"] == ANTHROPIC_MESSAGES_URL
     assert seen["headers"]["x-api-key"] == "test-key"
     assert seen["json"]["model"] == "claude-opus-4-7"
+    assert seen["json"]["tools"] == [
+        {
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "user_location": {
+                "type": "approximate",
+                "country": "US",
+                "timezone": "America/New_York",
+            },
+        }
+    ]
+    assert "Sports are outside my lane." not in str(seen["json"]["messages"])
     assert seen["json"]["messages"][-1] == {
         "role": "user",
         "content": "How are the LA Kings doing?",
@@ -92,6 +118,7 @@ def test_call_general_conversation_llm_posts_anthropic_messages_payload() -> Non
         "general_llm_model_id": "claude-opus-4-7",
         "general_llm_input_tokens": 12,
         "general_llm_output_tokens": 8,
+        "general_llm_web_search_requests": 1,
     }
 
 
