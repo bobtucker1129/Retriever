@@ -27,6 +27,21 @@ def test_fetch_enabled_marks_fetch_and_model_checks_ok() -> None:
     assert checks["modelProvider"] == "ok"
 
 
+def test_enabled_booneops_broker_reports_configured_not_degraded() -> None:
+    checks = readiness_checks(
+        AppSettings(
+            booneops_broker_enabled=True,
+            booneops_broker_url="http://broker.example:3487",
+            booneops_broker_bearer_token="token",
+            booneops_broker_hmac_secret="secret",
+        )
+    )
+
+    assert checks["booneopsBroker"] == "ok"
+    assert checks["tailscale"] == "ok"
+    assert overall_status(checks) == "ok"
+
+
 def test_ready_status_is_degraded_until_mysql_is_checked() -> None:
     checks = readiness_checks(AppSettings())
 
@@ -63,4 +78,3 @@ def test_mysql_check_uses_ping(monkeypatch) -> None:
     monkeypatch.setattr(health, "ping_mysql", lambda _: True)
 
     assert mysql_check(settings) == "ok"
-

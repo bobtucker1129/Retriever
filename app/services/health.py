@@ -30,9 +30,9 @@ def readiness_checks(settings: AppSettings) -> dict[str, CheckState]:
             if settings.printsmith_token_authority_mode == "disabled"
             else "degraded"
         ),
-        "booneopsBroker": "degraded" if settings.booneops_broker_enabled else "disabled",
+        "booneopsBroker": "ok" if settings.booneops_broker_enabled else "disabled",
         "tailscale": (
-            "degraded"
+            "ok"
             if settings.booneops_broker_enabled and settings.booneops_broker_requires_tailscale
             else "disabled"
         ),
@@ -53,4 +53,3 @@ def overall_status(checks: dict[str, CheckState]) -> CheckState:
     if any(value == "degraded" for value in checks.values()):
         return "degraded"
     return "ok"
-
