@@ -30,7 +30,7 @@ jobs:
               key, value = line.split("=", 1)
               os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-          target_email = "scott@boonegraphics.net"
+          target_emails = ["scott@boonegraphics.net", "state@boonegraphics.net"]
           config = {
               "host": os.environ["MYSQL_HOST"],
               "port": int(os.environ.get("MYSQL_PORT") or 3306),
@@ -60,16 +60,43 @@ jobs:
                       continue
 
                   cur.execute(
+                      """
+                      SELECT column_name AS column_name
+                      FROM information_schema.columns
+                      WHERE table_schema = %s
+                        AND table_name = 'users'
+                      ORDER BY ordinal_position
+                      """,
+                      (schema,),
+                  )
+                  user_columns = {row["column_name"] for row in cur.fetchall()}
+                  identity_columns = [
+                      col for col in ("cloudflare_email", "email", "username")
+                      if col in user_columns
+                  ]
+                  if not identity_columns:
+                      print(f"schema={schema} identity_columns=none")
+                      continue
+                  identity_expr = "COALESCE(" + ", ".join(identity_columns) + ")"
+                  where_clause = " OR ".join(
+                      f"LOWER({col}) IN ({', '.join(['%s'] * len(target_emails))})"
+                      for col in identity_columns
+                  )
+                  params = tuple(
+                      email
+                      for _col in identity_columns
+                      for email in target_emails
+                  )
+                  status_expr = "status" if "status" in user_columns else "'unknown'"
+                  cur.execute(
                       f"""
-                      SELECT id, status,
-                             COALESCE(cloudflare_email, email, username) AS identity_email
+                      SELECT id, {status_expr} AS status,
+                             {identity_expr} AS identity_email
                       FROM {schema}.users
-                      WHERE LOWER(cloudflare_email) = %s
-                         OR LOWER(email) = %s
-                         OR LOWER(username) = %s
+                      WHERE {where_clause}
                       ORDER BY id
                       """,
-                      (target_email, target_email, target_email),
+                      params,
                   )
                   users = cur.fetchall()
                   print(
@@ -102,11 +129,13 @@ jobs:
 
                   cur.execute(
                       f"""
-                      SELECT c.user_id, COUNT(*) AS conversations, COUNT(m.id) AS messages
+                      SELECT c.user_id, {identity_expr} AS identity_email,
+                             COUNT(*) AS conversations, COUNT(m.id) AS messages
                       FROM {schema}.fetch_conversations c
+                      LEFT JOIN {schema}.users u ON u.id = c.user_id
                       LEFT JOIN {schema}.fetch_messages m ON m.conversation_id = c.conversation_id
                       WHERE c.deleted_at IS NULL
-                      GROUP BY c.user_id
+                      GROUP BY c.user_id, identity_email
                       ORDER BY conversations DESC, c.user_id ASC
                       LIMIT 10
                       """
@@ -114,6 +143,7 @@ jobs:
                   for row in cur.fetchall():
                       print(
                           f"schema={schema} top_owner={row['user_id']} "
+                          f"identity={row.get('identity_email') or 'unknown'} "
                           f"conversations={row['conversations']} messages={row['messages']}"
                       )
           finally:
