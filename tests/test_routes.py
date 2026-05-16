@@ -1990,7 +1990,7 @@ def test_admin_delete_user_removes_profile(monkeypatch) -> None:
 
 def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
     db = FakeDb()
-    db.add_user("active@boonegraphics.net", "Active User", "active")
+    db.add_user("active@boonegraphics.net", "Active User", "active", booneops_level="medium")
     db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
     settings = make_settings(with_db=True)
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
@@ -2000,7 +2000,6 @@ def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
     response = client.post(
         "/admin/users/1/matrix-update",
         data={
-            "booneops_level": "light",
             "full_name": "Web Orders",
             "production_location_choice": "1|00/Scott - Working",
             "admin_module": "false",
@@ -2017,7 +2016,7 @@ def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
     assert db.user_by_id(1)["full_name"] == "Web Orders"
     assert db.user_by_id(1)["production_location_id"] == 1
     assert db.user_by_id(1)["production_location_name"] == "00/Scott - Working"
-    assert db.user_by_id(1)["booneops_level"] == "light"
+    assert db.user_by_id(1)["booneops_level"] == "medium"
     assert "fetch" in db.modules_by_user.get(1, set())
     assert "prepress" in db.modules_by_user.get(1, set())
     assert "fetch.access" in db.capabilities_by_user.get(1, set())
@@ -2040,7 +2039,6 @@ def test_admin_matrix_update_can_grant_admin(monkeypatch) -> None:
     response = client.post(
         "/admin/users/1/matrix-update",
         data={
-            "booneops_level": "none",
             "full_name": "Active Admin",
             "production_location_choice": "",
             "admin_module": "true",
@@ -2070,7 +2068,6 @@ def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:
     response = client.post(
         "/admin/users/1/matrix-update",
         data={
-            "booneops_level": "none",
             "full_name": "Seed User",
             "production_location_choice": "",
             "admin_module": "false",

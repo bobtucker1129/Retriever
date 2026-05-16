@@ -117,7 +117,6 @@ def _admin_action(action) -> None:
 async def update_user_matrix_row(
     user_id: int,
     request: Request,
-    booneops_level: str = Form(...),
     full_name: str = Form(""),
     production_location_choice: str = Form(""),
     admin_module: str = Form("false"),
@@ -135,7 +134,6 @@ async def update_user_matrix_row(
         lambda: _admin_service(settings).apply_user_matrix_row(
             user_id,
             actor,
-            booneops_level=booneops_level.strip(),
             full_name=full_name.strip(),
             production_location_id=location_id,
             production_location_name=location_name,

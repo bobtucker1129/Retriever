@@ -6,7 +6,6 @@
 {% block content %}
 <section class="page-intro">
   <p><strong>How access works:</strong> Cloudflare proves identity first. New people appear here as <strong>Pending</strong>. Fill in the name, location, and module access, save the row, then approve them when they are ready.</p>
-  <p class="muted">General “outside world” LLM answers are controlled <strong>app-wide</strong> via <code>FETCH_GENERAL_QUESTIONS_ENABLED</code> in environment — not per user in this matrix.</p>
 </section>
 
 <section class="panel admin-user-matrix-panel">
@@ -33,7 +32,6 @@
           <th scope="col">Inventory</th>
           <th scope="col">Proofs</th>
           <th scope="col">Role</th>
-          <th scope="col">BooneOps</th>
           <th scope="col">Status</th>
           <th scope="col">Actions</th>
         </tr>
@@ -46,7 +44,7 @@
           {% if row.is_seed_admin %}
           <td>{{ row.full_name or row.display_name }}</td>
           <td class="muted">{{ row.production_location_name or '—' }}</td>
-          <td colspan="8" class="muted">Seed operator — not editable in this matrix.</td>
+          <td colspan="7" class="muted">Seed operator — not editable in this matrix.</td>
           <td><span class="status-pill status-{{ row.status }}">{{ row.status }}</span></td>
           <td class="admin-matrix-actions">
             {% if row.status == 'pending' %}
@@ -119,14 +117,6 @@
             </select>
           </td>
           <td><span class="muted">{% if row.is_admin %}Owner/Admin{% else %}Viewer{% endif %}</span></td>
-          <td>
-            <label class="sr-only" for="booneops-{{ row.id }}">BooneOps tier</label>
-            <select form="user-matrix-{{ row.id }}" id="booneops-{{ row.id }}" name="booneops_level" aria-label="BooneOps tier">
-              <option value="none" {% if row.booneops_level == 'none' %}selected{% endif %}>None</option>
-              <option value="light" {% if row.booneops_level == 'light' %}selected{% endif %}>Light</option>
-              <option value="medium" {% if row.booneops_level == 'medium' %}selected{% endif %}>Medium</option>
-            </select>
-          </td>
           <td><span class="status-pill status-{{ row.status }}">{{ row.status }}</span></td>
           <td class="admin-matrix-actions">
             <button form="user-matrix-{{ row.id }}" type="submit" class="secondary">Save</button>

@@ -100,7 +100,6 @@ class AdminActionService:
         target_user_id: int,
         actor: CurrentUser,
         *,
-        booneops_level: str,
         full_name: str,
         production_location_id: Optional[int],
         production_location_name: str,
@@ -128,7 +127,6 @@ class AdminActionService:
             proofs_level=proofs_level,
         )
         self.assign_role(target_user_id, role_key, actor)
-        self.assign_booneops_level(target_user_id, booneops_level, actor)
         self.set_module_access(target_user_id, "admin", admin_module, actor)
         self.set_module_access(target_user_id, "fetch", fetch_module, actor)
         self.set_module_access(target_user_id, "prepress", prepress_module, actor)
