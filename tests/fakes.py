@@ -37,6 +37,19 @@ class FakeCursor:
             self.db.user_by_id(user_id)["booneops_level"] = booneops_level
             return
 
+        if "UPDATE users SET cloudflare_email = COALESCE" in normalized:
+            email = params[0]
+            user = self.db.users[email]
+            user["cloudflare_email"] = user.get("cloudflare_email") or user.get("email") or user.get("username")
+            user["email"] = user.get("email") or user.get("cloudflare_email") or user.get("username")
+            user["display_name"] = user.get("display_name") or user.get("full_name") or user["email"]
+            user["status"] = "active"
+            user["role_key"] = "owner_admin"
+            user["is_admin_role"] = True
+            user["booneops_level"] = "medium"
+            user["is_seed_admin"] = True
+            return
+
         if "UPDATE users SET full_name" in normalized:
             (
                 full_name,
@@ -78,7 +91,7 @@ class FakeCursor:
             and "capability_key = %s" in normalized
             and "WHERE u.cloudflare_email = %s" in normalized
         ):
-            capability_key, email = params
+            capability_key, email = params[0], params[1]
             user_id = self.db.users[email]["id"]
             self.db.capabilities_by_user.setdefault(user_id, set()).add(capability_key)
             return
@@ -99,7 +112,7 @@ class FakeCursor:
             return
 
         if "INSERT IGNORE INTO user_module_access" in normalized:
-            module_key, email = params
+            module_key, email = params[0], params[1]
             user_id = self.db.users[email]["id"]
             self.db.modules_by_user.setdefault(user_id, set()).add(module_key)
             return

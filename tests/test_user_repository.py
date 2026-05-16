@@ -39,6 +39,27 @@ def test_seed_admin_identity_creates_active_admin() -> None:
     assert "admin" in user.modules
 
 
+def test_existing_seed_admin_is_promoted_to_owner_admin() -> None:
+    db = FakeDb()
+    db.add_user(
+        email="state@boonegraphics.net",
+        display_name="State",
+        status="active",
+    )
+    db.users["state@boonegraphics.net"]["cloudflare_email"] = None
+    repo = UserRepository(db.connection)
+
+    user = repo.ensure_profile(
+        CloudflareIdentity(email="state@boonegraphics.net", display_name="Master Tate"),
+        seed_admin_email="state@boonegraphics.net",
+    )
+
+    assert user.status == "active"
+    assert user.is_admin is True
+    assert "admin.manage_users" in user.capabilities
+    assert "admin" in user.modules
+
+
 def test_list_pending_returns_only_pending_users() -> None:
     db = FakeDb()
     repo = UserRepository(db.connection)
@@ -95,4 +116,3 @@ def test_assignments_change_user_permissions() -> None:
 
     repo.revoke_capability(user.id, "fetch.access")
     assert "fetch.access" not in repo.get_by_email(user.email).capabilities
-

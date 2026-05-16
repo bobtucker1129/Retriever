@@ -105,6 +105,11 @@ class UserRepository:
         email = normalize_email(identity.email)
         existing = self.get_by_email(email)
         if existing:
+            if email == normalize_email(seed_admin_email) and not existing.is_admin:
+                self._promote_seed_admin(email)
+                promoted = self.get_by_email(email)
+                if promoted:
+                    return promoted
             return existing
 
         if email == normalize_email(seed_admin_email):
@@ -473,6 +478,33 @@ class UserRepository:
             cursor.close()
             conn.close()
 
+    def _promote_seed_admin(self, email: str) -> None:
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET cloudflare_email = COALESCE(cloudflare_email, email, username),
+                    email = COALESCE(email, cloudflare_email, username),
+                    display_name = COALESCE(display_name, full_name, email, username),
+                    status = 'active',
+                    role = 'admin',
+                    active = TRUE,
+                    role_id = (SELECT id FROM roles WHERE role_key = 'owner_admin' LIMIT 1),
+                    booneops_level = 'medium',
+                    is_seed_admin = TRUE,
+                    approved_at = COALESCE(approved_at, NOW())
+                WHERE cloudflare_email = %s OR email = %s OR username = %s
+                """,
+                (email, email, email),
+            )
+            self._grant_seed_admin_capabilities(cursor, email)
+            self._grant_seed_admin_modules(cursor, email)
+        finally:
+            cursor.close()
+            conn.close()
+
     def _grant_seed_admin_capabilities(self, cursor: CursorLike, email: str) -> None:
         for capability_key in ("admin.manage_users", "admin.manage_settings"):
             cursor.execute(
@@ -481,9 +513,9 @@ class UserRepository:
                 SELECT u.id, c.id
                 FROM users u
                 JOIN capabilities c ON c.capability_key = %s
-                WHERE u.cloudflare_email = %s
+                WHERE u.cloudflare_email = %s OR u.email = %s OR u.username = %s
                 """,
-                (capability_key, email),
+                (capability_key, email, email, email),
             )
 
     def _grant_seed_admin_modules(self, cursor: CursorLike, email: str) -> None:
@@ -493,9 +525,9 @@ class UserRepository:
                 INSERT IGNORE INTO user_module_access (user_id, module_key, enabled)
                 SELECT id, %s, TRUE
                 FROM users
-                WHERE cloudflare_email = %s
+                WHERE cloudflare_email = %s OR email = %s OR username = %s
                 """,
-                (module_key, email),
+                (module_key, email, email, email),
             )
 
     def _record_from_row(self, row) -> UserRecord:
