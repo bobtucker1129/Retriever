@@ -1,0 +1,123 @@
+name: Fetch DB diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect-fetch-history:
+    runs-on: [self-hosted, Windows]
+    steps:
+      - name: Inspect Fetch conversation ownership
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $envPath = 'D:\retriever-rebuild\retriever.env'
+          if (!(Test-Path $envPath)) {
+            throw "Missing $envPath"
+          }
+          $script = @'
+          from pathlib import Path
+          import os
+          import sys
+
+          import mysql.connector
+
+          env_path = Path(r"D:\retriever-rebuild\retriever.env")
+          for raw in env_path.read_text(encoding="utf-8").splitlines():
+              line = raw.strip()
+              if not line or line.startswith("#") or "=" not in line:
+                  continue
+              key, value = line.split("=", 1)
+              os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+          target_email = "scott@boonegraphics.net"
+          config = {
+              "host": os.environ["MYSQL_HOST"],
+              "port": int(os.environ.get("MYSQL_PORT") or 3306),
+              "user": os.environ["MYSQL_USER"],
+              "password": os.environ["MYSQL_PASSWORD"],
+              "connection_timeout": 10,
+          }
+          schemas = ["retriever_core", "retriever_cloudflare"]
+
+          conn = mysql.connector.connect(**config)
+          cur = conn.cursor(dictionary=True)
+          try:
+              for schema in schemas:
+                  cur.execute(
+                      """
+                      SELECT table_name
+                      FROM information_schema.tables
+                      WHERE table_schema = %s
+                        AND table_name IN ('users', 'fetch_conversations', 'fetch_messages')
+                      ORDER BY table_name
+                      """,
+                      (schema,),
+                  )
+                  tables = [row["table_name"] for row in cur.fetchall()]
+                  print(f"schema={schema} tables={','.join(tables) or 'none'}")
+                  if not {"users", "fetch_conversations", "fetch_messages"}.issubset(set(tables)):
+                      continue
+
+                  cur.execute(
+                      f"""
+                      SELECT id, status,
+                             COALESCE(cloudflare_email, email, username) AS identity_email
+                      FROM {schema}.users
+                      WHERE LOWER(cloudflare_email) = %s
+                         OR LOWER(email) = %s
+                         OR LOWER(username) = %s
+                      ORDER BY id
+                      """,
+                      (target_email, target_email, target_email),
+                  )
+                  users = cur.fetchall()
+                  print(
+                      f"schema={schema} matching_user_ids="
+                      + (",".join(str(row["id"]) for row in users) or "none")
+                  )
+                  for row in users:
+                      cur.execute(
+                          f"""
+                          SELECT COUNT(*) AS conversations
+                          FROM {schema}.fetch_conversations
+                          WHERE user_id = %s AND deleted_at IS NULL
+                          """,
+                          (row["id"],),
+                      )
+                      conv_count = cur.fetchone()["conversations"]
+                      cur.execute(
+                          f"""
+                          SELECT COUNT(*) AS messages
+                          FROM {schema}.fetch_messages
+                          WHERE user_id = %s
+                          """,
+                          (row["id"],),
+                      )
+                      msg_count = cur.fetchone()["messages"]
+                      print(
+                          f"schema={schema} user_id={row['id']} status={row['status']} "
+                          f"conversations={conv_count} messages={msg_count}"
+                      )
+
+                  cur.execute(
+                      f"""
+                      SELECT c.user_id, COUNT(*) AS conversations, COUNT(m.id) AS messages
+                      FROM {schema}.fetch_conversations c
+                      LEFT JOIN {schema}.fetch_messages m ON m.conversation_id = c.conversation_id
+                      WHERE c.deleted_at IS NULL
+                      GROUP BY c.user_id
+                      ORDER BY conversations DESC, c.user_id ASC
+                      LIMIT 10
+                      """
+                  )
+                  for row in cur.fetchall():
+                      print(
+                          f"schema={schema} top_owner={row['user_id']} "
+                          f"conversations={row['conversations']} messages={row['messages']}"
+                      )
+          finally:
+              cur.close()
+              conn.close()
+          '@
+          $script | python -c "import sys, textwrap; exec(textwrap.dedent(sys.stdin.read()))"
