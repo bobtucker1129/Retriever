@@ -7,7 +7,6 @@ from typing import Callable, Optional, Protocol
 
 DEFAULT_APP_SETTINGS = {
     "fetch.enabled": "false",
-    "fetch.general_questions_enabled": "false",
     "fetch.delayed_reports_enabled": "true",
     "auth.pending_users_enabled": "true",
 }
@@ -63,4 +62,3 @@ class SettingsRepository:
         if value is None:
             return default
         return value.strip().lower() in {"1", "true", "yes", "on"}
-

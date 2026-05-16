@@ -13,7 +13,6 @@ VALUES
   ('dsf.access', 'Access DSF', 'Open the DSF module.', 'standard'),
   ('fetch.access', 'Access Fetch', 'Open the Fetch module when enabled.', 'light'),
   ('fetch.ask_internal', 'Ask internal questions', 'Use approved Boone/internal routes.', 'light'),
-  ('fetch.ask_general', 'Ask general questions', 'Use general LLM path when enabled.', 'light'),
   ('fetch.email_cleanup', 'Email cleanup', 'Use the ephemeral email cleanup helper.', 'light'),
   ('fetch.upload', 'Upload files', 'Upload files into Fetch when enabled.', 'standard'),
   ('fetch.schedule_report', 'Schedule reports', 'Create or manage scheduled reports.', 'standard'),
@@ -23,7 +22,6 @@ INSERT IGNORE INTO retriever_core.app_settings
   (setting_key, setting_value, value_type, description)
 VALUES
   ('fetch.enabled', 'false', 'boolean', 'Enable new Fetch module.'),
-  ('fetch.general_questions_enabled', 'false', 'boolean', 'Enable general outside-world answers.'),
   ('fetch.uploads_enabled', 'false', 'boolean', 'Enable Fetch uploads.'),
   ('fetch.delayed_reports_enabled', 'true', 'boolean', 'Enable delayed report state.'),
   ('auth.pending_users_enabled', 'true', 'boolean', 'Auto-create pending users after Cloudflare Access.');

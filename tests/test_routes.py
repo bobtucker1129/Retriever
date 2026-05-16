@@ -694,7 +694,6 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     assert page.status_code == 200
     assert "What is DSF?" in page.text
     assert "stub" in page.text.lower()
-    assert "General Question: Off" in page.text
     assert "Context: 0% stub" in page.text
 
 
@@ -1206,7 +1205,7 @@ def test_fetch_post_ask_skips_external_artifact_href(monkeypatch) -> None:
     assert 'class="fetch-artifact-name"' in page.text
 
 
-def test_fetch_stub_turn_has_no_metadata_source_section(monkeypatch) -> None:
+def test_fetch_general_question_uses_unified_broker_path_without_source_section(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -1218,6 +1217,11 @@ def test_fetch_stub_turn_has_no_metadata_source_section(monkeypatch) -> None:
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
 
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult("Paris.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
     client = make_client(settings)
     response = client.post(
         f"/fetch/conversations/{conv.conversation_id}/ask",
@@ -1225,9 +1229,11 @@ def test_fetch_stub_turn_has_no_metadata_source_section(monkeypatch) -> None:
     )
 
     assert response.status_code == 303
+    assert db.fetch_messages[0]["route_key"] == "general_candidate"
+    assert db.fetch_messages[1]["context_state"] == "booneops"
+    assert db.fetch_messages[1]["content"] == "Paris."
     page = client.get(response.headers["location"])
     assert page.status_code == 200
-    assert 'aria-label="Answer details"' not in page.text
     assert "fetch-source-card-list" not in page.text
 
 
@@ -1990,7 +1996,7 @@ def test_admin_delete_user_removes_profile(monkeypatch) -> None:
 
 def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
     db = FakeDb()
-    db.add_user("active@boonegraphics.net", "Active User", "active", booneops_level="medium")
+    db.add_user("active@boonegraphics.net", "Active User", "active")
     db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
     settings = make_settings(with_db=True)
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
@@ -2016,7 +2022,6 @@ def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
     assert db.user_by_id(1)["full_name"] == "Web Orders"
     assert db.user_by_id(1)["production_location_id"] == 1
     assert db.user_by_id(1)["production_location_name"] == "00/Scott - Working"
-    assert db.user_by_id(1)["booneops_level"] == "medium"
     assert "fetch" in db.modules_by_user.get(1, set())
     assert "prepress" in db.modules_by_user.get(1, set())
     assert "fetch.access" in db.capabilities_by_user.get(1, set())

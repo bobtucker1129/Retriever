@@ -58,7 +58,7 @@ def test_fetch_thread_load_metadata_for_turn() -> None:
 
 
 def test_build_assistant_status_line_booneops_shows_model_and_load() -> None:
-    s = _settings(fetch_general_questions_enabled=False, model_default="claude-stub")
+    s = _settings(model_default="claude-stub")
     m = FetchMessageRecord(
         message_id="m1",
         conversation_id="c1",
@@ -83,7 +83,7 @@ def test_build_assistant_status_line_booneops_shows_model_and_load() -> None:
 
 
 def test_build_assistant_status_line_booneops_without_gateway_model() -> None:
-    s = _settings(fetch_general_questions_enabled=False, model_default="claude-opus-4-x")
+    s = _settings(model_default="claude-opus-4-x")
     m = FetchMessageRecord(
         message_id="m1",
         conversation_id="c1",
@@ -184,8 +184,8 @@ def test_assistant_body_html_renders_numbered_lists_as_sanitized_ordered_lists()
     assert "First" in text and "Second" in text
 
 
-def test_build_assistant_status_line_respects_flags_and_context() -> None:
-    s = _settings(fetch_general_questions_enabled=False, model_default="claude-stub")
+def test_build_assistant_status_line_respects_context() -> None:
+    s = _settings(model_default="claude-stub")
     m = FetchMessageRecord(
         message_id="m1",
         conversation_id="c1",
@@ -199,7 +199,6 @@ def test_build_assistant_status_line_respects_flags_and_context() -> None:
         metadata=None,
     )
     line = build_assistant_status_line(m, s)
-    assert "General Question: Off" in line
     assert "Claude Stub" in line
     assert "Context: 0% stub" in line
 

@@ -130,15 +130,14 @@ def context_line_for_assistant(m: FetchMessageRecord) -> tuple[int, str]:
 
 def build_assistant_status_line(m: FetchMessageRecord, settings: AppSettings) -> str:
     model_fragment = _model_display_parts(m, settings)
-    gq = "On" if settings.fetch_general_questions_enabled else "Off"
     load_fragment = _thread_load_phrase(m)
     state = (m.context_state or "").strip().lower()
 
     if state == "booneops" and load_fragment:
-        return f"{model_fragment} | General Question: {gq} | {load_fragment}"
+        return f"{model_fragment} | {load_fragment}"
 
     pct, state_word = context_line_for_assistant(m)
-    return f"{model_fragment} | General Question: {gq} | Context: {pct}% {state_word}"
+    return f"{model_fragment} | Context: {pct}% {state_word}"
 
 
 # GFM-style pipe tables need the "tables" extension; nh3 then keeps structure via explicit allowlists.

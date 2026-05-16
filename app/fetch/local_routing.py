@@ -276,9 +276,7 @@ def should_delegate_ask_to_booneops_broker(route: str, settings: AppSettings) ->
     """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``)."""
     if not settings.booneops_broker_enabled:
         return False
-    if route in ("printsmith_candidate", "docs_candidate"):
-        return True
-    if route == "general_candidate" and settings.fetch_general_questions_enabled:
+    if route in ("printsmith_candidate", "docs_candidate", "general_candidate"):
         return True
     return False
 
@@ -386,11 +384,10 @@ def build_fetch_stub_reply(route: str) -> str:
         return (
             "This message looks like a general question.\n\n"
             "Downloadable charts or files need a live BooneOps reply with artifact metadata, "
-            "or a docs / PrintSmith / report-style route—not this offline stub while general "
-            "routing is off.\n\n"
+            "or a docs / PrintSmith / report-style route—not this offline stub.\n\n"
             f"{_STATUS_OFFLINE}\n\n"
-            "When general or model routing is enabled for your account, this label would "
-            "feed the appropriate provider path; here you only get this placeholder."
+            "When live routing is enabled, this label feeds the same Fetch path as everyone else; "
+            "here you only get this placeholder."
         )
 
     if route == "local":

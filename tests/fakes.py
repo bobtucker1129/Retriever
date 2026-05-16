@@ -32,11 +32,6 @@ class FakeCursor:
             self.db.user_by_id(user_id)["is_admin_role"] = role_key == "owner_admin"
             return
 
-        if "UPDATE users SET booneops_level" in normalized:
-            booneops_level, user_id = params
-            self.db.user_by_id(user_id)["booneops_level"] = booneops_level
-            return
-
         if "UPDATE users SET cloudflare_email = COALESCE" in normalized:
             email = params[0]
             user = self.db.users[email]
@@ -46,7 +41,6 @@ class FakeCursor:
             user["status"] = "active"
             user["role_key"] = "owner_admin"
             user["is_admin_role"] = True
-            user["booneops_level"] = "medium"
             user["is_seed_admin"] = True
             return
 
@@ -77,12 +71,10 @@ class FakeCursor:
             email = params[0]
             display_name = params[3]
             status = params[5]
-            booneops_level = params[6]
             self.db.add_user(
                 email=email,
                 display_name=display_name,
                 status=status,
-                booneops_level=booneops_level,
             )
             return
 
@@ -402,7 +394,6 @@ class FakeDb:
         email: str,
         display_name: str,
         status: str,
-        booneops_level: str = "none",
         is_seed_admin: bool = False,
         last_seen_at: object = None,
         full_name: str = "",
@@ -423,7 +414,6 @@ class FakeDb:
             "status": status,
             "role_key": "owner_admin" if is_seed_admin else None,
             "is_admin_role": is_seed_admin,
-            "booneops_level": "medium" if is_seed_admin else booneops_level,
             "inventory_level": inventory_level,
             "proofs_level": proofs_level,
             "production_location_id": production_location_id,

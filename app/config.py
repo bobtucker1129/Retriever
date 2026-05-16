@@ -65,7 +65,6 @@ class AppSettings(BaseSettings):
     mis_db_password: Optional[str] = None
 
     fetch_enabled: bool = False
-    fetch_general_questions_enabled: bool = False
     fetch_uploads_enabled: bool = False
     fetch_delayed_reports_enabled: bool = True
     fetch_local_artifact_retention_days: int = 30

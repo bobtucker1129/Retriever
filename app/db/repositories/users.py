@@ -21,7 +21,6 @@ class UserRecord:
     status: str
     full_name: str = ""
     role_key: Optional[str] = None
-    booneops_level: str = "none"
     inventory_level: str = "no"
     proofs_level: str = "no"
     production_location_id: Optional[int] = None
@@ -78,7 +77,7 @@ class UserRepository:
                 SELECT u.id,
                        COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
                        u.display_name, u.full_name, u.status,
-                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
@@ -131,7 +130,7 @@ class UserRepository:
                 SELECT u.id,
                        COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
                        u.display_name, u.full_name, u.status,
-                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
@@ -158,7 +157,7 @@ class UserRepository:
                 SELECT u.id,
                        COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
                        u.display_name, u.full_name, u.status,
-                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
@@ -213,24 +212,6 @@ class UserRepository:
                 WHERE id = %s
                 """,
                 (role_key, legacy_role, user_id),
-            )
-        finally:
-            cursor.close()
-            conn.close()
-
-    def assign_booneops_level(self, user_id: int, booneops_level: str) -> None:
-        if booneops_level not in {"none", "light", "medium"}:
-            raise ValueError("Invalid BooneOps level")
-        conn = self._connection_factory()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                """
-                UPDATE users
-                SET booneops_level = %s
-                WHERE id = %s
-                """,
-                (booneops_level, user_id),
             )
         finally:
             cursor.close()
@@ -409,7 +390,7 @@ class UserRepository:
                 SELECT u.id,
                        COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
                        u.display_name, u.full_name, u.status,
-                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
@@ -433,8 +414,8 @@ class UserRepository:
                 """
                 INSERT INTO users
                   (username, password_hash, cloudflare_email, display_name, email,
-                   status, booneops_level, role, active)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'viewer', FALSE)
+                   status, role, active)
+                VALUES (%s, %s, %s, %s, %s, %s, 'viewer', FALSE)
                 """,
                 (
                     normalize_email(identity.email),
@@ -443,7 +424,6 @@ class UserRepository:
                     identity.display_name or normalize_email(identity.email),
                     normalize_email(identity.email),
                     "pending",
-                    "none",
                 ),
             )
         finally:
@@ -458,11 +438,11 @@ class UserRepository:
                 """
                 INSERT INTO users
                   (username, password_hash, cloudflare_email, display_name, email,
-                   status, role, active, role_id, booneops_level, is_seed_admin, approved_at)
+                   status, role, active, role_id, is_seed_admin, approved_at)
                 VALUES (
                   %s, %s, %s, %s, %s, 'active', 'admin', TRUE,
                   (SELECT id FROM roles WHERE role_key = 'owner_admin' LIMIT 1),
-                  'medium', TRUE, NOW()
+                  TRUE, NOW()
                 )
                 """,
                 (
@@ -493,7 +473,6 @@ class UserRepository:
                     role = 'admin',
                     active = TRUE,
                     role_id = (SELECT id FROM roles WHERE role_key = 'owner_admin' LIMIT 1),
-                    booneops_level = 'medium',
                     is_seed_admin = TRUE,
                     approved_at = COALESCE(approved_at, NOW())
                 WHERE cloudflare_email = %s OR email = %s OR username = %s
@@ -551,7 +530,6 @@ class UserRepository:
             full_name=row.get("full_name") or "",
             status=row.get("status") or "pending",
             role_key=row.get("role_key"),
-            booneops_level=row.get("booneops_level") or "none",
             inventory_level=row.get("inventory_level") or "no",
             proofs_level=row.get("proofs_level") or "no",
             production_location_id=_optional_int(row.get("production_location_id")),

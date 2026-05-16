@@ -54,16 +54,6 @@ class AdminActionService:
         self.repositories.users.assign_role(target_user_id, role_key)
         self._audit(actor, "admin.user.role_assigned", target_user_id, "succeeded")
 
-    def assign_booneops_level(
-        self,
-        target_user_id: int,
-        booneops_level: str,
-        actor: CurrentUser,
-    ) -> None:
-        self._require_mutable_target(target_user_id)
-        self.repositories.users.assign_booneops_level(target_user_id, booneops_level)
-        self._audit(actor, "admin.user.booneops_level_assigned", target_user_id, "succeeded")
-
     def set_module_access(
         self,
         target_user_id: int,

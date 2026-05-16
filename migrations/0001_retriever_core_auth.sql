@@ -49,9 +49,6 @@ ALTER TABLE retriever_core.users
   ADD COLUMN role_id BIGINT UNSIGNED DEFAULT NULL;
 
 ALTER TABLE retriever_core.users
-  ADD COLUMN booneops_level VARCHAR(32) NOT NULL DEFAULT 'none';
-
-ALTER TABLE retriever_core.users
   ADD COLUMN inventory_level VARCHAR(32) NOT NULL DEFAULT 'no';
 
 ALTER TABLE retriever_core.users
@@ -84,7 +81,6 @@ ALTER TABLE retriever_core.users
 CREATE INDEX idx_users_cloudflare_email ON retriever_core.users (cloudflare_email);
 CREATE INDEX idx_users_status ON retriever_core.users (status);
 CREATE INDEX idx_users_role_id ON retriever_core.users (role_id);
-CREATE INDEX idx_users_booneops_level ON retriever_core.users (booneops_level);
 CREATE INDEX idx_users_production_location_id ON retriever_core.users (production_location_id);
 
 UPDATE retriever_core.users

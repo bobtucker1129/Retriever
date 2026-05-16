@@ -157,12 +157,7 @@ def broker_message_url(settings: AppSettings) -> str:
 
 
 def map_user_to_broker_principal(user: CurrentUser) -> tuple[str, str]:
-    """Map Retriever user to broker ``(botId, role)`` per ``ROLE_TO_ALLOWED_BOTS``."""
-    if user.is_admin:
-        return "booneops.admin", "admin"
-    level = (user.booneops_level or "none").strip().lower()
-    if level == "medium":
-        return "booneops.super", "super"
+    """Map every Retriever Fetch user to the same broker principal."""
     return "booneops.production", "production"
 
 
@@ -205,7 +200,6 @@ def build_broker_payload(
     session_metadata: dict[str, Any] = {
         "source": "retriever-fetch",
         "routeLabel": route_label,
-        "booneopsLevel": user.booneops_level or "none",
         "retrieverCapabilities": caps,
         # Broker gateway envelope: ask BooneOps to answer like Discord channel turns.
         "retrieverDiscordAnswerParity": True,

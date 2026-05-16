@@ -43,7 +43,6 @@ def _current_user_from_record(record: UserRecord) -> CurrentUser:
         capabilities=record.capabilities,
         modules=record.modules,
         is_admin=record.is_admin,
-        booneops_level=record.booneops_level or "none",
     )
 
 
@@ -58,7 +57,6 @@ def _local_scaffold_user(identity: CloudflareIdentity, settings: AppSettings) ->
             capabilities=frozenset({"admin.manage_users", "admin.manage_settings"}),
             modules=frozenset({"admin", "help"}),
             is_admin=True,
-            booneops_level="medium",
         )
 
     return CurrentUser(
@@ -66,7 +64,6 @@ def _local_scaffold_user(identity: CloudflareIdentity, settings: AppSettings) ->
         email=identity.email,
         display_name=identity.display_name or identity.email,
         status="pending",
-        booneops_level="none",
     )
 
 
@@ -131,4 +128,3 @@ def revoke_session_cookie(
         repository = repository or SessionRepository(lambda: create_connection(settings))
         repository.revoke_session(session_id)
     response.delete_cookie(SESSION_COOKIE_NAME)
-

@@ -73,7 +73,7 @@ def apply_sql_file(connection, path: Path) -> int:
                 cursor.execute(statement)
                 executed += 1
             except mysql.connector.Error as exc:
-                if exc.errno in {1060, 1061}:
+                if exc.errno in {1060, 1061, 1091}:
                     continue
                 raise
     finally:

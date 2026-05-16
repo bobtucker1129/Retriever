@@ -102,9 +102,8 @@ def test_admin_assignment_actions_write_audit_events() -> None:
     service = make_service(db)
     actor = make_actor()
 
-    service.assign_booneops_level(1, "medium", actor)
     service.set_module_access(1, "fetch", True, actor)
     service.grant_capability(1, "fetch.access", actor)
     service.revoke_capability(1, "fetch.access", actor)
 
-    assert len(db.audit_events) == 4
+    assert len(db.audit_events) == 3

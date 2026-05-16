@@ -46,9 +46,18 @@ def test_fetch_migration_adds_conversation_storage_without_model_routes() -> Non
     assert "retriever_cloudflare" not in sql
 
 
+def test_cleanup_migration_removes_fetch_level_and_general_toggle() -> None:
+    sql = Path("migrations/0003_remove_fetch_level_and_general_toggle.sql").read_text()
+
+    assert "fetch.ask_general" in sql
+    assert "fetch.general_questions_enabled" in sql
+    assert "booneops_level" in sql
+
+
 def test_migration_helpers_find_migration_and_seed_files() -> None:
     assert any(path.name == "0001_retriever_core_auth.sql" for path in list_sql_migrations())
     assert any(path.name == "0002_fetch_conversations.sql" for path in list_sql_migrations())
+    assert any(path.name == "0003_remove_fetch_level_and_general_toggle.sql" for path in list_sql_migrations())
     assert any(path.name == "0001_seed_auth_shell.sql" for path in list_seed_files())
 
 
@@ -86,7 +95,7 @@ def test_split_sql_statements_ignores_comments_and_blank_lines() -> None:
     ]
 
 
-def test_apply_sql_file_skips_duplicate_column_and_index_errors(tmp_path) -> None:
+def test_apply_sql_file_skips_duplicate_column_index_and_missing_drop_errors(tmp_path) -> None:
     class DuplicateError(Exception):
         errno = 1060
 
@@ -104,6 +113,10 @@ def test_apply_sql_file_skips_duplicate_column_and_index_errors(tmp_path) -> Non
                 import mysql.connector
 
                 raise mysql.connector.Error(errno=1061, msg="Duplicate key name")
+            if "missing_drop" in statement:
+                import mysql.connector
+
+                raise mysql.connector.Error(errno=1091, msg="Can't DROP")
 
         def close(self):
             pass
@@ -121,6 +134,7 @@ def test_apply_sql_file_skips_duplicate_column_and_index_errors(tmp_path) -> Non
         SELECT 1;
         ALTER TABLE users ADD COLUMN duplicate_column VARCHAR(10);
         CREATE INDEX duplicate_index ON users (id);
+        ALTER TABLE users DROP COLUMN missing_drop;
         SELECT 2;
         """
     )

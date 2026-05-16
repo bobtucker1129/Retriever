@@ -118,13 +118,11 @@ def test_assignments_change_user_permissions() -> None:
         seed_admin_email="state@boonegraphics.net",
     )
 
-    repo.assign_booneops_level(user.id, "light")
     repo.assign_role(user.id, "viewer")
     repo.set_module_access(user.id, "fetch", True)
     repo.grant_capability(user.id, "fetch.access", granted_by_user_id=99)
 
     updated = repo.get_by_email(user.email)
-    assert updated.booneops_level == "light"
     assert updated.role_key == "viewer"
     assert "fetch" in updated.modules
     assert "fetch.access" in updated.capabilities

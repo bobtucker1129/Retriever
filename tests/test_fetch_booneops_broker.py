@@ -57,7 +57,6 @@ def _make_user(**kwargs: object) -> CurrentUser:
         capabilities=frozenset({"fetch.ask_internal"}),
         modules=frozenset({"fetch"}),
         is_admin=False,
-        booneops_level="light",
     )
     if not kwargs:
         return base
@@ -79,25 +78,15 @@ def test_broker_message_url_joins_path() -> None:
 
 def test_map_user_to_broker_principal() -> None:
     assert map_user_to_broker_principal(_make_user()) == ("booneops.production", "production")
-    assert map_user_to_broker_principal(_make_user(booneops_level="medium")) == (
-        "booneops.super",
-        "super",
-    )
-    assert map_user_to_broker_principal(_make_user(is_admin=True)) == ("booneops.admin", "admin")
+    assert map_user_to_broker_principal(_make_user(is_admin=True)) == ("booneops.production", "production")
 
 
-def test_should_delegate_printsmith_and_docs_only_by_default() -> None:
+def test_should_delegate_fetch_routes_when_broker_enabled() -> None:
     s = _make_settings()
     assert should_delegate_ask_to_booneops_broker("printsmith_candidate", s) is True
     assert should_delegate_ask_to_booneops_broker("docs_candidate", s) is True
-    assert should_delegate_ask_to_booneops_broker("general_candidate", s) is False
-    assert should_delegate_ask_to_booneops_broker("local", s) is False
-
-
-def test_should_delegate_general_when_admin_toggle_on() -> None:
-    s = _make_settings()
-    s = s.model_copy(update={"fetch_general_questions_enabled": True})
     assert should_delegate_ask_to_booneops_broker("general_candidate", s) is True
+    assert should_delegate_ask_to_booneops_broker("local", s) is False
 
 
 def test_should_delegate_off_when_broker_disabled() -> None:
@@ -937,7 +926,6 @@ def test_build_broker_payload_key_order_matches_booneops_canonical_contract() ->
     assert list(sm.keys()) == [
         "source",
         "routeLabel",
-        "booneopsLevel",
         "retrieverCapabilities",
         "retrieverDiscordAnswerParity",
         "alpha",

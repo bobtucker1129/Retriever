@@ -187,18 +187,6 @@ async def assign_role(
     return RedirectResponse(url="/admin/users", status_code=303)
 
 
-@router.post("/users/{user_id}/booneops-level")
-async def assign_booneops_level(
-    user_id: int,
-    request: Request,
-    booneops_level: str = Form(...),
-    settings: AppSettings = Depends(settings_dependency),
-):
-    actor = _require_admin_actor(request, settings)
-    _admin_action(lambda: _admin_service(settings).assign_booneops_level(user_id, booneops_level, actor))
-    return RedirectResponse(url="/admin/users", status_code=303)
-
-
 @router.post("/users/{user_id}/module-access")
 async def set_module_access(
     user_id: int,
