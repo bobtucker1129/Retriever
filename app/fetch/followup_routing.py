@@ -84,6 +84,10 @@ _PRIOR_REFERENT_RE: Final[re.Pattern[str]] = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_TEMPORAL_THIS_RE: Final[re.Pattern[str]] = re.compile(
+    r"\bthis\s+(year|month|week|quarter|morning|afternoon|evening|season)\b",
+    re.IGNORECASE,
+)
 
 _NO_OVERRIDE_ROUTES: Final[frozenset[str]] = frozenset(
     {"help", "sources", "health", "blocked_write", "email_cleanup"}
@@ -113,7 +117,8 @@ def _mentions_export_format(low: str) -> bool:
 
 
 def _has_prior_referent_cue(low: str) -> bool:
-    return _PRIOR_REFERENT_RE.search(low) is not None
+    without_temporal_this = _TEMPORAL_THIS_RE.sub("", low)
+    return _PRIOR_REFERENT_RE.search(without_temporal_this) is not None
 
 
 def _is_sticky_continuation_text(text: str) -> bool:

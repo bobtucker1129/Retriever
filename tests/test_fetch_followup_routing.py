@@ -321,7 +321,7 @@ def test_resolve_standalone_general_questions_do_not_continue_printsmith_lane() 
     route, _ = resolve_fetch_ask_route("why is the sky blue?", "general_candidate", prior)
     assert route == "general_candidate"
     route2, _ = resolve_fetch_ask_route(
-        "How are the LA Kings doing?",
+        "How are the LA Kings doing this year?",
         "general_candidate",
         prior,
     )
