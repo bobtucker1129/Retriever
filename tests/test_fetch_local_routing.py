@@ -66,6 +66,7 @@ from app.fetch.local_routing import (
             "general_candidate",
         ),
         ("What is the meaning of life?", "general_candidate"),
+        ("How are the LA Kings doing?", "general_candidate"),
         ("Could you summarize the policy?", "general_candidate"),
         ("hi", "local"),
         ("Thanks", "local"),

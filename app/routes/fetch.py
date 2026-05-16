@@ -40,10 +40,17 @@ from app.fetch.booneops_broker import (
 )
 from app.fetch.followup_routing import (
     html_export_prior_assistant,
+    is_artifact_refinement_followup_text,
     is_answer_snapshot_pdf_followup_text,
+    is_export_download_followup_text,
     is_html_export_followup_text,
     pdf_export_prior_assistant,
     resolve_fetch_ask_route,
+)
+from app.fetch.general_llm import (
+    GeneralLlmTurnResult,
+    call_general_conversation_llm,
+    should_use_general_llm,
 )
 from app.fetch.artifact_retention import (
     filter_message_metadata_for_local_retention,
@@ -422,6 +429,10 @@ async def ask_in_conversation(
 
     request_id = str(uuid.uuid4())
     use_broker = should_delegate_ask_to_booneops_broker(route, settings)
+    use_general_llm = should_use_general_llm(route, settings) and not (
+        is_export_download_followup_text(cleaned)
+        or is_artifact_refinement_followup_text(cleaned)
+    )
     if route == "fetch_html_export":
         if html_prior is not None:
             doc = build_standalone_html_export_document(
@@ -475,6 +486,19 @@ async def ask_in_conversation(
             context_state = "stub"
             model_label = settings.model_default
             assistant_metadata = None
+    elif use_general_llm:
+        llm_result: GeneralLlmTurnResult = call_general_conversation_llm(
+            settings,
+            user_message=cleaned,
+            prior_records=prior_records,
+        )
+        assistant_text = llm_result.assistant_text
+        context_state = llm_result.context_state
+        model_label = llm_result.model_label or settings.model_default
+        assistant_metadata = dict(llm_result.metadata) if llm_result.metadata else {}
+        assistant_metadata.update(
+            fetch_thread_load_metadata_for_turn(prior_records, cleaned, assistant_text)
+        )
     elif use_broker:
         prior_messages = prior_messages_from_history(prior_records)
         broker_result: BooneOpsBrokerTurnResult = call_booneops_broker(

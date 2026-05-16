@@ -118,6 +118,14 @@ class AppSettings(BaseSettings):
             return "retriever_core"
         return database
 
+    @field_validator("model_provider", mode="before")
+    @classmethod
+    def normalize_model_provider(cls, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        provider = str(value).strip().lower()
+        return provider or None
+
     @model_validator(mode="after")
     def validate_contract(self) -> AppSettings:
         errors: list[str] = []

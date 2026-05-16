@@ -276,7 +276,7 @@ def should_delegate_ask_to_booneops_broker(route: str, settings: AppSettings) ->
     """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``)."""
     if not settings.booneops_broker_enabled:
         return False
-    if route in ("printsmith_candidate", "docs_candidate", "general_candidate"):
+    if route in ("printsmith_candidate", "docs_candidate"):
         return True
     return False
 

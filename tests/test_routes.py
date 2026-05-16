@@ -1286,7 +1286,7 @@ def test_fetch_post_ask_skips_external_artifact_href(monkeypatch) -> None:
     assert 'class="fetch-artifact-name"' in page.text
 
 
-def test_fetch_general_question_uses_unified_broker_path_without_source_section(monkeypatch) -> None:
+def test_fetch_general_question_uses_anthropic_llm_without_broker(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -1299,20 +1299,31 @@ def test_fetch_general_question_uses_unified_broker_path_without_source_section(
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
 
     def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
-        return BooneOpsBrokerTurnResult("Paris.", "booneops")
+        raise AssertionError("general questions should not call the BooneOps broker")
 
     monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
+        return fetch_routes.GeneralLlmTurnResult(
+            "The Kings are worth checking on, but I do not have live scores here.",
+            "llm",
+            "claude-opus-4-7",
+            {"general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
 
     client = make_client(settings)
     response = client.post(
         f"/fetch/conversations/{conv.conversation_id}/ask",
-        data={"question": "What is the capital of France?"},
+        data={"question": "How are the LA Kings doing?"},
     )
 
     assert response.status_code == 303
     assert db.fetch_messages[0]["route_key"] == "general_candidate"
-    assert db.fetch_messages[1]["context_state"] == "booneops"
-    assert db.fetch_messages[1]["content"] == "Paris."
+    assert db.fetch_messages[1]["context_state"] == "llm"
+    assert db.fetch_messages[1]["content"].startswith("The Kings")
+    assert db.fetch_messages[1]["model_label"] == "claude-opus-4-7"
     page = client.get(response.headers["location"])
     assert page.status_code == 200
     assert "fetch-source-card-list" not in page.text

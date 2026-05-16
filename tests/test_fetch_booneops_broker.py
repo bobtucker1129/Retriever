@@ -85,7 +85,7 @@ def test_should_delegate_fetch_routes_when_broker_enabled() -> None:
     s = _make_settings()
     assert should_delegate_ask_to_booneops_broker("printsmith_candidate", s) is True
     assert should_delegate_ask_to_booneops_broker("docs_candidate", s) is True
-    assert should_delegate_ask_to_booneops_broker("general_candidate", s) is True
+    assert should_delegate_ask_to_booneops_broker("general_candidate", s) is False
     assert should_delegate_ask_to_booneops_broker("local", s) is False
 
 
