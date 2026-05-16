@@ -55,7 +55,7 @@ CLOUDFLARE_ACCESS_VALIDATE_JWT=true
 # MySQL app state
 MYSQL_HOST=<redacted>
 MYSQL_PORT=3306
-MYSQL_DATABASE=retriever_cloudflare
+MYSQL_DATABASE=retriever_core
 MYSQL_USER=retriever_app
 MYSQL_PASSWORD=<redacted>
 MYSQL_SSL_MODE=preferred
@@ -107,7 +107,7 @@ Production/staging must hard-fail when:
 - Cloudflare Access is disabled in staging/production
 - `CLOUDFLARE_ACCESS_VALIDATE_JWT` is false in staging/production without explicit approved exception
 - MySQL host, database, user, or password is missing
-- `MYSQL_DATABASE` is not `retriever_cloudflare`
+- `MYSQL_DATABASE` is not `retriever_core`
 - Fetch is enabled without a model provider and model key
 - uploads are enabled without upload storage
 - delayed reports are enabled without report storage and app database access

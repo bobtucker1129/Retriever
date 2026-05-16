@@ -5,76 +5,165 @@
 
 {% block content %}
 <section class="page-intro">
-  <p>Approve pending users and assign access before Fetch is enabled.</p>
+  <p><strong>How access works:</strong> Cloudflare proves identity first. New people appear here as <strong>Pending</strong>. Fill in the name, location, and module access, save the row, then approve them when they are ready.</p>
+  <p class="muted">General “outside world” LLM answers are controlled <strong>app-wide</strong> via <code>FETCH_GENERAL_QUESTIONS_ENABLED</code> in environment — not per user in this matrix.</p>
 </section>
 
-{% if pending_users %}
-<section class="panel">
+<section class="panel admin-user-matrix-panel">
   <div class="section-header">
-    <h2>Pending users</h2>
-    <span class="count-pill">{{ pending_users|length }}</span>
+    <h2>People</h2>
+    <span class="count-pill">{{ admin_users|length }}</span>
   </div>
-  <ul class="user-list">
-    {% for pending_user in pending_users %}
-    <li>
-      <div class="user-row">
-        <div class="user-main">
-          <strong>{{ pending_user.display_name }}</strong>
-          <span class="muted">&lt;{{ pending_user.email }}&gt;</span>
-        </div>
-        <div class="actions">
-          <form method="post" action="/admin/users/{{ pending_user.id }}/activate">
-            <button type="submit">Approve</button>
-          </form>
-          <form method="post" action="/admin/users/{{ pending_user.id }}/block">
-            <button type="submit" class="danger">Block</button>
-          </form>
-        </div>
-      </div>
-      <details class="access-details">
-        <summary>Assign access</summary>
-        <div class="form-grid">
-          <form method="post" action="/admin/users/{{ pending_user.id }}/role">
-            <label for="role-{{ pending_user.id }}">Role</label>
-            <select id="role-{{ pending_user.id }}" name="role_key">
-              <option value="viewer">Viewer</option>
-              <option value="project_manager">Project Manager</option>
-              <option value="sales">Sales</option>
-              <option value="production">Production</option>
-              <option value="prepress">PrePress</option>
-              <option value="dsf_operator">DSF Operator</option>
-            </select>
-            <button type="submit" class="secondary">Save role</button>
-          </form>
-          <form method="post" action="/admin/users/{{ pending_user.id }}/booneops-level">
-            <label for="booneops-{{ pending_user.id }}">BooneOps level</label>
-            <select id="booneops-{{ pending_user.id }}" name="booneops_level">
-              <option value="none">None</option>
-              <option value="light">Light</option>
-              <option value="medium">Medium</option>
-            </select>
-            <button type="submit" class="secondary">Save BooneOps level</button>
-          </form>
-          <form method="post" action="/admin/users/{{ pending_user.id }}/module-access">
-            <input type="hidden" name="module_key" value="fetch">
-            <input type="hidden" name="enabled" value="true">
-            <button type="submit" class="secondary">Grant Fetch module</button>
-          </form>
-          <form method="post" action="/admin/users/{{ pending_user.id }}/capabilities/grant">
-            <input type="hidden" name="capability_key" value="fetch.access">
-            <button type="submit" class="secondary">Grant Fetch access</button>
-          </form>
-        </div>
-      </details>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
-{% else %}
-<section class="notice-panel">
-  <h2>No pending users</h2>
-  <p class="muted">New users who pass Cloudflare Access will appear here for approval.</p>
-</section>
-{% endif %}
-{% endblock %}
 
+  {% if not admin_users %}
+  <p class="muted">No users found. Connect MySQL and ensure migrations are applied.</p>
+  {% else %}
+  <div class="admin-matrix-scroll">
+    <table class="admin-user-matrix">
+      <thead>
+        <tr>
+          <th scope="col">Last Login</th>
+          <th scope="col">Cloudflare Email Auth</th>
+          <th scope="col">Full Name</th>
+          <th scope="col">Location</th>
+          <th scope="col">Admin</th>
+          <th scope="col">Fetch</th>
+          <th scope="col">PrePress</th>
+          <th scope="col">DSF</th>
+          <th scope="col">Inventory</th>
+          <th scope="col">Proofs</th>
+          <th scope="col">Role</th>
+          <th scope="col">BooneOps</th>
+          <th scope="col">Status</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in admin_users %}
+        <tr>
+          <td>{% if row.status == 'pending' %}<span class="status-pill status-pending">Pending</span>{% elif row.last_seen_at %}{{ row.last_seen_at.strftime('%Y-%m-%d %H:%M') }}{% else %}<span class="muted">Never</span>{% endif %}</td>
+          <td><a href="mailto:{{ row.email }}">{{ row.email }}</a></td>
+          {% if row.is_seed_admin %}
+          <td>{{ row.full_name or row.display_name }}</td>
+          <td class="muted">{{ row.production_location_name or '—' }}</td>
+          <td colspan="8" class="muted">Seed operator — not editable in this matrix.</td>
+          <td><span class="status-pill status-{{ row.status }}">{{ row.status }}</span></td>
+          <td class="admin-matrix-actions">
+            {% if row.status == 'pending' %}
+            <form method="post" action="/admin/users/{{ row.id }}/activate" class="inline-form">
+              <button type="submit">Approve</button>
+            </form>
+            {% endif %}
+          </td>
+          {% else %}
+          <td>
+            <form id="user-matrix-{{ row.id }}" method="post" action="/admin/users/{{ row.id }}/matrix-update"></form>
+            <label class="sr-only" for="name-{{ row.id }}">Full name</label>
+            <input form="user-matrix-{{ row.id }}" id="name-{{ row.id }}" name="full_name" value="{{ row.full_name or '' }}" placeholder="Full name" required>
+          </td>
+          <td>
+            <label class="sr-only" for="loc-{{ row.id }}">Location</label>
+            <select form="user-matrix-{{ row.id }}" id="loc-{{ row.id }}" name="production_location_choice" aria-label="Location">
+              <option value="">No location</option>
+              {% for location in production_locations %}
+              <option value="{{ location.id }}|{{ location.name }}" {% if row.production_location_id == location.id %}selected{% endif %}>{{ location.name }}</option>
+              {% endfor %}
+              {% if row.production_location_id and production_locations|length == 0 %}
+              <option value="{{ row.production_location_id }}|{{ row.production_location_name }}" selected>{{ row.production_location_name }}</option>
+              {% endif %}
+            </select>
+          </td>
+          <td>
+            <label class="sr-only" for="admin-mod-{{ row.id }}">Admin</label>
+            <select form="user-matrix-{{ row.id }}" id="admin-mod-{{ row.id }}" name="admin_module" aria-label="Admin">
+              <option value="false" {% if not row.is_admin %}selected{% endif %}>No</option>
+              <option value="true" {% if row.is_admin %}selected{% endif %}>Yes</option>
+            </select>
+          </td>
+          <td>
+            <label class="sr-only" for="fetch-mod-{{ row.id }}">Fetch</label>
+            <select form="user-matrix-{{ row.id }}" id="fetch-mod-{{ row.id }}" name="fetch_module" aria-label="Fetch">
+              <option value="false" {% if 'fetch' not in row.modules %}selected{% endif %}>No</option>
+              <option value="true" {% if 'fetch' in row.modules %}selected{% endif %}>Yes</option>
+            </select>
+            <input form="user-matrix-{{ row.id }}" type="hidden" name="fetch_access" value="{% if 'fetch.access' in row.capabilities %}true{% else %}false{% endif %}" data-mirror-for="fetch-mod-{{ row.id }}">
+          </td>
+          <td>
+            <label class="sr-only" for="prepress-mod-{{ row.id }}">PrePress</label>
+            <select form="user-matrix-{{ row.id }}" id="prepress-mod-{{ row.id }}" name="prepress_module" aria-label="PrePress">
+              <option value="false" {% if 'prepress' not in row.modules %}selected{% endif %}>No</option>
+              <option value="true" {% if 'prepress' in row.modules %}selected{% endif %}>Yes</option>
+            </select>
+          </td>
+          <td>
+            <label class="sr-only" for="dsf-mod-{{ row.id }}">DSF</label>
+            <select form="user-matrix-{{ row.id }}" id="dsf-mod-{{ row.id }}" name="dsf_module" aria-label="DSF">
+              <option value="false" {% if 'dsf' not in row.modules %}selected{% endif %}>No</option>
+              <option value="true" {% if 'dsf' in row.modules %}selected{% endif %}>Yes</option>
+            </select>
+          </td>
+          <td>
+            <label class="sr-only" for="inventory-{{ row.id }}">Inventory</label>
+            <select form="user-matrix-{{ row.id }}" id="inventory-{{ row.id }}" name="inventory_level" aria-label="Inventory">
+              <option value="no" {% if row.inventory_level == 'no' %}selected{% endif %}>No</option>
+              <option value="viewer" {% if row.inventory_level == 'viewer' %}selected{% endif %}>Viewer</option>
+              <option value="manager" {% if row.inventory_level == 'manager' %}selected{% endif %}>Manager</option>
+            </select>
+          </td>
+          <td>
+            <label class="sr-only" for="proofs-{{ row.id }}">Proofs</label>
+            <select form="user-matrix-{{ row.id }}" id="proofs-{{ row.id }}" name="proofs_level" aria-label="Proofs">
+              <option value="no" {% if row.proofs_level == 'no' %}selected{% endif %}>No</option>
+              <option value="viewer" {% if row.proofs_level == 'viewer' %}selected{% endif %}>Viewer</option>
+              <option value="manager" {% if row.proofs_level == 'manager' %}selected{% endif %}>Manager</option>
+            </select>
+          </td>
+          <td><span class="muted">{% if row.is_admin %}Owner/Admin{% else %}Viewer{% endif %}</span></td>
+          <td>
+            <label class="sr-only" for="booneops-{{ row.id }}">BooneOps tier</label>
+            <select form="user-matrix-{{ row.id }}" id="booneops-{{ row.id }}" name="booneops_level" aria-label="BooneOps tier">
+              <option value="none" {% if row.booneops_level == 'none' %}selected{% endif %}>None</option>
+              <option value="light" {% if row.booneops_level == 'light' %}selected{% endif %}>Light</option>
+              <option value="medium" {% if row.booneops_level == 'medium' %}selected{% endif %}>Medium</option>
+            </select>
+          </td>
+          <td><span class="status-pill status-{{ row.status }}">{{ row.status }}</span></td>
+          <td class="admin-matrix-actions">
+            <button form="user-matrix-{{ row.id }}" type="submit" class="secondary">Save</button>
+            {% if row.status == 'pending' %}
+            <form method="post" action="/admin/users/{{ row.id }}/activate" class="inline-form" onsubmit="return document.getElementById('name-{{ row.id }}').reportValidity();">
+              <button type="submit">Approve</button>
+            </form>
+            {% endif %}
+            {% if row.status == 'active' %}
+            <form method="post" action="/admin/users/{{ row.id }}/suspend" class="inline-form" onsubmit="return confirm('Suspend this user? They will be signed out.');">
+              <button type="submit" class="secondary">Suspend</button>
+            </form>
+            {% endif %}
+            {% if row.status in ('active', 'suspended') %}
+            <form method="post" action="/admin/users/{{ row.id }}/block" class="inline-form" onsubmit="return confirm('Block this user? This cannot be undone from the UI.');">
+              <button type="submit" class="danger">Block</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/admin/users/{{ row.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this user from Retriever? If they sign in through Cloudflare again, they will return as pending.');">
+              <button type="submit" class="danger">Remove</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+<script>
+  document.querySelectorAll("[data-mirror-for]").forEach((hidden) => {
+    const source = document.getElementById(hidden.dataset.mirrorFor);
+    if (!source) return;
+    const sync = () => hidden.value = source.value;
+    source.addEventListener("change", sync);
+    sync();
+  });
+</script>
+{% endblock %}

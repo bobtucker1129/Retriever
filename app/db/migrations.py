@@ -7,6 +7,8 @@ import hashlib
 from pathlib import Path
 from typing import Iterable
 
+import mysql.connector
+
 from app.config import get_settings
 from app.db.connection import create_connection
 
@@ -48,12 +50,19 @@ def checksum(path: Path) -> str:
 def apply_sql_file(connection, path: Path) -> int:
     statements = split_sql_statements(path.read_text())
     cursor = connection.cursor()
+    executed = 0
     try:
         for statement in statements:
-            cursor.execute(statement)
+            try:
+                cursor.execute(statement)
+                executed += 1
+            except mysql.connector.Error as exc:
+                if exc.errno in {1060, 1061}:
+                    continue
+                raise
     finally:
         cursor.close()
-    return len(statements)
+    return executed
 
 
 def run_sql_files(files: Iterable[Path]) -> list[tuple[str, int]]:
@@ -85,4 +94,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

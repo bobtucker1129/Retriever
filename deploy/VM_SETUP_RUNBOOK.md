@@ -62,7 +62,7 @@ That release successfully:
 - installed dependencies from `pyproject.toml`
 - passed the import check
 - validated production config
-- applied `0001_retriever_cloudflare.sql`
+- applied `0001_retriever_core_auth.sql`
 - applied `0001_seed_auth_shell.sql`
 - pointed `D:\retriever-rebuild\current` at the staged release
 
@@ -160,7 +160,7 @@ CLOUDFLARE_ACCESS_JWKS_URL=https://<your-team>.cloudflareaccess.com/cdn-cgi/acce
 # MySQL (Boone MySQL server at 192.168.33.243)
 MYSQL_HOST=192.168.33.243
 MYSQL_PORT=3306
-MYSQL_DATABASE=retriever_cloudflare
+MYSQL_DATABASE=retriever_core
 MYSQL_USER=retriever_app
 MYSQL_PASSWORD=<strong-password>
 MYSQL_SSL_MODE=preferred
@@ -214,14 +214,14 @@ D:\Repository\pm-review-dashboard-ContexEng\venv\Scripts\python.exe -c "import s
 Connect to the Boone MySQL server at `192.168.33.243` and run:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS retriever_cloudflare
+CREATE DATABASE IF NOT EXISTS retriever_core
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE USER 'retriever_app'@'192.168.33.12'
   IDENTIFIED BY '<same-password-as-env-file>';
 
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP
-  ON retriever_cloudflare.*
+  ON retriever_core.*
   TO 'retriever_app'@'192.168.33.12';
 
 FLUSH PRIVILEGES;
@@ -231,7 +231,7 @@ Test from `bggol-vesko01`:
 
 ```powershell
 # If mysql client is available
-mysql -h 192.168.33.243 -u retriever_app -p retriever_cloudflare -e "SELECT 1 AS test;"
+mysql -h 192.168.33.243 -u retriever_app -p retriever_core -e "SELECT 1 AS test;"
 ```
 
 ---

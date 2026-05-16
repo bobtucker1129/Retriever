@@ -26,11 +26,13 @@
             <div class="brand-subtitle">{{ settings.retriever_env.value }}</div>
           </div>
         </div>
+        {% set shell = nav_shell|default('full') %}
         <nav class="module-nav">
           <a class="nav-item{% if active_nav == 'home' %} active{% endif %}" href="/" title="Home">
             <span class="nav-abbrev">H</span>
             <span class="nav-label">Home</span>
           </a>
+          {% if shell != 'minimal' %}
           {% if user and user.has_module("admin") %}
           <a class="nav-item{% if active_nav == 'admin' %} active{% endif %}" href="/admin/users" title="Admin">
             <span class="nav-abbrev">A</span>
@@ -50,7 +52,9 @@
           </a>
           {% endif %}
           {% endif %}
+          {% endif %}
         </nav>
+        {% if shell != 'minimal' and user and user.is_admin %}
         <div class="sidebar-footer">
           <a href="/health/ready" title="Health">
             <span class="nav-abbrev">?</span>
@@ -61,6 +65,7 @@
             <span class="nav-label">Version</span>
           </a>
         </div>
+        {% endif %}
       </aside>
 
       <div class="main-column">

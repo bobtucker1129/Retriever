@@ -127,7 +127,7 @@ Open decisions:
 
 Default recommendation:
 
-- start in MySQL `retriever_cloudflare.audit_events`, with optional append-only file mirroring to `/var/log/retriever-rebuild/audit.jsonl`
+- start in MySQL `retriever_core.audit_events`, with optional append-only file mirroring to `/var/log/retriever-rebuild/audit.jsonl`
 - log metadata by default
 - redact full prompts and uploaded text unless explicitly needed
 - use correlation IDs so detailed troubleshooting can happen without exposing everything by default
@@ -153,7 +153,7 @@ At minimum, audit:
 
 ## Current Storage Decision
 
-First audit store: MySQL table `retriever_cloudflare.audit_events`.
+First audit store: MySQL table `retriever_core.audit_events`.
 
 Optional runtime mirror: `/var/log/retriever-rebuild/audit.jsonl` for local operator visibility and emergency troubleshooting.
 

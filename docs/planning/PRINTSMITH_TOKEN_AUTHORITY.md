@@ -2,7 +2,7 @@
 
 **Status:** planning document  
 **Scope:** preserving the shared `LordTate` PrintSmith REST token authority before new Retriever cutover  
-**Inputs:** `REVIEW-2026-05-04-OPUS.md`, `SECRETS_HANDLING.md`, `WEBHOOK_AND_BROKER_AUTH.md`, old Retriever token proxy code and session log
+**Inputs:** `../archive/REVIEW-2026-05-04-OPUS.md`, `SECRETS_HANDLING.md`, `WEBHOOK_AND_BROKER_AUTH.md`, old Retriever token proxy code and session log
 
 ## Plain-English Summary
 

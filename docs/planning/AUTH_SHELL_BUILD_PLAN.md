@@ -2,7 +2,7 @@
 
 **Status:** build plan  
 **Scope:** first code scaffold for new Retriever before Fetch implementation  
-**Inputs:** `AUTH_REDESIGN.md`, `RETRIEVER_CLOUDFLARE_SCHEMA.md`, `CONFIG_AND_HEALTH_CONTRACT.md`, `VM_SETUP_PLAN.md`
+**Inputs:** `AUTH_REDESIGN.md`, `RETRIEVER_CORE_SCHEMA.md`, `CONFIG_AND_HEALTH_CONTRACT.md`, `VM_SETUP_PLAN.md`
 
 ## Plain-English Summary
 
@@ -87,7 +87,7 @@ projects/retriever-rebuild/
       app.css
       app.js
   migrations/
-    0001_retriever_cloudflare.sql
+    0001_retriever_core_auth.sql
     seeds/
       0001_seed_auth_shell.sql
   tests/
@@ -149,7 +149,7 @@ Acceptance:
 
 - staging/production fails with missing cookie secret
 - staging/production fails when Cloudflare Access validation is disabled
-- staging/production fails when `MYSQL_DATABASE != retriever_cloudflare`
+- staging/production fails when `MYSQL_DATABASE != retriever_core`
 - Fetch-disabled config starts without model keys
 - Fetch-enabled config fails without model keys
 - PrintSmith contradictory authority settings fail
@@ -160,7 +160,7 @@ Acceptance:
 Create first migration:
 
 ```text
-migrations/0001_retriever_cloudflare.sql
+migrations/0001_retriever_core_auth.sql
 ```
 
 It should create:
@@ -177,7 +177,7 @@ It should create:
 - `report_artifacts`
 - `audit_events`
 
-Use `RETRIEVER_CLOUDFLARE_SCHEMA.md` as the source of truth.
+Use `RETRIEVER_CORE_SCHEMA.md` as the source of truth.
 
 If Boone MySQL does not support JSON columns, replace JSON columns with `LONGTEXT` and validate JSON in app code.
 
@@ -227,7 +227,7 @@ Acceptance:
 Behavior:
 
 1. Cloudflare-authenticated email arrives.
-2. Retriever looks up `retriever_cloudflare.users`.
+2. Retriever looks up `retriever_core.users`.
 3. Unknown email creates a `pending` user.
 4. Pending user sees the access-pending page.
 5. Pending user cannot access Fetch, Admin, or future modules.
@@ -301,7 +301,7 @@ Implement:
 - `/health/ready`
 - `/health/deep`
 - `/version`
-- `deploy/smoke.sh`
+- `../deploy/smoke.sh`
 
 Health checks should use stable dependency names from `CONFIG_AND_HEALTH_CONTRACT.md`.
 
@@ -336,7 +336,7 @@ Minimum tests before moving to Fetch:
 The auth shell is done when:
 
 1. app starts locally
-2. app can run against `retriever_cloudflare`
+2. app can run against `retriever_core`
 3. config validation prevents unsafe production launch
 4. Cloudflare identity maps to Retriever users
 5. pending-user flow works

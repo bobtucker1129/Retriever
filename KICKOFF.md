@@ -3,7 +3,9 @@
 **Created:** 2026-05-04  
 **Status:** Active planning project. The old `projects/Retriever/` folder is a read-only reference copy of the current LAN repo.
 
-This project exists to rebuild Retriever deliberately instead of continuing to bolt new behavior onto the old application. Each session should stay narrow: read this file, then `PLAN.md`, `PARKED.md`, the active architecture artifacts listed in `PLAN.md`, and the newest `SESSION-LOG.md` entry.
+**Workspace vs repo:** This folder (`projects/retriever-rebuild/`) lives **inside** the LordTate **Whitaker workspace**, but it is its **own git repo** (separate **Retriever** remote). The BooneOps broker lives next door at `projects/booneops-bots/`—not inside Retriever. **Read once and stop re-explaining:** [`docs/WORKSPACE_AND_REPOS.md`](docs/WORKSPACE_AND_REPOS.md) (where every class of docs lives, which `git` to commit).
+
+This project exists to rebuild Retriever deliberately instead of continuing to bolt new behavior onto the old application. Each session should stay narrow: read this file, then `PLAN.md`, `PARKED.md`, the active architecture artifacts listed in `PLAN.md` (paths under `docs/planning/`), and the newest `SESSION-LOG.md` entry. For orientation across many markdowns, open `docs/README.md`.
 
 **Before substantive Retriever work** (auth, admin, Fetch, pre-press, DSF, deploy, migrations): run the test-readiness preflight in `.cursor/skills/retriever-test-ready/SKILL.md` (or say `kickoff projects/retriever-rebuild` and treat that as the cue). Goal: confirm how you will **observe** the running app (local curl, public URL, Chrome MCP, or user paste-back) *before* a long coding loop, and run **pytest** early.
 
@@ -56,10 +58,13 @@ Do not run Impeccable as a substitute for the auth/security plan.
 
 ## File Conventions
 
+- `docs/WORKSPACE_AND_REPOS.md`: **LordTate workspace vs Retriever nested repo**, sibling broker, and **where each doc category lives** (stop re-deriving this each session).
+- `docs/README.md`: **documentation map** — which markdown to open first (operators vs dev vs auth).
+- `docs/planning/README.md`: what lives in the planning folder and how paths work.
 - `KICKOFF.md`: this operating contract.
 - `PLAN.md`: current phase, next recommended session, and active decisions.
-- `AUTH_REDESIGN.md`: auth teardown and target model.
-- `REVIEW-2026-05-04-OPUS.md`: read-only senior review of the initial rebuild plan.
+- `docs/planning/AUTH_REDESIGN.md`: auth teardown and target model.
+- `docs/archive/REVIEW-2026-05-04-OPUS.md`: read-only senior review of the initial rebuild plan.
 - `PARKED.md`: deferred ideas and open questions.
 - `SESSION-LOG.md`: newest-first session exits.
 

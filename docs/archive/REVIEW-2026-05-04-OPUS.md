@@ -12,7 +12,7 @@ Fetch remains the trust barrier. The old Fetch-to-BooneOps integration was real 
 
 ## What Is Strong
 
-- `AUTH_REDESIGN.md` correctly separates Cloudflare identity from Retriever business authorization.
+- `../planning/AUTH_REDESIGN.md` correctly separates Cloudflare identity from Retriever business authorization.
 - The role, module access, capability, and BooneOps level split fixes a major problem in the current app.
 - The module/action matrix is useful and should survive into implementation.
 - The project correctly treats Fetch as the first trust barrier.
@@ -48,7 +48,7 @@ The rebuild needs a secrets inventory and storage plan. Known secrets include Cl
 
 ### P1: Audit Log Design
 
-`AUTH_REDESIGN.md` names audit tiers but does not define schema, storage, retention, redaction, tamper evidence, or who can read logs. This matters for HIPAA/SOC2 posture.
+`../planning/AUTH_REDESIGN.md` names audit tiers but does not define schema, storage, retention, redaction, tamper evidence, or who can read logs. This matters for HIPAA/SOC2 posture.
 
 ### P1: Webhook And Broker Auth
 
@@ -71,17 +71,17 @@ Old Retriever has development paths that synthesize an admin user, auto-create `
 - Same-hostname cutover is not defined. Old and new Retriever may both need to exist while `retriever.boonegraphics.net` points somewhere.
 - OpenClaw is described as not being runtime, but scheduled reports inside Retriever may still depend on the OpenClaw broker unless we redesign that path.
 - The docs say to prefer explicit routing, but some language still resembles the old keyword-regex router.
-- The kickoff rule did not originally load active architecture artifacts; this should be fixed so future sessions do not lose `AUTH_REDESIGN.md` and `FETCH_TRUST_PLAN.md`.
+- The kickoff rule did not originally load active architecture artifacts; this should be fixed so future sessions do not lose `../planning/AUTH_REDESIGN.md` and `../planning/FETCH_TRUST_PLAN.md`.
 - Standalone Shipping Chat is removed, but DSF scoped invoice chat remains. Future docs should name that distinction clearly.
 
 ## Missing Artifacts
 
 Recommended order:
 
-1. `FETCH_TRUST_PLAN.md`
-2. `DEPLOYMENT_BRIDGE.md`
-3. `RUNTIME_NOTES.md`
-4. `SECRETS_HANDLING.md`
+1. `../planning/FETCH_TRUST_PLAN.md`
+2. `../planning/DEPLOYMENT_BRIDGE.md`
+3. `../planning/RUNTIME_NOTES.md`
+4. `../planning/SECRETS_HANDLING.md`
 5. `AUDIT_LOG_DESIGN.md`
 6. `MIGRATION_PLAN.md`
 7. `PRINTSMITH_TOKEN_AUTHORITY.md`

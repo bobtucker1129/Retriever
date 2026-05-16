@@ -14,7 +14,7 @@ Local mode uses a safe development identity from `.env.example` defaults:
 - display name: `Master Tate`
 - role behavior: seeded admin fallback when no MySQL config is present
 
-This is not production auth. Real staging/production must use Cloudflare Access JWT validation and `retriever_cloudflare`.
+This is not production auth. Real staging/production must use Cloudflare Access JWT validation and `retriever_core`.
 
 ## One-Time Setup
 
@@ -67,9 +67,9 @@ Fetch route (unauthenticated `curl`):
 curl -i http://127.0.0.1:8810/fetch
 ```
 
-Expected: **401** or **403** without a session when the app expects Cloudflare or session identity. In **local** mode with **`LOCAL_DEV_IDENTITY_ENABLED=true`**, browser access may show **200** HTML for the Fetch shell. Production-style smoke on Windows uses **`deploy/smoke.ps1`**, not raw `curl` alone.
+Expected: **401** or **403** without a session when the app expects Cloudflare or session identity. In **local** mode with **`LOCAL_DEV_IDENTITY_ENABLED=true`**, browser access may show **200** HTML for the Fetch shell. Production-style smoke on Windows uses **`../deploy/smoke.ps1`**, not raw `curl` alone.
 
-When you **do** have a session and Fetch access, **`GET /fetch`** returns **200**: the conversation rail works against MySQL when configured. With **`FETCH_ENABLED=false`**, the composer stays **off** and messages are not accepted through ask. With **`FETCH_ENABLED=true`**, ask saves the user line and appends the **stub** reply only (no live model)—and production operators should read **`deploy/WINDOWS_FETCH_RELEASE.md`** before using that flag because validation still requires model env vars.
+When you **do** have a session and Fetch access, **`GET /fetch`** returns **200**: the conversation rail works against MySQL when configured. With **`FETCH_ENABLED=false`**, the composer stays **off** and messages are not accepted through ask. With **`FETCH_ENABLED=true`**, ask saves the user line and appends the **stub** reply only (no live model)—and production operators should read **`../deploy/WINDOWS_FETCH_RELEASE.md`** before using that flag because validation still requires model env vars.
 
 ## Expected Local Behavior
 
@@ -85,7 +85,7 @@ When you **do** have a session and Fetch access, **`GET /fetch`** returns **200*
 
 When Boone MySQL or a local MySQL test database is available:
 
-1. Create `retriever_cloudflare` (and apply migrations including **`0002_fetch_conversations`** if you need conversation tables—same SQL as production).
+1. Create `retriever_core` (and apply migrations including **`0002_fetch_conversations`** if you need conversation tables—same SQL as production).
 2. Configure `.env.local` with MySQL connection values.
 3. Run:
 
@@ -97,11 +97,11 @@ Then restart the app and smoke the same routes.
 
 ## BooneOps broker and general LLM (production reference)
 
-Windows operator details live in **`docs/runbooks/booneops-broker-fetch-windows.md`** — **`BOONEOPS_BROKER_ENABLED`**, **`BOONEOPS_BROKER_URL`**, **`BOONEOPS_BROKER_BEARER_TOKEN`**, **`BOONEOPS_BROKER_HMAC_SECRET`**, **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`**. **`FETCH_GENERAL_QUESTIONS_ENABLED`** should stay **`false`** until general internet answers ship behind admin + **`fetch.ask_general`** (**`FETCH_TRUST_PLAN.md`**).
+Windows operator details live in **`../runbooks/booneops-broker-fetch-windows.md`** — **`BOONEOPS_BROKER_ENABLED`**, **`BOONEOPS_BROKER_URL`**, **`BOONEOPS_BROKER_BEARER_TOKEN`**, **`BOONEOPS_BROKER_HMAC_SECRET`**, **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`**. **`FETCH_GENERAL_QUESTIONS_ENABLED`** should stay **`false`** until general internet answers ship behind admin + **`fetch.ask_general`** (**`FETCH_TRUST_PLAN.md`**).
 
 ## Do Not Do Yet
 
-- Do not set **`FETCH_ENABLED=true`** in **production** without **`deploy/WINDOWS_FETCH_RELEASE.md`**: validation will require model settings even for the stub-only path.
+- Do not set **`FETCH_ENABLED=true`** in **production** without **`../deploy/WINDOWS_FETCH_RELEASE.md`**: validation will require model settings even for the stub-only path.
 - Do not point at production PrintSmith credentials for unapproved tests.
 - Do not paste real Cloudflare Tunnel credentials into `.env.local`.
 - Do not migrate old Fetch conversations unless explicitly requested.

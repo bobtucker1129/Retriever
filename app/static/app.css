@@ -1546,3 +1546,115 @@ a.fetch-row-action:hover {
   }
 }
 
+/* Admin user matrix */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.admin-matrix-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.admin-user-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.admin-user-matrix th,
+.admin-user-matrix td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-user-matrix th {
+  background: var(--color-surface-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-user-matrix input,
+.admin-user-matrix select {
+  width: 100%;
+  min-width: 5.4rem;
+  height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  padding: 0 var(--space-xs);
+}
+
+.admin-user-matrix input[name="full_name"] {
+  min-width: 10rem;
+}
+
+.admin-user-matrix select[name="production_location_choice"] {
+  min-width: 11rem;
+}
+
+.admin-matrix-row-footer {
+  margin-top: var(--space-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.admin-matrix-actions {
+  white-space: nowrap;
+}
+
+.admin-matrix-actions .inline-form {
+  display: inline-block;
+  margin-right: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.admin-matrix-actions .inline-form:last-child {
+  margin-right: 0;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-pill.status-pending {
+  background: color-mix(in srgb, var(--brand-gold) 35%, var(--color-surface));
+}
+
+.status-pill.status-active {
+  background: color-mix(in srgb, #2d8a54 28%, var(--color-surface));
+}
+
+.status-pill.status-suspended,
+.status-pill.status-blocked {
+  background: color-mix(in srgb, var(--color-danger) 22%, var(--color-surface));
+}
+
+.small {
+  font-size: 0.8rem;
+}
+
+.admin-matrix-placeholder {
+  display: inline-block;
+  min-width: 1.5rem;
+  text-align: center;
+}

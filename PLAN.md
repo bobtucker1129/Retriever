@@ -12,6 +12,8 @@ Recent **employee-facing Fetch** work improved **readable answers** (Markdown + 
 
 Latest pilot polish shipped **safe pipe tables**, **compact metadata/source cards**, **downloadable artifacts**, **context-aware report follow-ups**, **authenticated BooneOps artifact download proxying**, **local HTML exports**, and **styled Excel exports**. Live Chrome verified deployed Retriever **`8867ff6`** on **`BGGOL-VESKO01`** and BooneOps broker styled Excel commit **`8bd5db0e`** after broker restart.
 
+**2026-05-17 (broker):** **Fetch gateway-first** — BooneOps broker defaults **`BOONEOPS_FETCH_GATEWAY_ONLY`** on so Retriever Fetch skips broker-local SQL list + chart/PDF paths and answers via the **same OpenClaw gateway agent** as other forwarded BooneOps turns; rollback = env **`false`** + broker restart. See **`projects/booneops-bots/BROKER.md`** and **`docs/DISCORD_FETCH_PARITY.md`**.
+
 **2026-05-15 (evening):** Shipped **honest per-answer status** (friendly model + raw slug from broker when the gateway exposes structured **`gatewayModelId`**; **not recorded** when it does not), **thread load hint** (char estimate + “not a model context %” + conservative new-chat nudge), broker **`/docs` Switch grounding** prompt lines + **gateway telemetry** on broker JSON and **`booneops.message.complete`** logs, **`runGatewayPrompt`** return shape fix for report planners. **Retriever `35a5d45`** verified on production **`/version`**; **LordTate `278ec9a5`** broker on Whitaker **pulled + LaunchAgent kickstart**; operator reports pilot **“in a good place.”**
 
 **Do not widen flags** until **`/docs`-style answers** stay **summarized and well-attributed**; **`FETCH_TRUST_PLAN.md`** pilot notes stay the guide.
@@ -36,14 +38,14 @@ Completed:
 - Wrote `RUNTIME_NOTES.md`, deciding that a sibling Boone LAN Linux app VM is the preferred first host while `bggol-vesko01` stays live old Retriever and PrintSmith token authority during staging.
 - Wrote `PRINTSMITH_TOKEN_AUTHORITY.md`, preserving old Retriever's `/api/printsmith-token` and `/api/printsmith-token/invalidate` authority contract before cutover.
 - Wrote `VM_SETUP_PLAN.md`, using `bggol-retriever01` as the working Boone LAN Linux app VM name and defining host ownership, Cloudflare/Tailscale, deploy, rollback, MySQL access, secrets, and backup expectations.
-- Wrote `RETRIEVER_CLOUDFLARE_SCHEMA.md`, defining the first MySQL `retriever_cloudflare` schema for Cloudflare-linked users, roles, capabilities, module access, sessions, settings, delayed reports, artifacts, audit events, and migrations.
+- Wrote `RETRIEVER_CORE_SCHEMA.md`, defining the first MySQL `retriever_core` schema for Cloudflare-linked users, roles, capabilities, module access, sessions, settings, delayed reports, artifacts, audit events, and migrations.
 - Wrote `CONFIG_AND_HEALTH_CONTRACT.md`, defining the first `.env.example` shape, startup validation rules, `/health/*`, `/version`, dependency names, smoke tests, and redaction rules.
 - Wrote `AUTH_SHELL_BUILD_PLAN.md`, choosing Python/FastAPI with server-rendered HTML as the first stack and breaking the auth shell into build slices.
 - Updated `BUILD_CODE_LAYOUT.md` so the first code scaffold has a concrete FastAPI layout instead of an open framework choice.
 - Created the first FastAPI scaffold with `pyproject.toml`, `.env.example`, `app/`, `migrations/`, `tests/`, `deploy/`, config validation, health/version routes, disabled Fetch placeholder, initial MySQL migration SQL, and smoke/systemd examples.
 - Set up a local `.venv` for scaffold verification and added project `.gitignore` rules so environment/cache files stay out of Git.
 - Added DB-backed repository scaffolding for users, sessions, settings, and audit events.
-- Replaced the local-only user placeholder with a flow that uses `retriever_cloudflare` repositories when MySQL config is present, while keeping local scaffold fallback for development.
+- Replaced the local-only user placeholder with a flow that uses `retriever_core` repositories when MySQL config is present, while keeping local scaffold fallback for development.
 - Added tests for pending-user creation, seeded admin profile creation, settings/audit/session repositories, migration contents, config validation, health output, and Cloudflare local identity fixtures.
 - Implemented Cloudflare Access JWT validation against configured JWKS URL and audience, with tests for valid identity, wrong audience, missing email, and spoofed-header rejection.
 - Added a migration runner for SQL migrations and seed files.
@@ -55,7 +57,7 @@ Completed:
 - Expanded the admin users page with approve/block controls and assignment forms for role, BooneOps level, Fetch module access, and Fetch capability.
 - Added route-level tests for pending user page, seeded admin access, forbidden non-admin admin access, pending-user listing, and admin activation POST.
 - Updated template rendering calls to current Starlette/FastAPI style so route tests run without deprecation warnings.
-- Added opaque `retriever_session` cookie issuance backed by `retriever_cloudflare.sessions`.
+- Added opaque `retriever_session` cookie issuance backed by `retriever_core.sessions`.
 - Added active session reuse/touch behavior, logout/session revocation, and suspended/blocked route denial.
 - Added route and repository tests for session creation, reuse, revocation, and suspended/blocked access denial.
 - Wrote `LOCAL_RUNBOOK.md` for local setup, test, server start, route smoke checks, migration command, and current "do not do yet" guardrails.
@@ -78,7 +80,7 @@ Completed:
 - Corrected deployment target after inspecting the old Retriever runtime: `bggol-vesko01` is Windows Server, old Retriever runs as the `Retriever` NSSM service on port `8000`, and new Retriever deploys beside it as `RetrieverRebuild` on port `8810`.
 - Replaced the discarded Linux deploy artifacts with Windows-native PowerShell/NSSM deploy scripts and pushed the proven deploy fixes through commit `ed41f94`.
 - Configured Cloudflare Zero Trust for `retriever.boonegraphics.net`: team domain `boonegraphics.cloudflareaccess.com`, Access application/policy for Boone employees, tunnel `bf859516-9782-4c53-9098-1923709b4028`, and `cloudflared` Windows service running on `bggol-vesko01`.
-- Created MySQL schema/user for `retriever_cloudflare` on Boone MySQL and successfully applied `0001_retriever_cloudflare.sql` plus `0001_seed_auth_shell.sql` during first deploy.
+- Created MySQL schema/user for `retriever_core` on Boone MySQL and successfully applied `0001_retriever_core_auth.sql` plus `0001_seed_auth_shell.sql` during first deploy.
 - Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c` at `D:\retriever-rebuild\current`; next step is installing and starting the `RetrieverRebuild` Windows service.
 - Installed `RetrieverRebuild` as an NSSM Windows service on `bggol-vesko01`; service started successfully and `/health/live` returned 200 on port `8810`.
 - Local smoke passed on `bggol-vesko01`: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
@@ -110,7 +112,7 @@ Completed:
 - `RUNTIME_NOTES.md`: first runtime host decision, VM requirements, dependency map, identity/network rules, health/smoke expectations, and cutover gates.
 - `PRINTSMITH_TOKEN_AUTHORITY.md`: old/new PrintSmith REST token authority contract, staging posture, cutover options, secrets, audit, and verification checklist.
 - `VM_SETUP_PLAN.md`: sibling Boone LAN app VM setup plan, with `bggol-retriever01` as the working host name.
-- `RETRIEVER_CLOUDFLARE_SCHEMA.md`: first MySQL schema plan for new Retriever app state.
+- `RETRIEVER_CORE_SCHEMA.md`: first MySQL schema plan for new Retriever app state.
 - `CONFIG_AND_HEALTH_CONTRACT.md`: environment, validation, health, version, smoke, and redaction contract.
 - `AUTH_SHELL_BUILD_PLAN.md`: selected first framework/runtime and build slices for the Cloudflare auth shell.
 - `LOCAL_RUNBOOK.md`: local test/start/smoke instructions and first browser-smoke path.
@@ -149,10 +151,10 @@ Resolved:
 - Deploy scripts must clear inherited old Retriever env vars (`FETCH_*`, `MODEL_*`, `ANTHROPIC_*`, `BOONEOPS_*`, `PRINTSMITH_*`) before loading `D:\retriever-rebuild\env\retriever.env`.
 - New Retriever must not generate its own `LordTate` PrintSmith REST token while old Retriever is still the authority.
 - `retriever.boonegraphics.net` is the live hostname from first deploy. No staging subdomain is needed because old Retriever is LAN-only with no Cloudflare presence.
-- New Retriever app state should live in MySQL, using a new `retriever_cloudflare` schema separate from current Retriever's `retriever_core`.
+- New Retriever app state should live in Boone MySQL, using the existing `retriever_core` schema as the shared Retriever app-state home.
 - Old Retriever keeps first dibs on the shared PrintSmith token at first launch. New Retriever becomes primary only when new Retriever PrePress is migrated and ready to own that token.
 - Working VM name is `bggol-retriever01`, unless Boone IT requires a different naming convention.
-- First app-state schema is `retriever_cloudflare`; old Fetch conversations/private library data do not migrate by default.
+- First app-state schema is `retriever_core`; old Fetch conversations/private library data do not migrate by default.
 - First health contract uses `/health/live`, `/health/ready`, `/health/deep`, and `/version`.
 - First app stack is Python/FastAPI with server-rendered HTML and small HTMX-style interactions.
 - First config validation implementation should use `pydantic-settings`.
@@ -262,4 +264,3 @@ Reference: `memory/shared/seeds/2026-05-05-cursor-security-model.md`
 - Prefer explicit tool routing over clever keyword guessing.
 - Use delayed reports with visible progress for heavy list/export work instead of long blocking chat calls.
 - Use plain English first.
-

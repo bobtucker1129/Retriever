@@ -11,7 +11,7 @@ from app.config import AppSettings
 
 def create_pool(settings: AppSettings) -> MySQLConnectionPool:
     return MySQLConnectionPool(
-        pool_name="retriever_cloudflare",
+        pool_name="retriever_core",
         pool_size=5,
         host=settings.mysql_host,
         port=settings.mysql_port,

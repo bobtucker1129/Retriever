@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Callable, Optional, Protocol
 
 from app.auth.cloudflare import CloudflareIdentity
@@ -18,11 +19,18 @@ class UserRecord:
     email: str
     display_name: str
     status: str
+    full_name: str = ""
     role_key: Optional[str] = None
     booneops_level: str = "none"
+    inventory_level: str = "no"
+    proofs_level: str = "no"
+    production_location_id: Optional[int] = None
+    production_location_name: str = ""
     is_admin: bool = False
+    is_seed_admin: bool = False
     capabilities: frozenset[str] = field(default_factory=frozenset)
     modules: frozenset[str] = field(default_factory=frozenset)
+    last_seen_at: Optional[datetime] = None
 
 
 class CursorLike(Protocol):
@@ -61,6 +69,32 @@ class UserRepository:
             return None
         return self._record_from_row(row)
 
+    def get_by_id(self, user_id: int) -> Optional[UserRecord]:
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.production_location_id, u.production_location_name,
+                       u.is_seed_admin, u.last_seen_at,
+                       r.role_key, r.is_admin_role
+                FROM users u
+                LEFT JOIN roles r ON r.id = u.role_id
+                WHERE u.id = %s
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+        if not row:
+            return None
+        return self._record_from_row(row)
+
     def ensure_profile(
         self,
         identity: CloudflareIdentity,
@@ -87,8 +121,10 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.status,
-                       u.booneops_level, u.is_seed_admin,
+                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.production_location_id, u.production_location_name,
+                       u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
                 FROM users u
                 LEFT JOIN roles r ON r.id = u.role_id
@@ -96,6 +132,31 @@ class UserRepository:
                 ORDER BY u.created_at ASC
                 """,
                 ("pending",),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+        return [self._record_from_row(row) for row in rows]
+
+    def list_users_for_admin_directory(self) -> list[UserRecord]:
+        """Pending first, then active, suspended, blocked — for the admin matrix."""
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.production_location_id, u.production_location_name,
+                       u.is_seed_admin, u.last_seen_at,
+                       r.role_key, r.is_admin_role
+                FROM users u
+                LEFT JOIN roles r ON r.id = u.role_id
+                WHERE u.status IN ('pending', 'active', 'suspended', 'blocked')
+                ORDER BY FIELD(u.status, 'pending', 'active', 'suspended', 'blocked'),
+                         u.id ASC
+                """
             )
             rows = cursor.fetchall()
         finally:
@@ -128,16 +189,18 @@ class UserRepository:
         )
 
     def assign_role(self, user_id: int, role_key: str) -> None:
+        legacy_role = "admin" if role_key == "owner_admin" else "viewer"
         conn = self._connection_factory()
         cursor = conn.cursor()
         try:
             cursor.execute(
                 """
                 UPDATE users
-                SET role_id = (SELECT id FROM roles WHERE role_key = %s LIMIT 1)
+                SET role_id = (SELECT id FROM roles WHERE role_key = %s LIMIT 1),
+                    role = %s
                 WHERE id = %s
                 """,
-                (role_key, user_id),
+                (role_key, legacy_role, user_id),
             )
         finally:
             cursor.close()
@@ -156,6 +219,53 @@ class UserRepository:
                 WHERE id = %s
                 """,
                 (booneops_level, user_id),
+            )
+        finally:
+            cursor.close()
+            conn.close()
+
+    def update_admin_matrix_profile(
+        self,
+        user_id: int,
+        *,
+        full_name: str,
+        production_location_id: Optional[int],
+        production_location_name: str,
+        inventory_level: str,
+        proofs_level: str,
+    ) -> None:
+        inventory_level = _normalize_access_level(inventory_level)
+        proofs_level = _normalize_access_level(proofs_level)
+        cleaned_name = full_name.strip()
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET full_name = %s,
+                    display_name = CASE WHEN %s <> '' THEN %s ELSE display_name END,
+                    email = COALESCE(email, cloudflare_email),
+                    location_id = %s,
+                    location_name = %s,
+                    production_location_id = %s,
+                    production_location_name = %s,
+                    inventory_level = %s,
+                    proofs_level = %s
+                WHERE id = %s
+                """,
+                (
+                    cleaned_name or None,
+                    cleaned_name,
+                    cleaned_name,
+                    production_location_id,
+                    production_location_name.strip() or None,
+                    production_location_id,
+                    production_location_name.strip() or None,
+                    inventory_level,
+                    proofs_level,
+                    user_id,
+                ),
             )
         finally:
             cursor.close()
@@ -212,6 +322,37 @@ class UserRepository:
             cursor.close()
             conn.close()
 
+    def delete_user(self, user_id: int) -> None:
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                DELETE uc
+                FROM user_capabilities uc
+                WHERE uc.user_id = %s
+                """,
+                (user_id,),
+            )
+            cursor.execute(
+                """
+                DELETE uma
+                FROM user_module_access uma
+                WHERE uma.user_id = %s
+                """,
+                (user_id,),
+            )
+            cursor.execute(
+                """
+                DELETE FROM users
+                WHERE id = %s
+                """,
+                (user_id,),
+            )
+        finally:
+            cursor.close()
+            conn.close()
+
     def _update_status(
         self,
         user_id: int,
@@ -229,6 +370,11 @@ class UserRepository:
                 f"""
                 UPDATE users
                 SET status = %s,
+                    active = CASE
+                      WHEN %s = 'active' THEN TRUE
+                      WHEN %s IN ('suspended', 'blocked') THEN FALSE
+                      ELSE active
+                    END,
                     {timestamp_column} = NOW(),
                     approved_by_user_id = CASE
                       WHEN %s = 'active' THEN %s
@@ -236,7 +382,7 @@ class UserRepository:
                     END
                 WHERE id = %s
                 """,
-                (status, status, actor_user_id, user_id),
+                (status, status, status, status, actor_user_id, user_id),
             )
         finally:
             cursor.close()
@@ -248,15 +394,17 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.status,
-                       u.booneops_level, u.is_seed_admin,
+                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                       u.booneops_level, u.inventory_level, u.proofs_level,
+                       u.production_location_id, u.production_location_name,
+                       u.is_seed_admin, u.last_seen_at,
                        r.role_key, r.is_admin_role
                 FROM users u
                 LEFT JOIN roles r ON r.id = u.role_id
-                WHERE u.cloudflare_email = %s
+                WHERE u.cloudflare_email = %s OR u.email = %s OR u.username = %s
                 LIMIT 1
                 """,
-                (email,),
+                (email, email, email),
             )
             return cursor.fetchone()
         finally:
@@ -270,12 +418,16 @@ class UserRepository:
             cursor.execute(
                 """
                 INSERT INTO users
-                  (cloudflare_email, display_name, status, booneops_level)
-                VALUES (%s, %s, %s, %s)
+                  (username, password_hash, cloudflare_email, display_name, email,
+                   status, booneops_level, role, active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'viewer', FALSE)
                 """,
                 (
                     normalize_email(identity.email),
+                    _cloudflare_only_password_hash(),
+                    normalize_email(identity.email),
                     identity.display_name or normalize_email(identity.email),
+                    normalize_email(identity.email),
                     "pending",
                     "none",
                 ),
@@ -291,17 +443,20 @@ class UserRepository:
             cursor.execute(
                 """
                 INSERT INTO users
-                  (cloudflare_email, display_name, status, role_id, booneops_level,
-                   is_seed_admin, approved_at)
+                  (username, password_hash, cloudflare_email, display_name, email,
+                   status, role, active, role_id, booneops_level, is_seed_admin, approved_at)
                 VALUES (
-                  %s, %s, 'active',
+                  %s, %s, %s, %s, %s, 'active', 'admin', TRUE,
                   (SELECT id FROM roles WHERE role_key = 'owner_admin' LIMIT 1),
                   'medium', TRUE, NOW()
                 )
                 """,
                 (
                     normalize_email(identity.email),
+                    _cloudflare_only_password_hash(),
+                    normalize_email(identity.email),
                     identity.display_name or normalize_email(identity.email),
+                    normalize_email(identity.email),
                 ),
             )
             self._grant_seed_admin_capabilities(cursor, normalize_email(identity.email))
@@ -337,16 +492,32 @@ class UserRepository:
 
     def _record_from_row(self, row) -> UserRecord:
         user_id = int(row["id"])
+        raw_seen = row.get("last_seen_at")
+        last_seen: Optional[datetime] = None
+        if raw_seen is not None and not isinstance(raw_seen, datetime):
+            try:
+                last_seen = datetime.fromisoformat(str(raw_seen).replace("Z", "+00:00"))
+            except ValueError:
+                last_seen = None
+        elif isinstance(raw_seen, datetime):
+            last_seen = raw_seen
         return UserRecord(
             id=user_id,
             email=normalize_email(row["cloudflare_email"]),
             display_name=row.get("display_name") or normalize_email(row["cloudflare_email"]),
+            full_name=row.get("full_name") or "",
             status=row.get("status") or "pending",
             role_key=row.get("role_key"),
             booneops_level=row.get("booneops_level") or "none",
+            inventory_level=row.get("inventory_level") or "no",
+            proofs_level=row.get("proofs_level") or "no",
+            production_location_id=_optional_int(row.get("production_location_id")),
+            production_location_name=row.get("production_location_name") or "",
             is_admin=bool(row.get("is_seed_admin") or row.get("is_admin_role")),
+            is_seed_admin=bool(row.get("is_seed_admin")),
             capabilities=frozenset(self._capabilities_for_user(user_id)),
             modules=frozenset(self._modules_for_user(user_id)),
+            last_seen_at=last_seen,
         )
 
     def _capabilities_for_user(self, user_id: int) -> list[str]:
@@ -386,3 +557,22 @@ class UserRepository:
             cursor.close()
             conn.close()
 
+
+def _optional_int(value) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_access_level(value: str) -> str:
+    normalized = (value or "no").strip().lower()
+    if normalized not in {"no", "viewer", "manager"}:
+        raise ValueError("Invalid module level")
+    return normalized
+
+
+def _cloudflare_only_password_hash() -> str:
+    return "0" * 128

@@ -2,7 +2,7 @@
 
 **Status:** planning document  
 **Scope:** first production-style runtime for new Retriever, before employee cutover  
-**Inputs:** `DEPLOYMENT_BRIDGE.md`, `SECRETS_HANDLING.md`, `REVIEW-2026-05-04-OPUS.md`, `AUTH_REDESIGN.md`
+**Inputs:** `DEPLOYMENT_BRIDGE.md`, `SECRETS_HANDLING.md`, `../archive/REVIEW-2026-05-04-OPUS.md`, `AUTH_REDESIGN.md`
 
 ## Plain-English Summary
 
@@ -81,7 +81,7 @@ Required for the first staging runtime:
 
 - Cloudflare Access for the public front door
 - Cloudflare Tunnel from `retriever-next.boonegraphics.net` to `127.0.0.1:8810`
-- existing Boone MySQL server with a new `retriever_cloudflare` schema for users, roles, capabilities, sessions, settings, delayed-report state, and audit metadata
+- existing Boone MySQL server with a new `retriever_core` schema for users, roles, capabilities, sessions, settings, delayed-report state, and audit metadata
 - model provider credentials for Fetch, if Fetch is enabled
 - report/artifact storage for delayed reports
 - log storage and rotation
@@ -126,9 +126,9 @@ Use the Boone VM filesystem for first deploy mechanics:
 - production env outside Git at `/etc/retriever-rebuild/retriever.env`
 - app/deploy/audit logs under `/var/log/retriever-rebuild`
 
-For app state, use MySQL before employee cutover. The current Retriever already uses `retriever_core`; the rebuild should use a separate `retriever_cloudflare` schema so new auth/session/audit work does not mutate the old app's tables by accident.
+For app state, use Boone MySQL before employee cutover. The current Retriever already uses `retriever_core`; the rebuild should extend that same schema carefully so auth, module access, and future module state stay in one app-state home.
 
-Use `retriever_cloudflare` for:
+Use `retriever_core` for:
 
 - Cloudflare-linked user profiles
 - pending/active/suspended/blocked user state

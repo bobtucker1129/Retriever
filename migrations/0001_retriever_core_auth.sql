@@ -1,7 +1,7 @@
-CREATE DATABASE IF NOT EXISTS retriever_cloudflare
+CREATE DATABASE IF NOT EXISTS retriever_core
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.schema_migrations (
+CREATE TABLE IF NOT EXISTS retriever_core.schema_migrations (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   version VARCHAR(120) NOT NULL,
   description VARCHAR(255) NOT NULL,
@@ -11,7 +11,83 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.schema_migrations (
   UNIQUE KEY uq_schema_migrations_version (version)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.roles (
+CREATE TABLE IF NOT EXISTS retriever_core.users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100) DEFAULT NULL,
+  last_name VARCHAR(100) DEFAULT NULL,
+  full_name VARCHAR(255) DEFAULT NULL,
+  email VARCHAR(255) DEFAULT NULL,
+  phone VARCHAR(50) DEFAULT NULL,
+  role ENUM('admin','super','project_manager','sales','production','viewer') DEFAULT 'viewer',
+  department VARCHAR(100) DEFAULT NULL,
+  location_id BIGINT UNSIGNED DEFAULT NULL,
+  location_name VARCHAR(255) DEFAULT NULL,
+  pm_id INT DEFAULT NULL,
+  notes TEXT DEFAULT NULL,
+  active BOOLEAN DEFAULT FALSE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_login DATETIME DEFAULT NULL,
+  created_by VARCHAR(120) DEFAULT NULL
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN cloudflare_email VARCHAR(255) DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN display_name VARCHAR(255) DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN job_role VARCHAR(100) DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'pending';
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN role_id BIGINT UNSIGNED DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN booneops_level VARCHAR(32) NOT NULL DEFAULT 'none';
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN inventory_level VARCHAR(32) NOT NULL DEFAULT 'no';
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN proofs_level VARCHAR(32) NOT NULL DEFAULT 'no';
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN production_location_id BIGINT UNSIGNED DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN production_location_name VARCHAR(255) DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN is_seed_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN last_seen_at DATETIME DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN approved_at DATETIME DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN approved_by_user_id BIGINT UNSIGNED DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN suspended_at DATETIME DEFAULT NULL;
+
+ALTER TABLE retriever_core.users
+  ADD COLUMN blocked_at DATETIME DEFAULT NULL;
+
+CREATE INDEX idx_users_cloudflare_email ON retriever_core.users (cloudflare_email);
+CREATE INDEX idx_users_status ON retriever_core.users (status);
+CREATE INDEX idx_users_role_id ON retriever_core.users (role_id);
+CREATE INDEX idx_users_booneops_level ON retriever_core.users (booneops_level);
+CREATE INDEX idx_users_production_location_id ON retriever_core.users (production_location_id);
+
+CREATE TABLE IF NOT EXISTS retriever_core.roles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   role_key VARCHAR(64) NOT NULL,
   label VARCHAR(120) NOT NULL,
@@ -22,33 +98,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.roles (
   UNIQUE KEY uq_roles_role_key (role_key)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.users (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  cloudflare_email VARCHAR(255) NOT NULL,
-  display_name VARCHAR(255) DEFAULT NULL,
-  first_name VARCHAR(100) DEFAULT NULL,
-  last_name VARCHAR(100) DEFAULT NULL,
-  department VARCHAR(100) DEFAULT NULL,
-  job_role VARCHAR(100) DEFAULT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'pending',
-  role_id BIGINT UNSIGNED DEFAULT NULL,
-  booneops_level VARCHAR(32) NOT NULL DEFAULT 'none',
-  is_seed_admin BOOLEAN NOT NULL DEFAULT FALSE,
-  last_seen_at DATETIME DEFAULT NULL,
-  approved_at DATETIME DEFAULT NULL,
-  approved_by_user_id BIGINT UNSIGNED DEFAULT NULL,
-  suspended_at DATETIME DEFAULT NULL,
-  blocked_at DATETIME DEFAULT NULL,
-  notes TEXT DEFAULT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_users_cloudflare_email (cloudflare_email),
-  KEY idx_users_status (status),
-  KEY idx_users_role_id (role_id),
-  KEY idx_users_booneops_level (booneops_level)
-) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.capabilities (
+CREATE TABLE IF NOT EXISTS retriever_core.capabilities (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   capability_key VARCHAR(120) NOT NULL,
   label VARCHAR(160) NOT NULL,
@@ -60,7 +110,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.capabilities (
   KEY idx_capabilities_risk_level (risk_level)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.user_capabilities (
+CREATE TABLE IF NOT EXISTS retriever_core.user_capabilities (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   capability_id BIGINT UNSIGNED NOT NULL,
@@ -73,7 +123,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.user_capabilities (
   KEY idx_user_capabilities_capability_id (capability_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.user_module_access (
+CREATE TABLE IF NOT EXISTS retriever_core.user_module_access (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   module_key VARCHAR(64) NOT NULL,
@@ -86,7 +136,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.user_module_access (
   KEY idx_user_module_access_module_key (module_key)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.sessions (
+CREATE TABLE IF NOT EXISTS retriever_core.sessions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   session_id CHAR(64) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -104,7 +154,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.sessions (
   KEY idx_sessions_revoked_at (revoked_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.app_settings (
+CREATE TABLE IF NOT EXISTS retriever_core.app_settings (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   setting_key VARCHAR(120) NOT NULL,
   setting_value TEXT NOT NULL,
@@ -116,7 +166,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.app_settings (
   UNIQUE KEY uq_app_settings_key (setting_key)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.delayed_reports (
+CREATE TABLE IF NOT EXISTS retriever_core.delayed_reports (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   report_id CHAR(36) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -141,7 +191,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.delayed_reports (
   KEY idx_delayed_reports_created_at (created_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.report_artifacts (
+CREATE TABLE IF NOT EXISTS retriever_core.report_artifacts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   report_id CHAR(36) NOT NULL,
   artifact_id CHAR(36) NOT NULL,
@@ -157,7 +207,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.report_artifacts (
   KEY idx_report_artifacts_expires_at (expires_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.audit_events (
+CREATE TABLE IF NOT EXISTS retriever_core.audit_events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actor_type VARCHAR(32) NOT NULL,
@@ -182,8 +232,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.audit_events (
   KEY idx_audit_events_correlation_id (correlation_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-INSERT IGNORE INTO retriever_cloudflare.schema_migrations
+INSERT IGNORE INTO retriever_core.schema_migrations
   (version, description, applied_by)
 VALUES
-  ('0001_retriever_cloudflare', 'Initial auth shell schema', 'migration');
-
+  ('0001_retriever_core_auth', 'Retriever core Cloudflare auth compatibility schema', 'migration');

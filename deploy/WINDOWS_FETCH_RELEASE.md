@@ -25,7 +25,7 @@ Exact **Retriever Fetch** env names (mirror **`AppSettings`** in **`app/config.p
 - **`BOONEOPS_BROKER_HMAC_SECRET`** — must match broker-side **`BOONEOPS_BROKER_SIGNING_SECRET`** ( **`X-BooneOps-Signature`** body signing).
 - **`BOONEOPS_BROKER_REQUIRES_TAILSCALE`** — default **`true`**.
 
-Separate from broker traffic: **`FETCH_GENERAL_QUESTIONS_ENABLED`** (**`false`** = no broad internet/general LLM path; future per-user admin + **`fetch.ask_general`** per **`FETCH_TRUST_PLAN.md`**).
+Separate from broker traffic: **`FETCH_GENERAL_QUESTIONS_ENABLED`** (**`false`** = no broad internet/general LLM path; future per-user admin + **`fetch.ask_general`** per **`docs/planning/FETCH_TRUST_PLAN.md`**).
 
 **Smoke nuance:** with **`BOONEOPS_BROKER_ENABLED=true`**, **`/health/ready`** exposes **`checks.booneopsBroker`** as **`degraded`** today (configured-on indicator, **not** a live broker socket check). Confirm the real broker with **`GET /health`** on the **`BOONEOPS_BROKER_URL`** host from **`bggol-vesko01`** before widening employee use.
 
@@ -55,7 +55,7 @@ With **`FETCH_ENABLED=false`**, **model-related environment variables are not re
    powershell -ExecutionPolicy Bypass -File D:\retriever-rebuild\bin\deploy.ps1 main
    ```
 
-   The **first** deploy after the code that adds **`0002_fetch_conversations`** **must** run migrations once (`RETRIEVER_RUN_MIGRATIONS=true`). That applies the conversation/message tables and records **`0002`** in `retriever_cloudflare.schema_migrations`. Later deploys can omit the variable unless a new SQL migration ships.
+   The **first** deploy after the code that adds **`0002_fetch_conversations`** **must** run migrations once (`RETRIEVER_RUN_MIGRATIONS=true`). That applies the conversation/message tables and records **`0002`** in `retriever_core.schema_migrations`. Later deploys can omit the variable unless a new SQL migration ships.
 
 3. Optional safety after the database has been upgraded at least once: fail the deploy early if **`0002`** is missing (catches a half-upgraded or wrong database):
 
@@ -114,7 +114,7 @@ Use **`rollback.ps1`** only for **RetrieverRebuild**; it does not alter the lega
 
 Use this when you intentionally move past the stub. Items are decision + verification pairs; do not flip **`FETCH_ENABLED`** (or change smoke expectations) until the business and technical checks you need are satisfied.
 
-**Policy and trust (`FETCH_TRUST_PLAN.md`, `AUTH_REDESIGN.md`)**
+**Policy and trust (`docs/planning/FETCH_TRUST_PLAN.md`, `docs/planning/AUTH_REDESIGN.md`)**
 
 - [ ] Default model and provider approved; data-retention and vendor posture documented.
 - [ ] Who may use general outside-world answers vs internal-only routes is decided (`fetch.ask_general`, admin settings).

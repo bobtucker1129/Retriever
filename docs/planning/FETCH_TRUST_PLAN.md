@@ -2,7 +2,7 @@
 
 **Status:** planning document  
 **Scope:** new Retriever rebuild, first Fetch implementation  
-**Sources:** `AUTH_REDESIGN.md`, `REVIEW-2026-05-04-OPUS.md`, old `projects/Retriever/` Fetch reference
+**Sources:** `AUTH_REDESIGN.md`, `../archive/REVIEW-2026-05-04-OPUS.md`, old `projects/Retriever/` Fetch reference
 
 ## Live pilot findings (concise)
 
@@ -30,22 +30,22 @@ Old Fetch is not a compatibility target. It does not work well enough, and nobod
 
 This section is what **shipping code does today** on **new Retriever** (**`RetrieverRebuild`** on Windows **`bggol-vesko01`**, **`8810`**, Cloudflare **`retriever.boonegraphics.net`**). The rest of this document is still the **target** trust and routing contract.
 
-### BooneOps broker vs general internet answers (planned wiring)
+### BooneOps broker vs general internet answers (pilot policy, 2026-05)
 
-Phase 1 product intent: **`#printsmith`-style BooneOps turns** ride the **BooneOps broker** over Tailscale (same contract as **`projects/booneops-bots/FETCH_HANDOFF.md`**). Operators hold integration **`BOONEOPS_BROKER_ENABLED=false`** until **`docs/runbooks/booneops-broker-fetch-windows.md`** Tailscale **`GET /health`** checks pass.
+Phase 1 product intent: **`#printsmith`-style BooneOps turns** ride the **BooneOps broker** over Tailscale (same contract as **`projects/booneops-bots/FETCH_HANDOFF.md`**). Operators hold integration **`BOONEOPS_BROKER_ENABLED=false`** until **`../runbooks/booneops-broker-fetch-windows.md`** Tailscale **`GET /health`** checks pass.
 
-**Separate lane:** **`FETCH_GENERAL_QUESTIONS_ENABLED`** (**`fetch.general_questions_enabled`**) gates **general outside-world LLM** use. Leave it **`false`** until a later rollout pairs admin policy with **`fetch.ask_general`**. That general toggle does **not** need to turn on for internal BooneOps/`#printsmith`-equivalent routing.
+**General LLM (`FETCH_GENERAL_QUESTIONS_ENABLED` / `fetch.general_questions_enabled`):** For the **employee Fetch pilot**, this flag is intended to be **on at the app (environment) level** so answers outside strict Boone-only routing still feel usable—turning it off reads as a broken product and erodes trust. There is **no per-user “general LLM” column** in the admin matrix; keep a **single global kill switch** in env for emergencies or maintenance only. Capability **`fetch.ask_general`** remains the per-user gate when you need to tighten who may use that path in a later phase.
 
 **Combined gate:** even with the broker configured, employee-visible BooneOps replies require the normal ask gates (**active Fetch access**, **`FETCH_ENABLED`**, broker routing implementation live—not this doc’s assumption until code ships).
 
-- **In service:** Fetch **shell** for users with Fetch module or capability access; **conversation CRUD** in **`retriever_cloudflare`** after migration **`0002_fetch_conversations`**.
+- **In service:** Fetch **shell** for users with Fetch module or capability access; **conversation CRUD** in **`retriever_core`** after migration **`0002_fetch_conversations`**.
 - **Ask path:** **`POST /fetch/conversations/{id}/ask`** is **gated** by active user, Fetch shell access, and **`FETCH_ENABLED`**. When **`FETCH_ENABLED` is off**, the handler **redirects** without saving a user message. When on, it **persists** the user turn and appends a **fixed stub assistant reply**—**no** live **LLM**, **PrintSmith**, **docs**, **BooneOps**, **upload**, or **delayed-report** calls *(until broker/model routing replaces the stub in code)*.
-- **`FETCH_ENABLED` caveat:** In code, that flag only unlocks the **stub** behavior, but **startup validation** still **requires** **`MODEL_PROVIDER`**, **`MODEL_DEFAULT`**, and (for Anthropic) **`ANTHROPIC_API_KEY`** whenever **`FETCH_ENABLED=true`**. **Production** should keep **`FETCH_ENABLED=false`** until operators follow **`deploy/WINDOWS_FETCH_RELEASE.md`** for a deliberate enablement or pilot.
+- **`FETCH_ENABLED` caveat:** In code, that flag only unlocks the **stub** behavior, but **startup validation** still **requires** **`MODEL_PROVIDER`**, **`MODEL_DEFAULT`**, and (for Anthropic) **`ANTHROPIC_API_KEY`** whenever **`FETCH_ENABLED=true`**. **Production** should keep **`FETCH_ENABLED=false`** until operators follow **`../deploy/WINDOWS_FETCH_RELEASE.md`** for a deliberate enablement or pilot.
 - **Legacy coexistence:** **Old Retriever** on port **`8000`** remains PrintSmith token authority and PrePress/DSF host; **old Fetch** is **off**.
 
 ## Real model and tool enablement
 
-Before employees rely on **live** routing, delayed reports, and tool calls, work through the checklist in **`deploy/WINDOWS_FETCH_RELEASE.md`** plus the failure-state tables and capability matrix later in this document.
+Before employees rely on **live** routing, delayed reports, and tool calls, work through the checklist in **`../deploy/WINDOWS_FETCH_RELEASE.md`** plus the failure-state tables and capability matrix later in this document.
 
 The old implementation is still useful as a reference for product ideas: one employee-facing chat should answer Boone questions, use PrintSmith data, look up vendor/tool documentation, clean up emails, accept uploads, show sources, and return report downloads. The rebuild should keep the ideas that are actually valuable, but it does not need to preserve old code paths, old data, old UI quirks, or old routing behavior.
 

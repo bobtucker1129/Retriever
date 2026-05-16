@@ -30,12 +30,23 @@ async def index(
         return templates.TemplateResponse(
             request,
             "pending.html",
-            {"user": user, "settings": settings, "active_nav": "home"},
+            {
+                "user": user,
+                "settings": settings,
+                "active_nav": "home",
+                "nav_shell": "minimal",
+            },
         )
     response = templates.TemplateResponse(
         request,
         "base.html",
-        {"user": user, "settings": settings, "page_title": "Retriever", "active_nav": "home"},
+        {
+            "user": user,
+            "settings": settings,
+            "page_title": "Retriever",
+            "active_nav": "home",
+            "nav_shell": "full",
+        },
     )
     ensure_session_cookie(request, response, user, settings)
     return response

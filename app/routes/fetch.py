@@ -146,6 +146,7 @@ async def fetch_shell(
                 "user": user,
                 "active_nav": "fetch",
                 "fetch_forbidden_reason": "inactive",
+                "nav_shell": "minimal" if user.status == "pending" else "full",
             },
             status_code=403,
         )
@@ -159,6 +160,7 @@ async def fetch_shell(
                 "user": user,
                 "active_nav": "fetch",
                 "fetch_forbidden_reason": "no_module",
+                "nav_shell": "full",
             },
             status_code=403,
         )

@@ -1,33 +1,38 @@
 # Handover: retriever-rebuild
 
-**Session:** 2026-05-12  
+**Session:** 2026-05-17  
 **Channel:** Cursor  
 
 ## Plain-English state
 
-The **live Fetch pilot** stays **narrow** (no broad rollout, no general-internet answers for everyone). Recent work focused on **employee-readable threads**: structured assistant text, compact **per-answer** status lines, **metadata-backed** source-style cards, **viewport-stable** layout, **reliable bottom anchoring** after ask, **CSS that actually refreshes on deploy**, and **better local routing** when users mistype “PrintSmith” or ask invoice-style questions with dates.
+**Navigation:** Repo **root** is only the five **session spine** markdowns; long specs live in **`docs/planning/`**. If the folder feels noisy, open **`docs/README.md`** first — it is the single index (pilot, deploy, auth, archive, broker topology pointer).
 
-**Deployed baseline** for that UX arc includes commits **`0e4f494`** and **`085b082`** (layout/CSS delivery); one verified Actions run was **`25705235002`**.
+The **live Fetch pilot** stays **narrow** (no broad rollout, no general-internet answers for everyone). Recent work has included **employee-readable threads** (structured assistant text, status lines, source-style cards, layout/CSS), **local routing** for vendor and invoice-style questions, and **parity with the Discord Fetch path** via the BooneOps broker (see `projects/booneops-bots` and the parity doc linked from `docs/README.md`).
 
-## Repo hygiene (this wrap)
+**Auth/admin:** Admin → Users is being rebuilt into the real authorization matrix: Cloudflare email auto-populates, pending users show **Pending** in Last Login until approved, admins fill Full Name + Location, then set Admin/Fetch/PrePress/DSF yes-no gates plus Inventory/Proofs **No/Viewer/Manager** placeholders. Approval requires Full Name. Location options come from MIS `productionlocations` when the production DB user can see it.
 
-Someone’s working tree had **many core Fetch files deleted by mistake** (routes, broker, CSS, templates, tests). Wrapping used **`git restore`** from **`HEAD`** (`085b082`). **`python3 -m pytest`** → **139 passed** after restore.
+**Hosts (short):** Retriever on Windows (`bggol-vesko01`); BooneOps broker on Whitaker over Tailscale. Long-form map: `memory/shared/seeds/2026-05-17-fetch-broker-openclaw-topology.md` in the LordTate workspace.
+
+## Repo hygiene (earlier wrap, still true)
+
+Someone’s working tree had **many core Fetch files deleted by mistake** (routes, broker, CSS, templates, tests). Recovery used **`git restore`** from **`HEAD`**. **`python3 -m pytest`** should stay green before push.
 
 If you see that pattern again, **restore before committing**; those files are not optional test-only artifacts.
 
 ## Still open (next session)
 
-1. **Markdown pipe tables:** answers still render lists/emphasis but **tabular pipe Markdown** needs the **`tables`** extension plus **sanitizer allow-list** and **`app.css`** styling (see **`PLAN.md`** next session).
-2. **`/docs` answers:** keep pushing **summaries + clean source attribution** (`FETCH_TRUST_PLAN.md`).
-3. **Security:** schedule **OpenClaw gateway token rotation** after prior exposure (no secrets in docs/logs).
+1. **Markdown pipe tables:** answers still need safe **tabular** rendering if you want pipe tables (`tables` extension, sanitizer allow-list, `app.css` — see **`PLAN.md`**).
+2. **`/docs` answers:** keep pushing **summaries + clean source attribution** (`docs/planning/FETCH_TRUST_PLAN.md`).
+3. **Security:** schedule **OpenClaw gateway token rotation** after any prior exposure (no secrets in docs/logs).
 4. **RetrieverOps separate broker lane:** still **parked** (`PARKED.md` OQ-10).
+5. **Admin matrix deploy:** apply migration `0001_retriever_core_auth.sql`, deploy, then verify `weborders@boonegraphics.net` can be saved/approved from production `/admin/users`.
 
 ## Copy-ready next kickoff
 
 ```text
 kickoff projects/retriever-rebuild
 
-Goal: Add safe Markdown pipe-table rendering for Fetch assistant answers (tables extension + nh3 allow-list + styled tables in app.css + tests), then continue docs summarization/source-card quality. Keep pilot flags narrow; do not enable FETCH_GENERAL_QUESTIONS_ENABLED for everyone.
+Goal: Pick up from PLAN.md next session goal (tables or trust/docs work). Open docs/README.md if you need orientation.
 
-Notes: HEAD reference 085b082; accidental local deletions were restored with git restore — verify clean tree before push. Rotate OpenClaw gateway credential if not done. No secrets in chat or commits.
+Notes: Verify clean tree and pytest before push. Broker parity and gateway-only defaults live in booneops-bots; Retriever is the web UI + broker client. No secrets in chat or commits.
 ```

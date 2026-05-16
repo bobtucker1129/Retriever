@@ -1,4 +1,4 @@
-# retriever_cloudflare MySQL Schema
+# retriever_core MySQL Schema
 
 **Status:** planning document  
 **Scope:** first MySQL schema for new Retriever auth, Fetch readiness, delayed reports, settings, and audit metadata  
@@ -6,15 +6,13 @@
 
 ## Plain-English Summary
 
-New Retriever should use the existing Boone MySQL server, but not the old `retriever_core` schema.
-
-Create a new schema named `retriever_cloudflare`. It stores the new Cloudflare-based user profiles, permissions, sessions, app settings, delayed-report records, and audit metadata.
+New Retriever should use the existing Boone MySQL server and the existing `retriever_core` schema. The old Windows Retriever already uses `retriever_core.users`; the rebuild extends that app-state home with Cloudflare identity, module gates, sessions, audit, and Fetch metadata instead of creating a separate `retriever_cloudflare` schema.
 
 Do not migrate old Fetch conversations or private library data by default. Old Fetch is not a compatibility target.
 
 ## Schema Boundary
 
-Use `retriever_cloudflare` for:
+Use `retriever_core` for:
 
 - Cloudflare-linked users
 - pending/active/suspended/blocked user states
@@ -28,14 +26,13 @@ Use `retriever_cloudflare` for:
 - audit metadata
 - schema migration tracking
 
-Do not use `retriever_cloudflare` for:
+Do not use `retriever_core` for:
 
 - PrintSmith business source data
 - MIS/Postgres source-of-truth data
 - old Fetch conversation migration by default
-- old Retriever local password auth
-- raw customer-upload corpuses
 - production secrets
+- raw customer-upload corpuses
 - generic SQL proxy behavior
 
 ## Naming Rules
@@ -64,14 +61,14 @@ Minimum first schema:
 10. `report_artifacts`
 11. `audit_events`
 
-These are enough to build the Cloudflare auth shell and first Fetch skeleton without touching old Retriever tables.
+These are enough to build the Cloudflare auth shell and first Fetch skeleton while preserving the old password-auth compatibility fields already present in `retriever_core.users`.
 
 ## Users
 
 Plain English: one row per person who reaches Retriever through Cloudflare.
 
 ```sql
-CREATE TABLE retriever_cloudflare.users (
+CREATE TABLE retriever_core.users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   cloudflare_email VARCHAR(255) NOT NULL,
   display_name VARCHAR(255) DEFAULT NULL,
@@ -125,7 +122,7 @@ No normal employee password hash belongs here.
 Plain English: role is the person's broad business/app role, not their exact permission list.
 
 ```sql
-CREATE TABLE retriever_cloudflare.roles (
+CREATE TABLE retriever_core.roles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   role_key VARCHAR(64) NOT NULL,
   label VARCHAR(120) NOT NULL,
@@ -153,7 +150,7 @@ Recommended seed roles:
 Plain English: capabilities are the exact things the app checks before showing or doing work.
 
 ```sql
-CREATE TABLE retriever_cloudflare.capabilities (
+CREATE TABLE retriever_core.capabilities (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   capability_key VARCHAR(120) NOT NULL,
   label VARCHAR(160) NOT NULL,
@@ -193,7 +190,7 @@ Hold for later:
 Plain English: per-user permission assignments.
 
 ```sql
-CREATE TABLE retriever_cloudflare.user_capabilities (
+CREATE TABLE retriever_core.user_capabilities (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   capability_id BIGINT UNSIGNED NOT NULL,
@@ -218,7 +215,7 @@ Application rule:
 Plain English: module access controls what appears in the app shell.
 
 ```sql
-CREATE TABLE retriever_cloudflare.user_module_access (
+CREATE TABLE retriever_core.user_module_access (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   module_key VARCHAR(64) NOT NULL,
@@ -252,7 +249,7 @@ Do not show old modules in new Retriever until they are rebuilt or intentionally
 Plain English: track Retriever sessions enough to revoke them and troubleshoot auth without relying only on a signed cookie.
 
 ```sql
-CREATE TABLE retriever_cloudflare.sessions (
+CREATE TABLE retriever_core.sessions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   session_id CHAR(64) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -282,7 +279,7 @@ Rules:
 Plain English: settings that should change without a code deploy.
 
 ```sql
-CREATE TABLE retriever_cloudflare.app_settings (
+CREATE TABLE retriever_core.app_settings (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   setting_key VARCHAR(120) NOT NULL,
   setting_value TEXT NOT NULL,
@@ -309,7 +306,7 @@ Recommended first settings:
 Plain English: report jobs are first-class app records so heavy Fetch work does not look frozen.
 
 ```sql
-CREATE TABLE retriever_cloudflare.delayed_reports (
+CREATE TABLE retriever_core.delayed_reports (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   report_id CHAR(36) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -351,7 +348,7 @@ Do not store full customer payloads in `request_summary`. Use redacted summaries
 Plain English: downloadable files from delayed reports.
 
 ```sql
-CREATE TABLE retriever_cloudflare.report_artifacts (
+CREATE TABLE retriever_core.report_artifacts (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   report_id CHAR(36) NOT NULL,
   artifact_id CHAR(36) NOT NULL,
@@ -379,7 +376,7 @@ Rules:
 Plain English: record important app and service actions without storing sensitive full content by default.
 
 ```sql
-CREATE TABLE retriever_cloudflare.audit_events (
+CREATE TABLE retriever_core.audit_events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actor_type VARCHAR(32) NOT NULL,
@@ -443,7 +440,7 @@ Required first audit events:
 Plain English: track which DB migrations have run.
 
 ```sql
-CREATE TABLE retriever_cloudflare.schema_migrations (
+CREATE TABLE retriever_core.schema_migrations (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   version VARCHAR(120) NOT NULL,
   description VARCHAR(255) NOT NULL,

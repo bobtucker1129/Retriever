@@ -1,5 +1,7 @@
 # VM Setup Plan
 
+> **Production path today:** new Retriever first shipped beside old Retriever on **Windows `bggol-vesko01`** (see `../deploy/VM_SETUP_RUNBOOK.md` and `../deploy/WINDOWS_FETCH_RELEASE.md`). This file remains the **Linux-first** alternate plan (`bggol-retriever01`) if you later split onto a dedicated app VM.
+
 **Status:** planning document  
 **Scope:** first Boone LAN app VM for new Retriever  
 **Inputs:** `RUNTIME_NOTES.md`, `DEPLOYMENT_BRIDGE.md`, `SECRETS_HANDLING.md`, `PRINTSMITH_TOKEN_AUTHORITY.md`
@@ -49,7 +51,7 @@ The VM should have:
 - static Boone LAN IP or stable internal DNS
 - outbound HTTPS to GitHub or the chosen release source
 - outbound HTTPS to model providers when Fetch is enabled
-- access to the Boone MySQL server for `retriever_cloudflare`
+- access to the Boone MySQL server for `retriever_core`
 - Cloudflare Tunnel installed outside the app repo
 - Tailscale installed if first Fetch launch uses the existing BooneOps broker/report path
 - systemd
@@ -129,7 +131,7 @@ Later goal: move the broker/report path closer to Retriever so Tailscale is no l
 
 ## MySQL Access
 
-The VM needs a service database user with access to `retriever_cloudflare`.
+The VM needs a service database user with access to `retriever_core`.
 
 Principle:
 
@@ -140,12 +142,12 @@ Principle:
 Recommended first DB grants:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS retriever_cloudflare
+CREATE DATABASE IF NOT EXISTS retriever_core
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE USER 'retriever_app'@'<bggol-retriever01-lan-host>' IDENTIFIED BY '<redacted>';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX
-  ON retriever_cloudflare.* TO 'retriever_app'@'<bggol-retriever01-lan-host>';
+  ON retriever_core.* TO 'retriever_app'@'<bggol-retriever01-lan-host>';
 ```
 
 Use narrower migration grants later if the app runtime should not be able to alter schema.
@@ -208,7 +210,7 @@ Rollback must not require Cursor, GitHub, or package installation.
 
 Back up:
 
-- `retriever_cloudflare` MySQL schema
+- `retriever_core` MySQL schema
 - `/opt/retriever-rebuild/shared/uploads`
 - `/opt/retriever-rebuild/shared/reports` if reports need retention
 - `/etc/retriever-rebuild/retriever.env` through an approved secret backup process
@@ -225,7 +227,7 @@ The VM is ready for app build when:
 3. `/opt/retriever-rebuild`, `/etc/retriever-rebuild`, and `/var/log/retriever-rebuild` exist with correct ownership
 4. Cloudflare Tunnel reaches `127.0.0.1:8810`
 5. `retriever-next.boonegraphics.net` shows Cloudflare Access challenge or approved service-token response
-6. MySQL connection to `retriever_cloudflare` works from the VM
+6. MySQL connection to `retriever_core` works from the VM
 7. Tailscale broker path works if Fetch/BooneOps is enabled
 8. systemd can start/stop `retriever-web.service`
 9. deploy and rollback scripts exist, even if app release is still a stub

@@ -53,10 +53,16 @@ class AppSettings(BaseSettings):
 
     mysql_host: Optional[str] = None
     mysql_port: int = 3306
-    mysql_database: str = "retriever_cloudflare"
+    mysql_database: str = "retriever_core"
     mysql_user: Optional[str] = None
     mysql_password: Optional[str] = None
     mysql_ssl_mode: str = "preferred"
+
+    mis_db_host: Optional[str] = None
+    mis_db_port: int = 5432
+    mis_db_database: Optional[str] = None
+    mis_db_user: Optional[str] = None
+    mis_db_password: Optional[str] = None
 
     fetch_enabled: bool = False
     fetch_general_questions_enabled: bool = False
@@ -113,8 +119,8 @@ class AppSettings(BaseSettings):
             RetrieverEnvironment.PRODUCTION,
         }
 
-        if self.mysql_database != "retriever_cloudflare":
-            errors.append("MYSQL_DATABASE must be retriever_cloudflare")
+        if self.mysql_database != "retriever_core":
+            errors.append("MYSQL_DATABASE must be retriever_core")
 
         if is_runtime:
             if len(self.retriever_cookie_secret or "") < 32:
@@ -202,6 +208,7 @@ class AppSettings(BaseSettings):
             "bindHost": self.retriever_bind_host,
             "port": self.retriever_port,
             "mysqlDatabase": self.mysql_database,
+            "misDatabaseConfigured": bool(self.mis_db_host and self.mis_db_database and self.mis_db_user),
             "cloudflareAccessEnabled": self.cloudflare_access_enabled,
             "cloudflareJwtValidation": self.cloudflare_access_validate_jwt,
             "fetchEnabled": self.fetch_enabled,
@@ -223,4 +230,3 @@ def format_config_error(exc: ValidationError | ValueError) -> str:
     if isinstance(exc, ValidationError):
         return "; ".join(error["msg"] for error in exc.errors())
     return str(exc)
-

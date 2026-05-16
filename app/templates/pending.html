@@ -5,8 +5,9 @@
 
 {% block content %}
 <section class="notice-panel">
-  <p>You reached Retriever through Cloudflare, but your Retriever profile has not been approved yet.</p>
-  <p class="muted">{{ user.email }}</p>
+  <p>You successfully signed in through Cloudflare. Your Retriever profile is <strong>waiting for an operator</strong> to turn on access.</p>
+  <p>This is normal for new accounts. You are not blocked — nothing is wrong with your login.</p>
+  <p class="muted"><strong>Signed in as:</strong> {{ user.email }}</p>
+  <p class="muted small">You will see the full app modules after an administrator approves your account and assigns Fetch or other modules.</p>
 </section>
 {% endblock %}
-

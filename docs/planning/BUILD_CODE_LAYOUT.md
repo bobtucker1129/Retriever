@@ -116,17 +116,15 @@ The first code layout should support this separation:
 
 ```text
 projects/retriever-rebuild/
-  AUTH_REDESIGN.md
-  FETCH_TRUST_PLAN.md
-  DEPLOYMENT_BRIDGE.md
-  SECRETS_HANDLING.md
-  AUDIT_LOG_DESIGN.md
-  WEBHOOK_AND_BROKER_AUTH.md
-  BUILD_CODE_LAYOUT.md
-  VM_SETUP_PLAN.md
-  RETRIEVER_CLOUDFLARE_SCHEMA.md
-  CONFIG_AND_HEALTH_CONTRACT.md
-  AUTH_SHELL_BUILD_PLAN.md
+  KICKOFF.md
+  PLAN.md
+  PARKED.md
+  SESSION-LOG.md
+  HANDOVER.md
+  docs/
+    README.md
+    planning/
+      (architecture + trust + runbooks-in-prose live here)
   app/
     main.py
     config.py

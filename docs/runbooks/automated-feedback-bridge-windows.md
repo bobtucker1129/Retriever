@@ -110,4 +110,4 @@ This complements:
 
 - **`PLAN.md`** — current phase and next session pointer.
 - **`SESSION-LOG.md`** — when Phase A–D milestones land, log them here.
-- **`DEPLOYMENT_BRIDGE.md`** — broader Cursor → GitHub → Boone lane (this doc is the **post-deploy feedback** slice).
+- **`docs/planning/DEPLOYMENT_BRIDGE.md`** — broader Cursor → GitHub → Boone lane (this doc is the **post-deploy feedback** slice).

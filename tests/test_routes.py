@@ -98,6 +98,9 @@ def test_pending_user_page_for_non_admin_local_identity() -> None:
 
     assert response.status_code == 200
     assert "Retriever access pending" in response.text
+    assert "waiting for an operator" in response.text.lower()
+    assert "/health/ready" not in response.text
+    assert "nav-label\">Version" not in response.text
 
 
 def test_seeded_admin_can_load_app_shell() -> None:
@@ -107,6 +110,7 @@ def test_seeded_admin_can_load_app_shell() -> None:
 
     assert response.status_code == 200
     assert "Retriever auth shell" in response.text
+    assert "/health/ready" in response.text
 
 
 def test_layout_stylesheet_includes_git_sha_cache_buster() -> None:
@@ -1915,14 +1919,176 @@ def test_admin_users_page_lists_pending_users(monkeypatch) -> None:
     response = client.get("/admin/users")
 
     assert response.status_code == 200
-    assert "Pending User" in response.text
-    assert "Approve" in response.text
-    assert "Grant Fetch access" in response.text
+    assert "pending@boonegraphics.net" in response.text
+    assert "Cloudflare Email Auth" in response.text
+    assert "Last Login" in response.text
+    assert "Pending" in response.text
+    assert "Inventory" in response.text
+    assert "Proofs" in response.text
+    assert "00/Scott - Working" in response.text
+    assert ">Save<" in response.text
+
+
+def test_admin_suspend_self_returns_400(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/suspend")
+
+    assert response.status_code == 400
+
+
+def test_admin_block_self_returns_400(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/block")
+
+    assert response.status_code == 400
+
+
+def test_admin_delete_self_returns_400(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/delete")
+
+    assert response.status_code == 400
+
+
+def test_admin_delete_user_removes_profile(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("active@boonegraphics.net", "Active User", "active", full_name="Active User")
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    db.modules_by_user[1] = {"fetch"}
+    db.capabilities_by_user[1] = {"fetch.access"}
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/delete")
+
+    assert response.status_code == 303
+    assert "active@boonegraphics.net" not in db.users
+    assert db.modules_by_user.get(1) is None
+    assert db.capabilities_by_user.get(1) is None
+    assert ("user", 1) in db.revoked_sessions
+
+
+def test_admin_matrix_update_applies_entitlements(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("active@boonegraphics.net", "Active User", "active")
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        "/admin/users/1/matrix-update",
+        data={
+            "booneops_level": "light",
+            "full_name": "Web Orders",
+            "production_location_choice": "1|00/Scott - Working",
+            "admin_module": "false",
+            "fetch_module": "true",
+            "fetch_access": "true",
+            "prepress_module": "true",
+            "dsf_module": "false",
+            "inventory_level": "viewer",
+            "proofs_level": "manager",
+        },
+    )
+
+    assert response.status_code == 303
+    assert db.user_by_id(1)["full_name"] == "Web Orders"
+    assert db.user_by_id(1)["production_location_id"] == 1
+    assert db.user_by_id(1)["production_location_name"] == "00/Scott - Working"
+    assert db.user_by_id(1)["booneops_level"] == "light"
+    assert "fetch" in db.modules_by_user.get(1, set())
+    assert "prepress" in db.modules_by_user.get(1, set())
+    assert "fetch.access" in db.capabilities_by_user.get(1, set())
+    assert "prepress.access" in db.capabilities_by_user.get(1, set())
+    assert db.user_by_id(1)["inventory_level"] == "viewer"
+    assert db.user_by_id(1)["proofs_level"] == "manager"
+    assert "inventory" in db.modules_by_user.get(1, set())
+    assert "proofs" in db.modules_by_user.get(1, set())
+
+
+def test_admin_matrix_update_can_grant_admin(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("active@boonegraphics.net", "Active User", "active")
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        "/admin/users/1/matrix-update",
+        data={
+            "booneops_level": "none",
+            "full_name": "Active Admin",
+            "production_location_choice": "",
+            "admin_module": "true",
+            "fetch_module": "false",
+            "fetch_access": "false",
+            "prepress_module": "false",
+            "dsf_module": "false",
+            "inventory_level": "no",
+            "proofs_level": "no",
+        },
+    )
+
+    assert response.status_code == 303
+    assert db.user_by_id(1)["role_key"] == "owner_admin"
+    assert "admin" in db.modules_by_user.get(1, set())
+    assert "admin.manage_users" in db.capabilities_by_user.get(1, set())
+
+
+def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post(
+        "/admin/users/1/matrix-update",
+        data={
+            "booneops_level": "none",
+            "full_name": "Seed User",
+            "production_location_choice": "",
+            "admin_module": "false",
+            "fetch_module": "false",
+            "fetch_access": "false",
+            "prepress_module": "false",
+            "dsf_module": "false",
+            "inventory_level": "no",
+            "proofs_level": "no",
+        },
+    )
+
+    assert response.status_code == 400
 
 
 def test_admin_activate_post_updates_user_and_redirects(monkeypatch) -> None:
     db = FakeDb()
-    db.add_user("pending@boonegraphics.net", "Pending User", "pending")
+    db.add_user("pending@boonegraphics.net", "Pending User", "pending", full_name="Pending User")
     settings = make_settings(with_db=True)
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
@@ -1934,6 +2100,35 @@ def test_admin_activate_post_updates_user_and_redirects(monkeypatch) -> None:
     assert response.headers["location"] == "/admin/users"
     assert db.user_by_id(1)["status"] == "active"
     assert len(db.audit_events) == 1
+
+
+def test_admin_activate_requires_full_name(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("pending@boonegraphics.net", "Pending User", "pending")
+    settings = make_settings(with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/activate")
+
+    assert response.status_code == 400
+    assert db.user_by_id(1)["status"] == "pending"
+
+
+def test_admin_direct_entitlement_endpoint_rejects_seed_row(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    db.add_user("admin@boonegraphics.net", "Admin User", "active", is_seed_admin=True)
+    settings = make_settings(email="admin@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(admin_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.post("/admin/users/1/role", data={"role_key": "viewer"})
+
+    assert response.status_code == 400
+    assert db.user_by_id(1)["role_key"] == "owner_admin"
 
 
 def test_active_db_user_gets_session_cookie(monkeypatch) -> None:
@@ -2008,4 +2203,3 @@ def test_blocked_user_is_denied_admin_route(monkeypatch) -> None:
     response = client.get("/admin/users")
 
     assert response.status_code == 403
-

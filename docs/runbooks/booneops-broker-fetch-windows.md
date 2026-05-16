@@ -8,11 +8,11 @@
 
 Retriever Fetch should behave like **Discord `#printsmith` via the BooneOps broker**: when the broker is **on** in Fetch configuration and Fetch **ask** is enabled, employee questions follow the Phase 1 BooneOps contract (`projects/booneops-bots/FETCH_HANDOFF.md`, `projects/booneops-bots/BROKER.md`).  
 
-**Broad internet / general-purpose LLM** is a separate lane and stays **off** here: leave **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** until a deliberate per-account policy uses capability **`fetch.ask_general`** plus admin toggles (`FETCH_TRUST_PLAN.md`). Internal PrintSmith-like traffic goes to the broker **only** when **`BOONEOPS_BROKER_ENABLED=true`** **and** the ask path is allowed (**active Fetch access**, **`FETCH_ENABLED=true`**, etc.—see Windows fetch release notes).
+**Broad internet / general-purpose LLM** is a separate lane and stays **off** here: leave **`FETCH_GENERAL_QUESTIONS_ENABLED=false`** until a deliberate per-account policy uses capability **`fetch.ask_general`** plus admin toggles (`docs/planning/FETCH_TRUST_PLAN.md`). Internal PrintSmith-like traffic goes to the broker **only** when **`BOONEOPS_BROKER_ENABLED=true`** **and** the ask path is allowed (**active Fetch access**, **`FETCH_ENABLED=true`**, etc.—see Windows fetch release notes).
 
 ### Identity / persona (pilot)
 
-Live pilot expectation: **Retriever Fetch** speaks as **BooneOps**—the **employee-facing** Boone operations helper—not **private LordTate**. If replies sound like the wrong audience or route oddly, **verify broker persona and routing** on the OpenClaw/broker side against `FETCH_TRUST_PLAN.md` (pilot findings).
+Live pilot expectation: **Retriever Fetch** speaks as **BooneOps**—the **employee-facing** Boone operations helper—not **private LordTate**. If replies sound like the wrong audience or route oddly, **verify broker persona and routing** on the OpenClaw/broker side against `docs/planning/FETCH_TRUST_PLAN.md` (pilot findings).
 
 Store production values only in **`D:\retriever-rebuild\env\retriever.env`**. Do **not** paste secrets into tickets or chat.
 

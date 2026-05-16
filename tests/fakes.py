@@ -15,7 +15,8 @@ class FakeCursor:
         self.statements.append((normalized, params))
 
         if "INSERT INTO users" in normalized and "'active'" in normalized:
-            email, display_name = params
+            email = params[0]
+            display_name = params[3]
             self.db.add_user(email=email, display_name=display_name, status="active", is_seed_admin=True)
             return
 
@@ -26,7 +27,7 @@ class FakeCursor:
             return
 
         if "UPDATE users SET role_id" in normalized:
-            role_key, user_id = params
+            role_key, _legacy_role, user_id = params
             self.db.user_by_id(user_id)["role_key"] = role_key
             self.db.user_by_id(user_id)["is_admin_role"] = role_key == "owner_admin"
             return
@@ -36,8 +37,34 @@ class FakeCursor:
             self.db.user_by_id(user_id)["booneops_level"] = booneops_level
             return
 
+        if "UPDATE users SET full_name" in normalized:
+            (
+                full_name,
+                _cleaned_name,
+                display_name,
+                production_location_id,
+                production_location_name,
+                _production_location_id_again,
+                _production_location_name_again,
+                inventory_level,
+                proofs_level,
+                user_id,
+            ) = params
+            user = self.db.user_by_id(user_id)
+            user["full_name"] = full_name
+            if display_name:
+                user["display_name"] = display_name
+            user["production_location_id"] = production_location_id
+            user["production_location_name"] = production_location_name
+            user["inventory_level"] = inventory_level
+            user["proofs_level"] = proofs_level
+            return
+
         if "INSERT INTO users" in normalized:
-            email, display_name, status, booneops_level = params
+            email = params[0]
+            display_name = params[3]
+            status = params[5]
+            booneops_level = params[6]
             self.db.add_user(
                 email=email,
                 display_name=display_name,
@@ -64,6 +91,13 @@ class FakeCursor:
             ]
             return
 
+        if "FROM productionlocations" in normalized:
+            self.last_result = [
+                {"id": location_id, "name": name}
+                for location_id, name in sorted(self.db.production_locations.items(), key=lambda item: item[1])
+            ]
+            return
+
         if "INSERT IGNORE INTO user_module_access" in normalized:
             module_key, email = params
             user_id = self.db.users[email]["id"]
@@ -84,9 +118,34 @@ class FakeCursor:
             self.db.capabilities_by_user.setdefault(user_id, set()).add(capability_key)
             return
 
+        if (
+            normalized.startswith("DELETE uc FROM user_capabilities")
+            and "WHERE uc.user_id = %s" in normalized
+            and "JOIN capabilities" not in normalized
+        ):
+            user_id = params[0]
+            self.db.capabilities_by_user.pop(user_id, None)
+            return
+
         if normalized.startswith("DELETE uc FROM user_capabilities"):
             user_id, capability_key = params
             self.db.capabilities_by_user.setdefault(user_id, set()).discard(capability_key)
+            return
+
+        if normalized.startswith("DELETE uma FROM user_module_access"):
+            user_id = params[0]
+            self.db.modules_by_user.pop(user_id, None)
+            return
+
+        if normalized.startswith("DELETE FROM users"):
+            user_id = params[0]
+            email_to_delete = None
+            for email, user in self.db.users.items():
+                if user["id"] == user_id:
+                    email_to_delete = email
+                    break
+            if email_to_delete:
+                del self.db.users[email_to_delete]
             return
 
         if "UPDATE sessions SET revoked_at" in normalized and "session_id = %s" in normalized:
@@ -240,6 +299,22 @@ class FakeCursor:
             self.last_result = self.db.users.get(email)
             return
 
+        if "FROM users u" in normalized and "WHERE u.id = %s" in normalized:
+            uid = params[0]
+            self.last_result = None
+            for u in self.db.users.values():
+                if u["id"] == uid:
+                    self.last_result = dict(u)
+                    break
+            return
+
+        if "FROM users u" in normalized and "WHERE u.status IN" in normalized:
+            rows = [dict(u) for u in self.db.users.values() if u["status"] in {"pending", "active", "suspended", "blocked"}]
+            order = {"pending": 0, "active": 1, "suspended": 2, "blocked": 3}
+            rows.sort(key=lambda r: (order.get(r["status"], 9), r["id"]))
+            self.last_result = rows
+            return
+
         if "WHERE u.status = %s" in normalized:
             status = params[0]
             self.last_result = [row for row in self.db.users.values() if row["status"] == status]
@@ -296,6 +371,10 @@ class FakeDb:
         self.sessions = {}
         self.fetch_conversations = {}
         self.fetch_messages = []
+        self.production_locations = {
+            1: "00/Scott - Working",
+            2: "PrePress",
+        }
 
     def connection(self) -> FakeConnection:
         return FakeConnection(self)
@@ -307,6 +386,12 @@ class FakeDb:
         status: str,
         booneops_level: str = "none",
         is_seed_admin: bool = False,
+        last_seen_at: object = None,
+        full_name: str = "",
+        production_location_id: object = None,
+        production_location_name: str = "",
+        inventory_level: str = "no",
+        proofs_level: str = "no",
     ) -> None:
         user_id = self.next_id
         self.next_id += 1
@@ -314,11 +399,17 @@ class FakeDb:
             "id": user_id,
             "cloudflare_email": email,
             "display_name": display_name,
+            "full_name": full_name,
             "status": status,
             "role_key": "owner_admin" if is_seed_admin else None,
             "is_admin_role": is_seed_admin,
             "booneops_level": "medium" if is_seed_admin else booneops_level,
+            "inventory_level": inventory_level,
+            "proofs_level": proofs_level,
+            "production_location_id": production_location_id,
+            "production_location_name": production_location_name,
             "is_seed_admin": is_seed_admin,
+            "last_seen_at": last_seen_at,
         }
 
     def user_by_id(self, user_id: int):
@@ -326,4 +417,3 @@ class FakeDb:
             if user["id"] == user_id:
                 return user
         raise KeyError(user_id)
-

@@ -11,6 +11,7 @@ dependencies = [
   "markdown",
   "mysql-connector-python",
   "nh3",
+  "psycopg2-binary",
   "pydantic-settings",
   "PyJWT[crypto]",
   "python-multipart",
@@ -42,4 +43,3 @@ asyncio_mode = "auto"
 [tool.ruff]
 line-length = 100
 target-version = "py39"
-

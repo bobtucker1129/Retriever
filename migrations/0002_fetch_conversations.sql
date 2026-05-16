@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.fetch_conversations (
+CREATE TABLE IF NOT EXISTS retriever_core.fetch_conversations (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   conversation_id CHAR(36) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.fetch_conversations (
   KEY idx_fetch_conversations_last_message (user_id, last_message_at)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS retriever_cloudflare.fetch_messages (
+CREATE TABLE IF NOT EXISTS retriever_core.fetch_messages (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   message_id CHAR(36) NOT NULL,
   conversation_id CHAR(36) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS retriever_cloudflare.fetch_messages (
   KEY idx_fetch_messages_route_key (route_key)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-INSERT IGNORE INTO retriever_cloudflare.schema_migrations
+INSERT IGNORE INTO retriever_core.schema_migrations
   (version, description, applied_by)
 VALUES
   ('0002_fetch_conversations', 'Fetch conversation and message storage', 'migration');

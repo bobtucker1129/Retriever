@@ -22,11 +22,11 @@ Live production for the rebuild is **Windows Server** on **`bggol-vesko01`**, no
 | Public URL | `https://retriever.boonegraphics.net` (Cloudflare Access + Tunnel to `127.0.0.1:8810`) |
 | New Retriever | Windows service **RetrieverRebuild** (NSSM), `127.0.0.1:8810` |
 | Legacy Retriever | Windows service **Retriever** on port **8000** (PrePress, DSF, PrintSmith token authority until cutover) |
-| Deploy + Fetch foundation | **`deploy/WINDOWS_FETCH_RELEASE.md`**: migration **`0002`**, **`smoke.ps1`**, **`FETCH_ENABLED=false`** recommended until deliberate enablement—see runbook for stub vs **`MODEL_*`** validation. BooneOps broker **`BOONEOPS_*`** + Tailscale **`GET /health`** before **`BOONEOPS_BROKER_ENABLED=true`**: **`docs/runbooks/booneops-broker-fetch-windows.md`**. **`FETCH_GENERAL_QUESTIONS_ENABLED`** stays **`false`** for general LLM deferral—see **`FETCH_TRUST_PLAN.md`**. |
+| Deploy + Fetch foundation | **`../deploy/WINDOWS_FETCH_RELEASE.md`**: migration **`0002`**, **`smoke.ps1`**, **`FETCH_ENABLED=false`** recommended until deliberate enablement—see runbook for stub vs **`MODEL_*`** validation. BooneOps broker **`BOONEOPS_*`** + Tailscale **`GET /health`** before **`BOONEOPS_BROKER_ENABLED=true`**: **`../runbooks/booneops-broker-fetch-windows.md`**. **`FETCH_GENERAL_QUESTIONS_ENABLED`** stays **`false`** for general LLM deferral—see **`FETCH_TRUST_PLAN.md`**. |
 
 Plain English: operators follow **PowerShell/NSSM** procedures on the **`D:\retriever-rebuild\`** layout; do not assume **`/opt`**, **bash deploy**, or **`systemd`** on this host.
 
-**CI lane:** merges to **`main`** trigger **GitHub Actions** on a **self-hosted Windows runner** on this host, which runs **`D:\retriever-rebuild\bin\deploy.ps1`** (see **`docs/runbooks/github-actions-retriever-rebuild-deploy.md`**). The **post-deploy feedback** roadmap—so agents read smoke/health/version outcomes without clipboard mediation—is **`docs/runbooks/automated-feedback-bridge-windows.md`**.
+**CI lane:** merges to **`main`** trigger **GitHub Actions** on a **self-hosted Windows runner** on this host, which runs **`D:\retriever-rebuild\bin\deploy.ps1`** (see **`../runbooks/github-actions-retriever-rebuild-deploy.md`**). The **post-deploy feedback** roadmap—so agents read smoke/health/version outcomes without clipboard mediation—is **`../runbooks/automated-feedback-bridge-windows.md`**.
 
 ## Reference: Linux sibling-VM runtime plan (deferred)
 
@@ -303,7 +303,7 @@ Use three levels:
 
 ## Smoke Tests
 
-**Windows production (`bggol-vesko01`, `RetrieverRebuild`):** run **`D:\retriever-rebuild\bin\smoke.ps1`** as documented in **`deploy/WINDOWS_FETCH_RELEASE.md`**. That script is the gate for Fetch foundation deploys (including expectations that **`fetch`** and **`modelProvider`** stay **`disabled`** while **`FETCH_ENABLED=false`**). When wiring BooneOps broker traffic, also run **`GET /health`** on **`BOONEOPS_BROKER_URL`** from **`bggol-vesko01`** (**`docs/runbooks/booneops-broker-fetch-windows.md`**). Today **`checks.booneopsBroker`** in **`/health/ready`** does not substitute for that outbound check.
+**Windows production (`bggol-vesko01`, `RetrieverRebuild`):** run **`D:\retriever-rebuild\bin\smoke.ps1`** as documented in **`../deploy/WINDOWS_FETCH_RELEASE.md`**. That script is the gate for Fetch foundation deploys (including expectations that **`fetch`** and **`modelProvider`** stay **`disabled`** while **`FETCH_ENABLED=false`**). When wiring BooneOps broker traffic, also run **`GET /health`** on **`BOONEOPS_BROKER_URL`** from **`bggol-vesko01`** (**`../runbooks/booneops-broker-fetch-windows.md`**). Today **`checks.booneopsBroker`** in **`/health/ready`** does not substitute for that outbound check.
 
 Recommended command for a **Linux reference** host or local developer habit:
 
@@ -409,7 +409,7 @@ If BooneOps broker later moves into the new Retriever runtime, update this docum
 
 ## Required Deployment Artifacts
 
-**`bggol-vesko01` (current production):** Windows paths and **`RetrieverRebuild`** / **`smoke.ps1`** — see **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`deploy/deploy.ps1`**, and **`D:\retriever-rebuild\env\retriever.env`**. Ignore the **`/opt`** / **`systemd`** list items below for this host.
+**`bggol-vesko01` (current production):** Windows paths and **`RetrieverRebuild`** / **`smoke.ps1`** — see **`../deploy/WINDOWS_FETCH_RELEASE.md`**, **`../deploy/deploy.ps1`**, and **`D:\retriever-rebuild\env\retriever.env`**. Ignore the **`/opt`** / **`systemd`** list items below for this host.
 
 **Linux sibling VM (if used later):** keep the checklist below.
 

@@ -2,6 +2,76 @@
 
 Exit summaries, newest at top. Use project-local wrap to keep this current.
 
+**Path note:** Older entries may name planning files as if they lived in the repo root (for example `FETCH_TRUST_PLAN.md`). Those files now live under **`docs/planning/`**. See **`PLAN.md`** → *Active Architecture Artifacts* and **`docs/README.md`** for current paths.
+
+---
+
+## 2026-05-16 — Codex: auth admin users matrix
+
+**Goal:** Replace the pending-only admin approval card with the actual user authorization table Master Tate described after testing `weborders@boonegraphics.net` through Cloudflare Access.
+
+**What changed:**
+
+- Added migration **`0001_retriever_core_auth.sql`** for admin profile fields: `full_name`, production location id/name, Inventory level, and Proofs level.
+- Reworked **Admin → Users** into one user matrix: **Last Login**, Cloudflare email, Full Name, Location, Admin, Fetch, PrePress, DSF, Inventory, Proofs, Role, BooneOps, Status, Actions.
+- New pending users show **Pending** in **Last Login** until approval; approval now requires a full name.
+- **Admin / Fetch / PrePress / DSF** are yes/no module gates. **Inventory / Proofs** are placeholder levels: **No / Viewer / Manager**.
+- Location options come from the MIS `productionlocations` query when available; saved location id/name is copied to the Retriever user row.
+- Server derives the internal role from the **Admin** yes/no selection; no hidden role choice is trusted from the UI.
+- Seed operator account remains protected from matrix and direct legacy admin POST endpoints.
+- Added **Remove** action: deletes the Retriever profile/access rows, revokes sessions, audits the delete, protects self/seed, and lets the same Cloudflare email return later as pending.
+- Checked old Retriever auth: it used MySQL **`retriever_core.users`** as the sole auth source with username/password hashes, role enum, active flag, location fields, `last_login`, and hard delete. Rebuild now targets that same **`retriever_core`** app-state schema instead of the Cursor-era **`retriever_cloudflare`** schema.
+- Updated admin onboarding runbook to match the new operator flow.
+
+**Update after DB review:** Master Tate confirmed **`retriever_cloudflare`** was the Cursor/new-rebuild attempt and asked to use the existing Boone MySQL **`retriever_core`** app-state database instead. Active code/config/migrations now target **`retriever_core`**; `0001_retriever_core_auth.sql` preserves old password-auth compatibility columns while adding Cloudflare identity/status/module/session/audit tables and fields. Do **not** drop the live `retriever_cloudflare` schema until the `retriever_core` deploy is verified.
+
+**Proof:** `python3 -m pytest -q` → **270 passed** after the `retriever_core` switch. Local dev server on **`127.0.0.1:8810`** returned **200** for `/health/live`, `/version`, `/`, `/admin/users`, and `/fetch`. Chrome DevTools MCP opened local `/admin/users` with no console errors earlier in the auth-matrix pass. Production Chrome snapshot before deploy showed the old pending-only card for `weborders@boonegraphics.net`, confirming the target behavior gap.
+
+**Next:** Apply migration and deploy through the Windows runner, then use production `/admin/users` to save Full Name/Location/modules for `weborders@boonegraphics.net` and Approve.
+
+---
+
+## 2026-05-16 — Codex: admin onboarding matrix hardening
+
+**Goal:** Continue from the current Retriever workspace state and make the in-progress admin user matrix safer to ship.
+
+**What changed:**
+
+- Preserved the new **Admin → Users** matrix direction: directory view across pending/active/suspended/blocked users, pending-account copy, minimal pending shell nav, and `docs/runbooks/admin-user-onboarding.md`.
+- Split the accidentally blended route test so **activate user** coverage is its own test again.
+- Hardened admin actions so the **seed operator account** cannot be changed through direct legacy POST endpoints, not only hidden from the matrix UI.
+- Added direct endpoint coverage for seed-row protection.
+
+**Proof:** `python3 -m pytest -q` → **264 passed**. Local dev server on **`127.0.0.1:8810`** returned **200** for `/health/live`, `/version`, `/`, `/admin/users`, and `/fetch`. Chrome DevTools MCP opened `/admin/users`; no console errors; document/CSS/logo requests were **200**.
+
+**Notes:** Local dev server was stopped after verification. The repo still contains broader pre-existing dirty state, including doc moves and untracked documentation/assets; separate commits by concern before push.
+
+---
+
+## 2026-05-17 — Wrap: planning docs → `docs/planning/`, kickoff path clarified
+
+**Goal (this wrap):** Close the session after **documentation layout** work: Master Tate could not judge “how aggressive” cleanup should be without knowing what **kickoff** actually loads; simultaneously reduce **root markdown sprawl** (~22 files) so the default session path matches **human expectation**.
+
+**What landed:**
+
+- **Root = session spine only:** **`KICKOFF.md`**, **`PLAN.md`**, **`PARKED.md`**, **`SESSION-LOG.md`**, **`HANDOVER.md`** stay at repo root; **17** long-form specs moved to **`docs/planning/`** (single hub + relative links fixed: `../deploy/`, `../runbooks/`, `../archive/`).
+- **Navigation:** **`docs/README.md`** (map) and **`docs/planning/README.md`** (what lives there); archived Opus review links retargeted; **`HANDOVER.md`** / **`KICKOFF.md`** explain “read `PLAN`’s active artifact list, paths under `docs/planning/`.”
+- **Cross-repo pointers:** **`deploy/WINDOWS_FETCH_RELEASE.md`**, **`docs/runbooks/*`**, **`.cursor/skills/retriever-test-ready/SKILL.md`**, **LordTate** **`.cursor/rules/retriever-rebuild.mdc`**, **`memory/shared/seeds/2026-05-17-fetch-broker-openclaw-topology.md`** and **`2026-05-05-cursor-security-model.md`** use the new **`docs/planning/...`** paths where they cited Retriever trust docs.
+
+**What we learned (plain English):** Kickoff **never** implied “read every root `.md`”; it implied **five spine files + whatever `PLAN.md` lists for the active goal**. Putting long specs one folder down makes that **visible** without deleting history (**`SESSION-LOG`** path note preserves older references).
+
+**Proof:** `python3 -m pytest -q` → **255 passed** (no runtime code changes in this pass).
+
+**Repo / next push:** **Retriever** nested repo under `projects/retriever-rebuild` has **staged-ready** doc moves (many `D` at old paths + **`?? docs/planning/`** until `git add`); **LordTate** workspace shows **modified** **`retriever-rebuild.mdc`** and seed path tweaks—**commit separately** per repo policy. `git status` still shows unrelated untracked noise (**.DS_Store**, **`.cursor/`** plugin copy, **`retriever_favicon_package/`**) — **do not** mix into a docs-only commit without intent.
+
+**Next session:** **`PLAN.md` → Next Recommended Session`** (Discord–Fetch parity **eight-step program**). Before coding: **`.cursor/skills/retriever-test-ready/SKILL.md`** preflight + open **Retriever** in a browser (local **`http://127.0.0.1:8810/`** or **`https://retriever.boonegraphics.net/`** after Access).
+
+---
+
+## 2026-05-17 — Broker: Fetch gateway-first (unified agent path)
+
+**BooneOps broker (`projects/booneops-bots`):** Retriever Fetch (`sessionMetadata.source: retriever-fetch`) now **defaults to gateway-only**: broker-local **data-list** and **report/chart** steps are skipped unless `BOONEOPS_FETCH_GATEWAY_ONLY` is set false on the host. `getConfig()` passes `fetchGatewayOnly` into routing; `buildGatewayEnvelope` no longer tells the model that a separate broker report engine owns charts when gateway-only is on. **Rollback:** set `BOONEOPS_FETCH_GATEWAY_ONLY=false` and restart the broker. Integration tests force `BOONEOPS_FETCH_GATEWAY_ONLY=false` inside `withBrokerEnv` so HTTP fixtures stay stable. See `BROKER.md` and `docs/DISCORD_FETCH_PARITY.md` for operator notes and the `reportContext` / export follow-up gap.
+
 ---
 
 ## 2026-05-17 — Wrap: parity spine reset (golden Discord contract + kill forks)
@@ -314,9 +384,9 @@ Browser-check `https://retriever.boonegraphics.net/fetch` through Cloudflare Acc
 - Corrected a major deployment assumption: `bggol-vesko01` is Windows Server, not Linux. Old Retriever runs there as the `Retriever` NSSM service on port `8000`.
 - Replaced the failed Linux/systemd/bash deployment path with Windows PowerShell/NSSM scripts.
 - Configured Cloudflare Zero Trust for `retriever.boonegraphics.net`: team domain `boonegraphics.cloudflareaccess.com`, Boone Employees Access policy, tunnel `bf859516-9782-4c53-9098-1923709b4028`, DNS route, and `cloudflared` service running.
-- Created MySQL `retriever_cloudflare` schema/user access from `192.168.33.12`.
+- Created MySQL `retriever_core` schema/user access from `192.168.33.12`.
 - Fixed first-deploy blockers in the Windows deploy script: PowerShell 5.1 compatibility, reserved `$Args` variable shadowing, `pyproject.toml` install, old Retriever env-var pollution, Python cwd for static/templates, and the real migration API.
-- Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c`; migrations applied `0001_retriever_cloudflare.sql` and `0001_seed_auth_shell.sql`; `D:\retriever-rebuild\current` points at the staged release.
+- Successfully staged release `ed41f94261910256edc71d104adcabf7dd00324c`; migrations applied `0001_retriever_core_auth.sql` and `0001_seed_auth_shell.sql`; `D:\retriever-rebuild\current` points at the staged release.
 - Installed `RetrieverRebuild` via NSSM after making `install-service.ps1` PowerShell 5.1 safe; service started and returned `Health check OK: 200`.
 - Local smoke passed: `/health/live`, `/health/ready`, `/version`, version metadata, no secret leakage, and disabled `/fetch` all passed (`8 passed, 0 failed`).
 - Corrected the `cloudflared` Windows service command to run the configured tunnel (`--config C:\cloudflared\config.yml tunnel run retriever`); browser verification now shows Cloudflare Access first, then reaches Retriever successfully.
@@ -362,8 +432,8 @@ The rebuild now has a real app that looks and feels like old Retriever made shar
 
 **What happened:**
 
-- Resolved runtime and token-authority details: new Retriever should stage on a sibling Boone LAN Linux VM, `retriever.boonegraphics.net` remains the final live hostname, `retriever-next.boonegraphics.net` is staging, app state belongs in MySQL `retriever_cloudflare`, and old Retriever keeps first dibs on the shared PrintSmith token until new PrePress is ready.
-- Wrote the core planning/build artifacts: `RUNTIME_NOTES.md`, `PRINTSMITH_TOKEN_AUTHORITY.md`, `VM_SETUP_PLAN.md`, `RETRIEVER_CLOUDFLARE_SCHEMA.md`, `CONFIG_AND_HEALTH_CONTRACT.md`, `AUTH_SHELL_BUILD_PLAN.md`, `LOCAL_RUNBOOK.md`, `PRODUCT.md`, and `SHARED_LAYOUT_SHAPE.md`.
+- Resolved runtime and token-authority details: new Retriever should stage on a sibling Boone LAN Linux VM, `retriever.boonegraphics.net` remains the final live hostname, `retriever-next.boonegraphics.net` is staging, app state belongs in MySQL `retriever_core`, and old Retriever keeps first dibs on the shared PrintSmith token until new PrePress is ready.
+- Wrote the core planning/build artifacts: `RUNTIME_NOTES.md`, `PRINTSMITH_TOKEN_AUTHORITY.md`, `VM_SETUP_PLAN.md`, `RETRIEVER_CORE_SCHEMA.md`, `CONFIG_AND_HEALTH_CONTRACT.md`, `AUTH_SHELL_BUILD_PLAN.md`, `LOCAL_RUNBOOK.md`, `PRODUCT.md`, and `SHARED_LAYOUT_SHAPE.md`.
 - Built the first FastAPI auth shell with config validation, health/version routes, Cloudflare Access JWT validation, MySQL migration/seed SQL, repository scaffolding, DB-backed pending/admin user flow, strict audit writes, session cookies, logout/session revocation, and disabled Fetch placeholder.
 - Added admin user actions for approve, suspend, block, role assignment, BooneOps level, module access, and capability grant/revoke.
 - Ran Impeccable teach/shape for the shared Retriever shell and changed the scaffold from ugly standalone pages into a single shared Retriever layout where Admin is a normal left-sidebar module.
@@ -476,7 +546,7 @@ Fetch now has a trust policy before code. The rebuild should keep what employees
 **What happened:**
 
 - Ran a read-only senior-engineer review against `projects/retriever-rebuild/` and sampled the old `projects/Retriever/` reference where needed.
-- Captured the review in `REVIEW-2026-05-04-OPUS.md`.
+- Captured the review in `docs/archive/REVIEW-2026-05-04-OPUS.md`.
 - Updated `KICKOFF.md` and `.cursor/rules/retriever-rebuild.mdc` so future kickoff reads active architecture artifacts, not only kickoff/plan/parked/session log.
 - Updated `PLAN.md` with the active review artifact and new open decisions.
 - Updated `PARKED.md` with new parked issues for PrintSmith token authority, Cloudflare identity binding, audit/secrets design, and migration.
@@ -518,4 +588,3 @@ Fetch is the first trust barrier. If Fetch is buggy or unreliable, employees wil
 Write `FETCH_TRUST_PLAN.md`.
 
 ---
-

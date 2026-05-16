@@ -14,7 +14,7 @@ def test_local_config_can_start_without_cloudflare_or_mysql_secret() -> None:
     settings = AppSettings()
 
     assert settings.retriever_env == "local"
-    assert settings.mysql_database == "retriever_cloudflare"
+    assert settings.mysql_database == "retriever_core"
     assert settings.fetch_enabled is False
 
 
@@ -45,12 +45,12 @@ def test_staging_rejects_wrong_database() -> None:
             cloudflare_access_audience="aud",
             cloudflare_access_jwks_url="https://example.com/cdn-cgi/access/certs",
             mysql_host="mysql.internal",
-            mysql_database="retriever_core",
+            mysql_database="retriever_cloudflare",
             mysql_user="retriever_app",
             mysql_password="redacted",
         )
 
-    assert "MYSQL_DATABASE must be retriever_cloudflare" in str(exc_info.value)
+    assert "MYSQL_DATABASE must be retriever_core" in str(exc_info.value)
 
 
 def test_fetch_enabled_requires_model_config() -> None:
@@ -58,4 +58,3 @@ def test_fetch_enabled_requires_model_config() -> None:
         AppSettings(fetch_enabled=True)
 
     assert "MODEL_PROVIDER is required when Fetch is enabled" in str(exc_info.value)
-
