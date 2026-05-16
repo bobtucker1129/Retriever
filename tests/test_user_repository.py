@@ -77,6 +77,21 @@ def test_list_pending_returns_only_pending_users() -> None:
     assert [user.email for user in pending] == ["pending@boonegraphics.net"]
 
 
+def test_admin_directory_skips_legacy_rows_without_identity() -> None:
+    db = FakeDb()
+    db.add_user(email="blank@boonegraphics.net", display_name="", status="active")
+    row = db.users["blank@boonegraphics.net"]
+    row["cloudflare_email"] = ""
+    row["email"] = None
+    row["username"] = "  "
+    db.add_user(email="real@boonegraphics.net", display_name="Real User", status="active")
+    repo = UserRepository(db.connection)
+
+    users = repo.list_users_for_admin_directory()
+
+    assert [user.email for user in users] == ["real@boonegraphics.net"]
+
+
 def test_activate_suspend_and_block_user() -> None:
     db = FakeDb()
     repo = UserRepository(db.connection)

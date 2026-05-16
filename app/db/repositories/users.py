@@ -165,7 +165,7 @@ class UserRepository:
                 FROM users u
                 LEFT JOIN roles r ON r.id = u.role_id
                 WHERE u.status IN ('pending', 'active', 'suspended', 'blocked')
-                  AND COALESCE(u.cloudflare_email, u.email, u.username) IS NOT NULL
+                  AND NULLIF(TRIM(COALESCE(u.cloudflare_email, u.email, u.username)), '') IS NOT NULL
                 ORDER BY FIELD(u.status, 'pending', 'active', 'suspended', 'blocked'),
                          u.id ASC
                 """

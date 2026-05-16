@@ -322,7 +322,12 @@ class FakeCursor:
             return
 
         if "FROM users u" in normalized and "WHERE u.status IN" in normalized:
-            rows = [dict(u) for u in self.db.users.values() if u["status"] in {"pending", "active", "suspended", "blocked"}]
+            rows = [
+                dict(u)
+                for u in self.db.users.values()
+                if u["status"] in {"pending", "active", "suspended", "blocked"}
+                and (u.get("cloudflare_email") or u.get("email") or u.get("username") or "").strip()
+            ]
             order = {"pending": 0, "active": 1, "suspended": 2, "blocked": 3}
             rows.sort(key=lambda r: (order.get(r["status"], 9), r["id"]))
             self.last_result = rows
