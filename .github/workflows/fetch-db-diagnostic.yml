@@ -123,8 +123,12 @@ jobs:
           $tmp = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.py'
           $utf8NoBom = New-Object System.Text.UTF8Encoding $false
           [System.IO.File]::WriteAllText($tmp, $script, $utf8NoBom)
+          $pythonExe = 'D:\retriever-rebuild\current\.venv\Scripts\python.exe'
+          if (!(Test-Path $pythonExe)) {
+            $pythonExe = 'python'
+          }
           try {
-            python $tmp
+            & $pythonExe $tmp
           } finally {
             Remove-Item -Force $tmp -ErrorAction SilentlyContinue
           }
