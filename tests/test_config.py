@@ -34,7 +34,25 @@ def test_staging_requires_cloudflare_validation() -> None:
     assert "CLOUDFLARE_ACCESS_ENABLED must be true" in str(exc_info.value)
 
 
-def test_staging_rejects_wrong_database() -> None:
+def test_staging_maps_cursor_auth_database_alias_to_core() -> None:
+    settings = AppSettings(
+        retriever_env="staging",
+        retriever_cookie_secret="x" * 40,
+        local_dev_identity_enabled=False,
+        cloudflare_access_enabled=True,
+        cloudflare_access_validate_jwt=True,
+        cloudflare_access_audience="aud",
+        cloudflare_access_jwks_url="https://example.com/cdn-cgi/access/certs",
+        mysql_host="mysql.internal",
+        mysql_database="retriever_cloudflare",
+        mysql_user="retriever_app",
+        mysql_password="redacted",
+    )
+
+    assert settings.mysql_database == "retriever_core"
+
+
+def test_staging_rejects_unknown_database() -> None:
     with pytest.raises(ValidationError) as exc_info:
         AppSettings(
             retriever_env="staging",
@@ -45,7 +63,7 @@ def test_staging_rejects_wrong_database() -> None:
             cloudflare_access_audience="aud",
             cloudflare_access_jwks_url="https://example.com/cdn-cgi/access/certs",
             mysql_host="mysql.internal",
-            mysql_database="retriever_cloudflare",
+            mysql_database="some_other_schema",
             mysql_user="retriever_app",
             mysql_password="redacted",
         )

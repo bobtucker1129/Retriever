@@ -111,6 +111,14 @@ class AppSettings(BaseSettings):
     def normalize_email(cls, value: str) -> str:
         return value.strip().lower()
 
+    @field_validator("mysql_database", mode="before")
+    @classmethod
+    def normalize_mysql_database(cls, value: Any) -> str:
+        database = str(value or "retriever_core").strip()
+        if database == "retriever_cloudflare":
+            return "retriever_core"
+        return database
+
     @model_validator(mode="after")
     def validate_contract(self) -> AppSettings:
         errors: list[str] = []
