@@ -11,7 +11,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $envPath = 'D:\retriever-rebuild\retriever.env'
+          $envPath = 'D:\retriever-rebuild\env\retriever.env'
           if (!(Test-Path $envPath)) {
             throw "Missing $envPath"
           }
@@ -22,7 +22,7 @@ jobs:
 
           import mysql.connector
 
-          env_path = Path(r"D:\retriever-rebuild\retriever.env")
+          env_path = Path(r"D:\retriever-rebuild\env\retriever.env")
           for raw in env_path.read_text(encoding="utf-8").splitlines():
               line = raw.strip()
               if not line or line.startswith("#") or "=" not in line:
