@@ -1,0 +1,29 @@
+name: Diagnose RetrieverRebuild (Windows self-hosted)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: Collect RetrieverRebuild logs
+    runs-on:
+      - self-hosted
+      - Windows
+      - RetrieverRebuild
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Print recent service logs
+        run: |
+          $logDir = 'D:\retriever-rebuild\logs'
+          foreach ($name in @('service-stdout.log', 'service-stderr.log', 'service-bootstrap.log', 'deploy.log')) {
+            $path = Join-Path $logDir $name
+            Write-Host ""
+            Write-Host "===== $path ====="
+            if (Test-Path -LiteralPath $path) {
+              Get-Content -LiteralPath $path -Tail 220 | Write-Host
+            } else {
+              Write-Host "(missing)"
+            }
+          }
