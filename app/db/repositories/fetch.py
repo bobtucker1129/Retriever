@@ -144,6 +144,60 @@ class FetchRepository:
             conn.close()
         return [self._conversation_from_row(row) for row in rows]
 
+    def adopt_conversations_for_identity(self, user_id: int, email: str) -> int:
+        """Move same-email legacy Fetch conversations onto the current user id."""
+        clean_email = " ".join(email.split()).strip().lower()
+        if not clean_email:
+            return 0
+
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT c.conversation_id
+                FROM fetch_conversations c
+                JOIN users u ON u.id = c.user_id
+                WHERE c.user_id <> %s
+                  AND c.deleted_at IS NULL
+                  AND (
+                    LOWER(u.cloudflare_email) = %s
+                    OR LOWER(u.email) = %s
+                    OR LOWER(u.username) = %s
+                  )
+                """,
+                (user_id, clean_email, clean_email, clean_email),
+            )
+            conversation_ids = [
+                row["conversation_id"]
+                for row in cursor.fetchall()
+                if row.get("conversation_id")
+            ]
+            if not conversation_ids:
+                return 0
+
+            placeholders = ", ".join(["%s"] * len(conversation_ids))
+            cursor.execute(
+                f"""
+                UPDATE fetch_conversations
+                SET user_id = %s
+                WHERE conversation_id IN ({placeholders})
+                """,
+                (user_id, *conversation_ids),
+            )
+            cursor.execute(
+                f"""
+                UPDATE fetch_messages
+                SET user_id = %s
+                WHERE conversation_id IN ({placeholders})
+                """,
+                (user_id, *conversation_ids),
+            )
+        finally:
+            cursor.close()
+            conn.close()
+        return len(conversation_ids)
+
     def rename_conversation(self, user_id: int, conversation_id: str, title: str) -> None:
         conn = self._connection_factory()
         cursor = conn.cursor()

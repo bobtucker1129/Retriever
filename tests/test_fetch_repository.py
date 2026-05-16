@@ -29,6 +29,38 @@ def test_fetch_repository_creates_and_lists_conversations() -> None:
     assert any("INSERT INTO fetch_conversations" in statement for statement, _ in db.statements)
 
 
+def test_fetch_repository_adopts_same_email_legacy_conversations() -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Current User", "active")
+    db.add_user("legacy-row", "Legacy User", "active")
+    current_id = db.users["fetcher@boonegraphics.net"]["id"]
+    legacy_id = db.users["legacy-row"]["id"]
+    db.users["legacy-row"]["cloudflare_email"] = "fetcher@boonegraphics.net"
+    db.users["legacy-row"]["email"] = "fetcher@boonegraphics.net"
+    db.users["legacy-row"]["username"] = "fetcher@boonegraphics.net"
+
+    repo = FetchRepository(db.connection)
+    conversation = repo.create_conversation(user_id=legacy_id, title="Legacy thread")
+    repo.append_message(
+        user_id=legacy_id,
+        conversation_id=conversation.conversation_id,
+        role="user",
+        content="Where did my history go?",
+    )
+
+    adopted = repo.adopt_conversations_for_identity(
+        user_id=current_id,
+        email="FETCHER@boonegraphics.net",
+    )
+
+    assert adopted == 1
+    assert repo.list_conversations(current_id)[0].title == "Legacy thread"
+    assert repo.list_messages(current_id, conversation.conversation_id)[0].content == (
+        "Where did my history go?"
+    )
+    assert repo.list_conversations(legacy_id) == []
+
+
 def test_fetch_repository_renames_and_soft_deletes_conversation() -> None:
     db = FakeDb()
     repo = FetchRepository(db.connection)

@@ -203,6 +203,41 @@ class FakeCursor:
             }
             return
 
+        if normalized.startswith("SELECT c.conversation_id FROM fetch_conversations c JOIN users u"):
+            user_id, email_a, email_b, email_c = params
+            email_matches = {email_a, email_b, email_c}
+            user_ids = {
+                user["id"]
+                for user in self.db.users.values()
+                if user["id"] != user_id
+                and (
+                    str(user.get("cloudflare_email") or "").lower() in email_matches
+                    or str(user.get("email") or "").lower() in email_matches
+                    or str(user.get("username") or "").lower() in email_matches
+                )
+            }
+            self.last_result = [
+                {"conversation_id": conversation["conversation_id"]}
+                for conversation in self.db.fetch_conversations.values()
+                if conversation["user_id"] in user_ids
+                and not conversation.get("deleted")
+            ]
+            return
+
+        if normalized.startswith("UPDATE fetch_conversations SET user_id"):
+            user_id, *conversation_ids = params
+            for conversation_id in conversation_ids:
+                if conversation_id in self.db.fetch_conversations:
+                    self.db.fetch_conversations[conversation_id]["user_id"] = user_id
+            return
+
+        if normalized.startswith("UPDATE fetch_messages SET user_id"):
+            user_id, *conversation_ids = params
+            for message in self.db.fetch_messages:
+                if message["conversation_id"] in conversation_ids:
+                    message["user_id"] = user_id
+            return
+
         if "FROM fetch_conversations c" in normalized:
             user_id = params[0]
             if len(params) == 2:

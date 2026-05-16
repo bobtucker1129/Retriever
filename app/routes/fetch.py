@@ -173,6 +173,16 @@ async def fetch_shell(
 
     if repo is not None:
         conversations = repo.list_conversations(user.id)
+        if not conversations:
+            repo.adopt_conversations_for_identity(user.id, user.email)
+            conversations = repo.list_conversations(user.id)
+        if (
+            not conversations
+            and settings.fetch_enabled
+            and user.can_submit_fetch_ask()
+        ):
+            created = repo.create_conversation(user_id=user.id)
+            conversations = [created]
         if c:
             current = repo.get_conversation(user.id, c)
             if current:

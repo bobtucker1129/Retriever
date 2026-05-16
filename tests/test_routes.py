@@ -601,6 +601,61 @@ def test_fetch_shell_lists_conversations_from_db(monkeypatch) -> None:
     assert "DSF nightly check" in response.text
 
 
+def test_fetch_shell_creates_first_conversation_when_enabled(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert len(db.fetch_conversations) == 1
+    assert "New Fetch conversation" in response.text
+    textarea = re.search(r'<textarea[^>]*id="fetch-question"[^>]*>', response.text, re.DOTALL)
+    assert textarea is not None
+    assert "disabled" not in textarea.group(0)
+
+
+def test_fetch_shell_adopts_same_email_legacy_history(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    db.add_user("legacy-row", "Legacy User", "active")
+    current_id = db.users["fetcher@boonegraphics.net"]["id"]
+    legacy_id = db.users["legacy-row"]["id"]
+    db.modules_by_user.setdefault(current_id, set()).add("fetch")
+    db.users["legacy-row"]["cloudflare_email"] = "fetcher@boonegraphics.net"
+    db.users["legacy-row"]["email"] = "fetcher@boonegraphics.net"
+    db.users["legacy-row"]["username"] = "fetcher@boonegraphics.net"
+
+    repo = FetchRepository(db.connection)
+    conversation = repo.create_conversation(user_id=legacy_id, title="Recovered thread")
+    repo.append_message(
+        user_id=legacy_id,
+        conversation_id=conversation.conversation_id,
+        role="user",
+        content="Find order 12345",
+    )
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    client = make_client(settings)
+    response = client.get("/fetch")
+
+    assert response.status_code == 200
+    assert "Recovered thread" in response.text
+    assert "Find order 12345" in response.text
+    assert db.fetch_conversations[conversation.conversation_id]["user_id"] == current_id
+    assert db.fetch_messages[0]["user_id"] == current_id
+
+
 def test_fetch_post_new_conversation_requires_access(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("plain@boonegraphics.net", "Plain User", "active")
