@@ -196,7 +196,8 @@ def _general_chat_system_prompt() -> str:
         "Do not claim you used BooneOps, PrintSmith, MIS, web search, or live sports/news tools "
         "unless the user explicitly asks for an internal routed task and the app routes it there. "
         "If a question needs real-time information, be clear that you may not have live data and "
-        "answer with that limitation."
+        "answer with that limitation. Do not redirect ordinary chat back to PrintSmith, BooneOps, "
+        "or production work unless the user asks for that."
     )
 
 
