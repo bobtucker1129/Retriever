@@ -611,6 +611,8 @@ def test_call_booneops_broker_docs_route_keeps_user_message_clean_and_sets_guida
     payload = json.loads(captured["content"].decode())
     assert payload["message"] == user_q
     sm = payload["sessionMetadata"]
+    assert sm["source"] == "discord-booneops"
+    assert sm["retrieverMcpDocsFastPath"] is True
     assert sm["retrieverDocsPresentationGuidance"].startswith("Lead with a short Summary")
     assert "sourceCards" in sm["retrieverDocsPresentationGuidance"]
     forbidden_in_message = (

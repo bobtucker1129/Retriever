@@ -77,6 +77,17 @@ _DOCS_HINTS: Final[tuple[str, ...]] = (
     "scripting guide",
 )
 
+_DOCS_PRODUCT_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(switch|enfocus|pitstop|xmpie|uplan|ucreate|uproduce|uimage|"
+    r"marketdirect|storefront|smartcanvas)\b",
+    re.IGNORECASE,
+)
+_DOCS_ACTION_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(how|where|what does|documentation|docs|help|manual|guide|api|schema|"
+    r"configure|setup|set up|upload|publish|template)\b",
+    re.IGNORECASE,
+)
+
 _EMAIL_CLEANUP_HINTS: Final[tuple[str, ...]] = (
     "email cleanup",
     "clean my inbox",
@@ -191,6 +202,15 @@ def _collapsed_printsmith_hint(low: str) -> bool:
     return any(fragment in collapsed for fragment in _COLLAPSED_PRINTSMITH_FRAGMENTS)
 
 
+def _looks_like_vendor_documentation_question(low: str) -> bool:
+    """Match the product/docs shape used by BooneOps #General without catching every "how" question."""
+    if _DOCS_PRODUCT_RE.search(low) is not None:
+        return True
+    if _DOCS_ACTION_RE.search(low) is None:
+        return False
+    return any(hint in low for hint in _DOCS_HINTS)
+
+
 def normalize_user_text(text: str) -> str:
     """Collapse whitespace; preserves leading slash commands."""
     return " ".join(text.split()).strip()
@@ -253,9 +273,8 @@ def classify_fetch_intent(text: str) -> str:
         if hint in low:
             return "printsmith_candidate"
 
-    for hint in _DOCS_HINTS:
-        if hint in low:
-            return "docs_candidate"
+    if _looks_like_vendor_documentation_question(low):
+        return "docs_candidate"
 
     if _looks_printsmith_invoice_shop_query(low):
         return "printsmith_candidate"
