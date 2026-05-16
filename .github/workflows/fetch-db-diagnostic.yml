@@ -2,6 +2,12 @@ name: Fetch DB diagnostic
 
 on:
   workflow_dispatch:
+    inputs:
+      migrate_history:
+        description: Copy state@boonegraphics.net Fetch history from retriever_cloudflare to retriever_core
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   inspect-fetch-history:
@@ -9,6 +15,8 @@ jobs:
     steps:
       - name: Inspect Fetch conversation ownership
         shell: powershell
+        env:
+          MIGRATE_HISTORY: ${{ inputs.migrate_history && 'true' || '' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $envPath = 'D:\retriever-rebuild\env\retriever.env'
@@ -146,6 +154,91 @@ jobs:
                           f"identity={row.get('identity_email') or 'unknown'} "
                           f"conversations={row['conversations']} messages={row['messages']}"
                       )
+
+              if os.environ.get("MIGRATE_HISTORY", "").lower() == "true":
+                  source_schema = "retriever_cloudflare"
+                  target_schema = "retriever_core"
+                  identity = "state@boonegraphics.net"
+
+                  def find_user_id(schema):
+                      cur.execute(
+                          """
+                          SELECT column_name AS column_name
+                          FROM information_schema.columns
+                          WHERE table_schema = %s AND table_name = 'users'
+                          """,
+                          (schema,),
+                      )
+                      columns = {row["column_name"] for row in cur.fetchall()}
+                      identity_columns = [
+                          col for col in ("cloudflare_email", "email", "username")
+                          if col in columns
+                      ]
+                      where_clause = " OR ".join(
+                          f"LOWER({col}) = %s" for col in identity_columns
+                      )
+                      cur.execute(
+                          f"SELECT id FROM {schema}.users WHERE {where_clause} ORDER BY id LIMIT 1",
+                          tuple(identity for _col in identity_columns),
+                      )
+                      row = cur.fetchone()
+                      if not row:
+                          raise RuntimeError(f"No user for {identity} in {schema}")
+                      return int(row["id"])
+
+                  source_user_id = find_user_id(source_schema)
+                  target_user_id = find_user_id(target_schema)
+                  print(
+                      f"migrate source_schema={source_schema} source_user_id={source_user_id} "
+                      f"target_schema={target_schema} target_user_id={target_user_id}"
+                  )
+                  cur.execute(
+                      f"""
+                      INSERT IGNORE INTO {target_schema}.fetch_conversations
+                        (conversation_id, user_id, title, status, route_state,
+                         last_message_at, created_at, updated_at, deleted_at)
+                      SELECT conversation_id, %s, title, status, route_state,
+                             last_message_at, created_at, updated_at, deleted_at
+                      FROM {source_schema}.fetch_conversations
+                      WHERE user_id = %s
+                        AND deleted_at IS NULL
+                      """,
+                      (target_user_id, source_user_id),
+                  )
+                  print(f"migrate conversations_inserted={cur.rowcount}")
+                  cur.execute(
+                      f"""
+                      INSERT IGNORE INTO {target_schema}.fetch_messages
+                        (message_id, conversation_id, user_id, role, content, route_key,
+                         model_label, context_percent, context_state, metadata_json, created_at)
+                      SELECT m.message_id, m.conversation_id, %s, m.role, m.content, m.route_key,
+                             m.model_label, m.context_percent, m.context_state, m.metadata_json,
+                             m.created_at
+                      FROM {source_schema}.fetch_messages m
+                      JOIN {source_schema}.fetch_conversations c
+                        ON c.conversation_id = m.conversation_id
+                      WHERE c.user_id = %s
+                        AND c.deleted_at IS NULL
+                      """,
+                      (target_user_id, source_user_id),
+                  )
+                  print(f"migrate messages_inserted={cur.rowcount}")
+                  cur.execute(
+                      f"""
+                      UPDATE {target_schema}.fetch_conversations c
+                      LEFT JOIN {target_schema}.fetch_messages m
+                        ON m.conversation_id = c.conversation_id
+                      SET c.deleted_at = NOW(),
+                          c.status = 'deleted'
+                      WHERE c.user_id = %s
+                        AND c.title = 'New Fetch conversation'
+                        AND m.id IS NULL
+                        AND c.deleted_at IS NULL
+                      """,
+                      (target_user_id,),
+                  )
+                  print(f"migrate blank_conversations_deleted={cur.rowcount}")
+                  conn.commit()
           finally:
               cur.close()
               conn.close()
