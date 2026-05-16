@@ -120,4 +120,11 @@ jobs:
               cur.close()
               conn.close()
           '@
-          $script | python -c "import sys, textwrap; exec(textwrap.dedent(sys.stdin.read()))"
+          $tmp = [System.IO.Path]::GetTempFileName() -replace '\.tmp$', '.py'
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+          [System.IO.File]::WriteAllText($tmp, $script, $utf8NoBom)
+          try {
+            python $tmp
+          } finally {
+            Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+          }
