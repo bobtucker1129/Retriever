@@ -129,6 +129,32 @@ def test_layout_stylesheet_default_git_sha_is_dev() -> None:
     assert '/static/app.css?v=dev' in response.text
 
 
+def test_health_and_version_links_render_friendly_html_for_browsers() -> None:
+    client = make_client(make_settings())
+
+    health = client.get("/health/ready", headers={"accept": "text/html"})
+    version = client.get("/version", headers={"accept": "text/html"})
+
+    assert health.status_code == 200
+    assert "Readiness checks" in health.text
+    assert "status-grid" not in health.text
+    assert version.status_code == 200
+    assert "Git SHA" in version.text
+    assert "retriever-rebuild" in version.text
+
+
+def test_health_and_version_still_return_json_for_api_clients() -> None:
+    client = make_client(make_settings())
+
+    health = client.get("/health/ready", headers={"accept": "application/json"})
+    version = client.get("/version", headers={"accept": "application/json"})
+
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+    assert version.status_code == 200
+    assert version.json()["app"] == "retriever-rebuild"
+
+
 def test_pending_layout_stylesheet_includes_git_sha_cache_buster() -> None:
     sha = "pendingcache1"
     settings = make_settings(email="new@boonegraphics.net").model_copy(update={"git_sha": sha})

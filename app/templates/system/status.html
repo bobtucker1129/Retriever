@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}System{% endblock %}
+{% block title %}{{ status_title }}{% endblock %}
+
+{% block content %}
+<section class="system-page">
+  <div class="system-header">
+    <div>
+      <p class="system-kicker">{{ status_label }}</p>
+      <h2>{{ status_title }}</h2>
+    </div>
+    <span class="system-status system-status-{{ status }}">{{ status }}</span>
+  </div>
+
+  <div class="system-card-list">
+    {% for label, value in rows %}
+    <div class="system-row">
+      <span>{{ label }}</span>
+      <strong>{{ value }}</strong>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if checks %}
+  <div class="system-checks" aria-label="Readiness checks">
+    {% for name, value in checks.items() %}
+    <div class="system-check">
+      <span>{{ name }}</span>
+      <strong class="system-check-value system-check-{{ value }}">{{ value }}</strong>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if config %}
+  <details class="system-details">
+    <summary>Configuration summary</summary>
+    <div class="system-checks">
+      {% for name, value in config.items() %}
+      <div class="system-check">
+        <span>{{ name }}</span>
+        <strong>{{ value }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

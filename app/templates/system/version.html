@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}System{% endblock %}
+{% block title %}Version{% endblock %}
+
+{% block content %}
+<section class="system-page">
+  <div class="system-header">
+    <div>
+      <p class="system-kicker">Build</p>
+      <h2>Retriever</h2>
+    </div>
+    <span class="system-status system-status-ok">{{ version_info.version }}</span>
+  </div>
+
+  <div class="system-card-list">
+    <div class="system-row">
+      <span>App</span>
+      <strong>{{ version_info.app }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Environment</span>
+      <strong>{{ version_info.environment }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Git SHA</span>
+      <strong>{{ version_info.gitSha }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Git ref</span>
+      <strong>{{ version_info.gitRef }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Built at</span>
+      <strong>{{ version_info.builtAt or "Not recorded" }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Deployed at</span>
+      <strong>{{ version_info.deployedAt or "Not recorded" }}</strong>
+    </div>
+    <div class="system-row">
+      <span>Host</span>
+      <strong>{{ version_info.host }}</strong>
+    </div>
+  </div>
+</section>
+{% endblock %}
