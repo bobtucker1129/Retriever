@@ -60,6 +60,16 @@ def test_migration_dir_prefers_current_release_working_directory(monkeypatch, tm
     assert find_migrations_dir() == release_migrations
 
 
+def test_migration_dir_walks_up_from_nested_working_directory(monkeypatch, tmp_path) -> None:
+    release_migrations = tmp_path / "migrations"
+    nested = tmp_path / ".venv" / "Lib" / "site-packages"
+    release_migrations.mkdir()
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    assert find_migrations_dir() == release_migrations
+
+
 def test_split_sql_statements_ignores_comments_and_blank_lines() -> None:
     statements = split_sql_statements(
         """

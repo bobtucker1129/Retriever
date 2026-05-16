@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.db.repositories.audit import AuditEvent, AuditRepository
 from app.db.repositories.sessions import SessionRepository, hash_optional
 from app.db.repositories.settings import SettingsRepository
+from app.db.repositories.users import UserRepository
 from tests.fakes import FakeDb
 
 
@@ -87,3 +88,18 @@ def test_session_repository_revokes_single_session() -> None:
 
     assert repo.get_active_session(session_id, user_id=1) is None
 
+
+def test_user_repository_uses_email_for_legacy_rows_without_cloudflare_email() -> None:
+    db = FakeDb()
+    db.add_user(
+        email="state@boonegraphics.net",
+        display_name="State",
+        status="active",
+    )
+    db.users["state@boonegraphics.net"]["cloudflare_email"] = None
+
+    user = UserRepository(db.connection).get_by_email("state@boonegraphics.net")
+
+    assert user is not None
+    assert user.email == "state@boonegraphics.net"
+    assert user.display_name == "State"

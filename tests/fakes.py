@@ -397,7 +397,9 @@ class FakeDb:
         self.next_id += 1
         self.users[email] = {
             "id": user_id,
+            "username": email,
             "cloudflare_email": email,
+            "email": email,
             "display_name": display_name,
             "full_name": full_name,
             "status": status,

@@ -75,7 +75,9 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                SELECT u.id,
+                       COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
+                       u.display_name, u.full_name, u.status,
                        u.booneops_level, u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
@@ -121,7 +123,9 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                SELECT u.id,
+                       COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
+                       u.display_name, u.full_name, u.status,
                        u.booneops_level, u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
@@ -146,7 +150,9 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                SELECT u.id,
+                       COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
+                       u.display_name, u.full_name, u.status,
                        u.booneops_level, u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
@@ -394,7 +400,9 @@ class UserRepository:
         try:
             cursor.execute(
                 """
-                SELECT u.id, u.cloudflare_email, u.display_name, u.full_name, u.status,
+                SELECT u.id,
+                       COALESCE(u.cloudflare_email, u.email, u.username) AS cloudflare_email,
+                       u.display_name, u.full_name, u.status,
                        u.booneops_level, u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
                        u.is_seed_admin, u.last_seen_at,
@@ -492,6 +500,7 @@ class UserRepository:
 
     def _record_from_row(self, row) -> UserRecord:
         user_id = int(row["id"])
+        email = normalize_email(row.get("cloudflare_email") or row.get("email") or row.get("username"))
         raw_seen = row.get("last_seen_at")
         last_seen: Optional[datetime] = None
         if raw_seen is not None and not isinstance(raw_seen, datetime):
@@ -503,8 +512,8 @@ class UserRepository:
             last_seen = raw_seen
         return UserRecord(
             id=user_id,
-            email=normalize_email(row["cloudflare_email"]),
-            display_name=row.get("display_name") or normalize_email(row["cloudflare_email"]),
+            email=email,
+            display_name=row.get("display_name") or email,
             full_name=row.get("full_name") or "",
             status=row.get("status") or "pending",
             role_key=row.get("role_key"),

@@ -87,6 +87,16 @@ CREATE INDEX idx_users_role_id ON retriever_core.users (role_id);
 CREATE INDEX idx_users_booneops_level ON retriever_core.users (booneops_level);
 CREATE INDEX idx_users_production_location_id ON retriever_core.users (production_location_id);
 
+UPDATE retriever_core.users
+SET cloudflare_email = COALESCE(cloudflare_email, email, username),
+    email = COALESCE(email, cloudflare_email, username),
+    display_name = COALESCE(display_name, full_name, email, username),
+    status = CASE WHEN active = TRUE THEN 'active' ELSE status END
+WHERE cloudflare_email IS NULL
+   OR email IS NULL
+   OR display_name IS NULL
+   OR (active = TRUE AND status <> 'active');
+
 CREATE TABLE IF NOT EXISTS retriever_core.roles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   role_key VARCHAR(64) NOT NULL,

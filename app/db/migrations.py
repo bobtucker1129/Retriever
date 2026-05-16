@@ -16,14 +16,17 @@ from app.db.connection import create_connection
 def find_migrations_dir() -> Path:
     """Find repo/release migrations even when app is imported from site-packages."""
 
-    candidates = [
-        Path.cwd() / "migrations",
-        Path(__file__).resolve().parents[2] / "migrations",
-    ]
+    anchors = [Path.cwd(), Path(__file__).resolve()]
+    candidates: list[Path] = []
+    for anchor in anchors:
+        search_root = anchor if anchor.is_dir() else anchor.parent
+        candidates.append(search_root / "migrations")
+        candidates.extend(parent / "migrations" for parent in search_root.parents)
+
     for candidate in candidates:
         if candidate.is_dir():
             return candidate
-    return candidates[0]
+    return Path.cwd() / "migrations"
 
 
 MIGRATIONS_DIR = find_migrations_dir()
