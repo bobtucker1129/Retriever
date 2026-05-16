@@ -308,8 +308,8 @@ def test_resolve_refinement_pdf_clean_up_inherits_without_spreadsheet_style_hint
     assert "reportStyle" not in extra
 
 
-def test_resolve_sticky_general_followups_continue_printsmith_lane() -> None:
-    """Vague ``?`` / general-classified turns inherit the latest successful broker lane."""
+def test_resolve_standalone_general_questions_do_not_continue_printsmith_lane() -> None:
+    """A new ordinary question should not inherit the latest internal broker lane."""
     prior = [
         _rec(
             "assistant",
@@ -319,13 +319,13 @@ def test_resolve_sticky_general_followups_continue_printsmith_lane() -> None:
         ),
     ]
     route, _ = resolve_fetch_ask_route("why is the sky blue?", "general_candidate", prior)
-    assert route == "printsmith_candidate"
+    assert route == "general_candidate"
     route2, _ = resolve_fetch_ask_route(
-        "what is the capital of France?",
+        "How are the LA Kings doing?",
         "general_candidate",
         prior,
     )
-    assert route2 == "printsmith_candidate"
+    assert route2 == "general_candidate"
 
 
 def test_resolve_sticky_inherits_even_when_not_artifact_refinement() -> None:
@@ -344,7 +344,7 @@ def test_resolve_sticky_inherits_even_when_not_artifact_refinement() -> None:
         "general_candidate",
         prior,
     )
-    assert route == "printsmith_candidate"
+    assert route == "general_candidate"
 
 
 def test_resolve_sticky_docs_candidate_natural_followup_question() -> None:

@@ -93,6 +93,16 @@ _NO_OVERRIDE_ROUTES: Final[frozenset[str]] = frozenset(
 # inherit prior successful docs/PrintSmith broker turn instead of the general stub.
 _STICKY_BASE_ROUTES: Final[frozenset[str]] = frozenset({"general_candidate", "unknown"})
 
+_STICKY_CONTINUATION_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b("
+    r"are\s+you\s+sure|look\s+again|double[-\s]?check|check\s+again|try\s+again|"
+    r"rerun|re-run|same\s+(thing|query|report|search)|"
+    r"explain\s+(that|this)|break\s+(that|this)\s+down|"
+    r"tell\s+me\s+more\s+about\s+(that|this)"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 def _has_export_action(low: str) -> bool:
     return _EXPORT_ACTION_RE.search(low) is not None
@@ -104,6 +114,15 @@ def _mentions_export_format(low: str) -> bool:
 
 def _has_prior_referent_cue(low: str) -> bool:
     return _PRIOR_REFERENT_RE.search(low) is not None
+
+
+def _is_sticky_continuation_text(text: str) -> bool:
+    low = text.strip().lower()
+    if not low:
+        return False
+    if _has_prior_referent_cue(low) or _STICKY_CONTINUATION_RE.search(low) is not None:
+        return True
+    return _has_export_action(low) and _mentions_export_format(low)
 
 
 def is_export_download_followup_text(text: str) -> bool:
@@ -284,6 +303,8 @@ def resolve_fetch_ask_route(
     prior_assistant = latest_inheritable_assistant_record(prior_records)
     sticky = _assistant_inheritable_route(prior_assistant) if prior_assistant else None
     if sticky is None:
+        return base_route, {}
+    if not _is_sticky_continuation_text(cleaned):
         return base_route, {}
 
     return sticky, inheritable_session_metadata_from_assistant(prior_assistant)
