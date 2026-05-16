@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.db.migrations import apply_sql_file, list_seed_files, list_sql_migrations, split_sql_statements
+from app.db.migrations import (
+    apply_sql_file,
+    find_migrations_dir,
+    list_seed_files,
+    list_sql_migrations,
+    split_sql_statements,
+)
 
 
 def test_initial_migration_contains_required_tables() -> None:
@@ -44,6 +50,14 @@ def test_migration_helpers_find_migration_and_seed_files() -> None:
     assert any(path.name == "0001_retriever_core_auth.sql" for path in list_sql_migrations())
     assert any(path.name == "0002_fetch_conversations.sql" for path in list_sql_migrations())
     assert any(path.name == "0001_seed_auth_shell.sql" for path in list_seed_files())
+
+
+def test_migration_dir_prefers_current_release_working_directory(monkeypatch, tmp_path) -> None:
+    release_migrations = tmp_path / "migrations"
+    release_migrations.mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert find_migrations_dir() == release_migrations
 
 
 def test_split_sql_statements_ignores_comments_and_blank_lines() -> None:

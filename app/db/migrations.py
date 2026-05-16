@@ -13,7 +13,20 @@ from app.config import get_settings
 from app.db.connection import create_connection
 
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+def find_migrations_dir() -> Path:
+    """Find repo/release migrations even when app is imported from site-packages."""
+
+    candidates = [
+        Path.cwd() / "migrations",
+        Path(__file__).resolve().parents[2] / "migrations",
+    ]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
+
+
+MIGRATIONS_DIR = find_migrations_dir()
 SEEDS_DIR = MIGRATIONS_DIR / "seeds"
 
 
