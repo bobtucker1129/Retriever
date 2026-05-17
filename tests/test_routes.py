@@ -2084,6 +2084,8 @@ def test_seed_admin_can_load_prepress_shell_without_db() -> None:
     assert response.status_code == 200
     assert "PrePress WIP" in response.text
     assert "hx-get=\"/prepress/partials/wip-table\"" in response.text
+    assert "ppToast(j.message || (j.ok ? \"Saved.\" : \"Save failed.\")" in response.text
+    assert "target: \"#parts-\" + invoiceNumber" in response.text
 
 
 def test_active_user_without_prepress_is_forbidden(monkeypatch) -> None:

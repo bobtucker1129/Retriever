@@ -615,6 +615,7 @@
         if (!container) return;
         var el = document.createElement("div");
         el.className = "pp-toast pp-toast-" + type;
+        el.setAttribute("role", type === "error" ? "alert" : "status");
         el.textContent = message;
         container.appendChild(el);
         setTimeout(function () {
@@ -709,7 +710,7 @@
         }
     });
 
-    function toggleInvoiceParts(invoiceNumber) {
+    async function toggleInvoiceParts(invoiceNumber) {
         var container = document.getElementById("parts-" + invoiceNumber);
         var btn = document.getElementById("toggle-" + invoiceNumber);
         if (!container) return;
@@ -717,12 +718,29 @@
         if ((container.innerHTML || "").trim().length > 0) {
             container.innerHTML = "";
             if (btn) btn.textContent = "+";
+            if (btn) btn.setAttribute("aria-expanded", "false");
             return;
         }
 
         if (btn) btn.textContent = "-";
+        if (btn) btn.setAttribute("aria-expanded", "true");
         if (window.htmx) {
-            window.htmx.ajax("GET", "/prepress/partials/invoice/" + invoiceNumber + "/parts", { target: container, swap: "innerHTML" });
+            window.htmx.ajax("GET", "/prepress/partials/invoice/" + invoiceNumber + "/parts", { target: "#parts-" + invoiceNumber, swap: "innerHTML" });
+            return;
+        }
+
+        try {
+            var r = await fetch("/prepress/partials/invoice/" + encodeURIComponent(invoiceNumber) + "/parts", {
+                credentials: "same-origin",
+                headers: { "Accept": "text/html" },
+            });
+            if (!r.ok) throw new Error("parts request failed");
+            container.innerHTML = await r.text();
+        } catch (e) {
+            container.innerHTML = "";
+            if (btn) btn.textContent = "+";
+            if (btn) btn.setAttribute("aria-expanded", "false");
+            ppToast("Could not load invoice parts.", "error");
         }
     }
 </script>
