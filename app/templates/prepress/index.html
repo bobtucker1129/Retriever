@@ -23,8 +23,20 @@
             font-size: var(--font-size-sm);
         }
 
-        .prepress-content .filter-controls select {
+        .prepress-content .prepress-main-filters {
+            display: grid;
+        }
+
+        .prepress-content .prepress-stat-filters {
+            flex-wrap: nowrap;
+        }
+
+        .prepress-content .prepress-main-filters #queue {
             min-width: 220px;
+        }
+
+        .prepress-content .prepress-main-filters #include_completed {
+            min-width: 110px;
         }
 
         .prepress-content .data-table th,
@@ -196,7 +208,7 @@
             Invoices appear when any job part is located to a PrePress person’s MIS location. Shared Queue shows invoices split across multiple operators until owned.
         </div>
 
-        <div class="filter-controls" id="prepress-filters" style="margin-bottom: 10px;">
+        <div class="filter-controls prepress-main-filters" id="prepress-filters">
             <label for="queue">Queue</label>
             <select id="queue" name="queue">
                 <option value="all" data-base-label="All">All</option>
@@ -206,7 +218,7 @@
                 {% endfor %}
             </select>
 
-            <label for="include_completed" style="margin-left: 8px;">Show Completed (Reference)</label>
+            <label for="include_completed">Show Completed (Reference)</label>
             <select id="include_completed" name="include_completed" style="min-width: 110px;">
                 <option value="0" selected>No</option>
                 <option value="1">Yes</option>
@@ -223,8 +235,8 @@
                 Refresh WIP
             </button>
 
-            <div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end;">
-                <label for="prepress-search" style="margin-left: 8px;">Search</label>
+            <div class="prepress-search-control">
+                <label for="prepress-search">Search</label>
                 <input id="prepress-search"
                        name="prepress_search"
                        type="text"
@@ -245,7 +257,7 @@
             <div class="muted">Loading...</div>
         </div>
 
-        <div id="prepress-footer-controls" class="filter-controls" style="justify-content: flex-end; margin-top: 8px;">
+        <div id="prepress-footer-controls" class="filter-controls prepress-page-size-control">
             <label for="page_size">Show</label>
             <select id="page_size" name="page_size" style="min-width: 120px;">
                 <option value="25">25</option>

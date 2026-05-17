@@ -1837,7 +1837,7 @@ a.fetch-row-action:hover {
 .prepress-content .data-table {
   border-collapse: collapse;
   font-size: 0.75rem;
-  min-width: 78rem;
+  min-width: 70rem;
   width: 100%;
 }
 
@@ -1860,6 +1860,82 @@ a.fetch-row-action:hover {
 .prepress-content input[type="date"],
 .prepress-content textarea {
   font: inherit;
+}
+
+.prepress-content .filter-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.prepress-content .filter-controls label {
+  flex: 0 0 auto;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  margin: 0 !important;
+}
+
+.prepress-content .filter-controls select,
+.prepress-content .filter-controls input[type="date"],
+.prepress-content .filter-controls input[type="text"] {
+  display: inline-block;
+  flex: 0 0 auto;
+  margin: 0;
+  width: auto;
+}
+
+.prepress-content .filter-controls select {
+  min-height: 1.75rem;
+}
+
+.prepress-content .prepress-main-filters {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 22rem) auto 11rem auto minmax(14rem, 1fr);
+  width: 100%;
+}
+
+.prepress-content .prepress-main-filters select {
+  max-width: 100%;
+}
+
+.prepress-content .prepress-main-filters #queue {
+  width: 100%;
+}
+
+.prepress-content .prepress-search-control {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.45rem;
+  justify-self: end;
+}
+
+.prepress-content .prepress-search-control input {
+  width: min(22rem, 32vw) !important;
+}
+
+.prepress-content .prepress-page-size-control {
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.prepress-content .prepress-page-size-control select {
+  min-width: 6rem !important;
+}
+
+.prepress-content .prepress-stat-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.prepress-content .prepress-stat-filters select {
+  min-width: 7rem !important;
+}
+
+.prepress-content .prepress-stat-filters input[type="date"] {
+  width: 9.5rem;
 }
 
 .prepress-content .card {
@@ -1918,4 +1994,32 @@ a.fetch-row-action:hover {
 .prepress-content .pp-copy-btn:hover {
   background: var(--color-surface-2);
   color: var(--color-text);
+}
+
+@media (max-width: 86rem) {
+  .prepress-content .prepress-main-filters {
+    grid-template-columns: auto minmax(10rem, 18rem) auto 9rem auto minmax(12rem, 1fr);
+  }
+
+  .prepress-content .prepress-search-control input {
+    width: min(16rem, 28vw) !important;
+  }
+}
+
+@media (max-width: 62rem) {
+  .prepress-content .prepress-main-filters,
+  .prepress-content .prepress-stat-filters {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .prepress-content .prepress-main-filters #queue,
+  .prepress-content .prepress-search-control input {
+    width: 100% !important;
+  }
+
+  .prepress-content .prepress-search-control {
+    flex: 1 1 100%;
+    justify-self: stretch;
+  }
 }
