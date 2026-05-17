@@ -6,6 +6,8 @@ from typing import Literal
 
 from app.config import AppSettings
 from app.db.connection import ping_mysql
+from app.db.mis_connection import create_mis_connection, is_mis_configured
+from app.db.repositories.locations import ProductionLocationRepository
 
 CheckState = Literal["ok", "disabled", "degraded", "failed"]
 
@@ -30,6 +32,7 @@ def readiness_checks(settings: AppSettings) -> dict[str, CheckState]:
             if settings.printsmith_token_authority_mode == "disabled"
             else "degraded"
         ),
+        "productionLocations": production_locations_check(settings),
         "booneopsBroker": "ok" if settings.booneops_broker_enabled else "disabled",
         "tailscale": (
             "ok"
@@ -45,6 +48,48 @@ def mysql_check(settings: AppSettings) -> CheckState:
     if not settings.mysql_host or not settings.mysql_user or not settings.mysql_password:
         return "disabled" if settings.retriever_env == "local" else "failed"
     return "ok" if ping_mysql(settings) else "failed"
+
+
+def production_locations_check(settings: AppSettings) -> CheckState:
+    if not is_mis_configured(settings):
+        return "disabled"
+    try:
+        locations = ProductionLocationRepository(
+            lambda: create_mis_connection(settings),
+            schema_name="public",
+        ).list_active()
+    except Exception:
+        return "degraded"
+    return "ok" if locations else "degraded"
+
+
+def production_locations_diagnostics(settings: AppSettings) -> dict[str, object]:
+    diagnostic: dict[str, object] = {
+        "configured": is_mis_configured(settings),
+        "source": "mis-postgres" if is_mis_configured(settings) else "disabled",
+        "table": "public.productionlocations",
+        "status": "disabled",
+        "count": None,
+        "sampleNames": [],
+        "errorType": None,
+        "error": None,
+    }
+    if not is_mis_configured(settings):
+        return diagnostic
+
+    try:
+        locations = ProductionLocationRepository(
+            lambda: create_mis_connection(settings),
+            schema_name="public",
+        ).list_active()
+        diagnostic["count"] = len(locations)
+        diagnostic["sampleNames"] = [location.name for location in locations[:8]]
+        diagnostic["status"] = "ok" if locations else "empty"
+    except Exception as exc:
+        diagnostic["status"] = "error"
+        diagnostic["errorType"] = type(exc).__name__
+        diagnostic["error"] = str(exc)[:240]
+    return diagnostic
 
 
 def overall_status(checks: dict[str, CheckState]) -> CheckState:

@@ -13,7 +13,11 @@ from app.auth.cloudflare import get_identity_from_request
 from app.auth.sessions import current_user_from_identity
 from app.config import AppSettings
 from app.dependencies import settings_dependency
-from app.services.health import overall_status, readiness_checks
+from app.services.health import (
+    overall_status,
+    production_locations_diagnostics,
+    readiness_checks,
+)
 
 router = APIRouter(tags=["health"])
 templates = Jinja2Templates(directory="app/templates")
@@ -106,6 +110,7 @@ async def health_deep(
         "environment": settings.retriever_env.value,
         "checks": checks,
         "config": settings.redacted_summary(),
+        "productionLocations": production_locations_diagnostics(settings),
         "checkedAt": checked_at,
     }
     if _wants_html(request):

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from app.config import AppSettings
 from app.services import health
-from app.services.health import mysql_check, overall_status, readiness_checks
+from app.services.health import (
+    mysql_check,
+    overall_status,
+    production_locations_check,
+    production_locations_diagnostics,
+    readiness_checks,
+)
 
 
 def test_disabled_features_report_disabled_not_failed() -> None:
@@ -12,6 +18,7 @@ def test_disabled_features_report_disabled_not_failed() -> None:
     assert checks["docsRoute"] == "disabled"
     assert checks["printsmithRoute"] == "disabled"
     assert checks["booneopsBroker"] == "disabled"
+    assert checks["productionLocations"] == "disabled"
 
 
 def test_fetch_enabled_marks_fetch_and_model_checks_ok() -> None:
@@ -78,3 +85,57 @@ def test_mysql_check_uses_ping(monkeypatch) -> None:
     monkeypatch.setattr(health, "ping_mysql", lambda _: True)
 
     assert mysql_check(settings) == "ok"
+
+
+def test_production_locations_check_reports_ok_when_mis_returns_rows(monkeypatch) -> None:
+    settings = AppSettings(
+        mis_db_host="mis.internal",
+        mis_db_database="printsmith",
+        mis_db_user="u",
+        mis_db_password="p",
+    )
+
+    monkeypatch.setattr(health, "create_mis_connection", lambda _: None)
+
+    class FakeRepository:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def list_active(self):
+            return [type("Location", (), {"name": "00/Scott - Working"})()]
+
+    monkeypatch.setattr(health, "ProductionLocationRepository", FakeRepository)
+
+    assert production_locations_check(settings) == "ok"
+    diagnostic = production_locations_diagnostics(settings)
+    assert diagnostic["status"] == "ok"
+    assert diagnostic["count"] == 1
+    assert diagnostic["sampleNames"] == ["00/Scott - Working"]
+
+
+def test_production_locations_diagnostics_reports_error_without_secrets(monkeypatch) -> None:
+    settings = AppSettings(
+        mis_db_host="mis.internal",
+        mis_db_database="printsmith",
+        mis_db_user="u",
+        mis_db_password="super-secret",
+    )
+
+    monkeypatch.setattr(health, "create_mis_connection", lambda _: None)
+
+    class BrokenRepository:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def list_active(self):
+            raise RuntimeError("permission denied for table productionlocations")
+
+    monkeypatch.setattr(health, "ProductionLocationRepository", BrokenRepository)
+
+    diagnostic = production_locations_diagnostics(settings)
+
+    assert production_locations_check(settings) == "degraded"
+    assert diagnostic["status"] == "error"
+    assert diagnostic["errorType"] == "RuntimeError"
+    assert "permission denied" in str(diagnostic["error"])
+    assert "super-secret" not in str(diagnostic)
