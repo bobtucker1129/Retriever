@@ -156,6 +156,99 @@ def call_general_conversation_llm(
     )
 
 
+def call_email_cleanup_llm(
+    settings: AppSettings,
+    *,
+    email_draft: str,
+    http_post: HttpPostFn = httpx.post,
+) -> GeneralLlmTurnResult:
+    """Rewrite a pasted email draft with Scott's plain, human cleanup prompt."""
+    provider = _normalize_provider(settings.model_provider)
+    if provider != "anthropic":
+        return _configuration_error_result("Fetch email cleanup currently supports Anthropic only.")
+
+    api_key = (settings.anthropic_api_key or "").strip()
+    if not api_key:
+        return _configuration_error_result("Fetch email cleanup is missing ANTHROPIC_API_KEY.")
+
+    model_id = resolve_anthropic_model_id(settings.model_default)
+    payload = {
+        "model": model_id,
+        "max_tokens": _DEFAULT_MAX_TOKENS,
+        "system": _email_cleanup_system_prompt(),
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Clean up this email draft. Return only the revised email, with no preface "
+                    "or explanation.\n\n"
+                    f"{email_draft.strip()}"
+                ),
+            }
+        ],
+    }
+    headers = {
+        "anthropic-version": ANTHROPIC_VERSION,
+        "content-type": "application/json",
+        "x-api-key": api_key,
+    }
+
+    try:
+        response = http_post(
+            ANTHROPIC_MESSAGES_URL,
+            headers=headers,
+            json=payload,
+            timeout=_DEFAULT_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except httpx.TimeoutException:
+        return _transient_error_result(
+            "Claude took too long to clean up that email. Your draft was saved; try again in a moment.",
+            model_id,
+        )
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status and 400 <= status < 500:
+            return _configuration_error_result(
+                "Claude rejected the email cleanup request. Check the configured model name and API key.",
+                model_id,
+            )
+        return _transient_error_result(
+            "Claude is temporarily unavailable. Your draft was saved; try again in a moment.",
+            model_id,
+        )
+    except (httpx.HTTPError, ValueError):
+        return _transient_error_result(
+            "Fetch could not reach Claude for that email cleanup request. Your draft was saved.",
+            model_id,
+        )
+
+    text = _assistant_text_from_anthropic_response(data)
+    if not text:
+        return _transient_error_result(
+            "Claude returned an empty email cleanup response. Your draft was saved; try again in a moment.",
+            model_id,
+        )
+
+    usage = data.get("usage") if isinstance(data, dict) else None
+    metadata: dict[str, Any] = {
+        "general_llm_provider": "anthropic",
+        "general_llm_model_id": model_id,
+        "email_cleanup": True,
+    }
+    if isinstance(usage, dict):
+        for key in ("input_tokens", "output_tokens"):
+            if isinstance(usage.get(key), int):
+                metadata[f"general_llm_{key}"] = usage[key]
+    return GeneralLlmTurnResult(
+        assistant_text=text,
+        context_state="llm",
+        model_label=model_id,
+        metadata=metadata,
+    )
+
+
 def _anthropic_messages_from_history(
     prior_records: Sequence[FetchMessageRecord],
     user_message: str,
@@ -234,6 +327,21 @@ def _general_chat_system_prompt() -> str:
         "schedule cron jobs, recurring reports, or automations; say Scott must approve those directly. "
         "Do not redirect ordinary non-personal chat back to PrintSmith, BooneOps, or production work "
         "unless the user asks for that."
+    )
+
+
+def _email_cleanup_system_prompt() -> str:
+    return (
+        "You are a writing assistant for cleaning up email drafts. Rewrite the user's text as an email. "
+        "Clean up spelling, grammar, punctuation, clarity, and flow while preserving the user's intent. "
+        "Never use em dashes. Use simple language and short, plain sentences. Avoid AI giveaway phrases "
+        "like 'dive into', 'unleash', and 'game-changing'. Be direct and concise. Write naturally, like "
+        "people actually talk. Do not make it promotional, over-friendly, or exaggerated. Keep it honest. "
+        "Casual grammar is okay if it feels more human. Cut fluff and filler. Focus on clarity. "
+        "Humanize the tone without adding fake warmth or promises. Do not jargonize unless the original "
+        "email clearly needs it. If the draft has a subject heading, make that heading bold. Do not bold "
+        "individual words in the middle of sentences. Return only the cleaned-up email text. Do not include "
+        "a preface, explanation, notes, or alternatives."
     )
 
 

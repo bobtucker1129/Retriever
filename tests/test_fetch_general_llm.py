@@ -6,6 +6,7 @@ from app.config import AppSettings
 from app.db.repositories.fetch import FetchMessageRecord
 from app.fetch.general_llm import (
     ANTHROPIC_MESSAGES_URL,
+    call_email_cleanup_llm,
     call_general_conversation_llm,
     resolve_anthropic_model_id,
     should_use_general_llm,
@@ -136,3 +137,39 @@ def test_call_general_conversation_llm_handles_timeout() -> None:
     assert result.context_state == "error"
     assert "too long" in result.assistant_text
     assert result.model_label == "claude-opus-4-7"
+
+
+def test_call_email_cleanup_llm_posts_cleanup_prompt_without_web_tools() -> None:
+    seen = {}
+
+    def fake_post(url: str, **kwargs):
+        seen["url"] = url
+        seen["json"] = kwargs["json"]
+        return httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "Hi Michael,\n\nThanks for sending this over."}],
+                "usage": {"input_tokens": 20, "output_tokens": 10},
+            },
+            request=httpx.Request("POST", url),
+        )
+
+    result = call_email_cleanup_llm(
+        _settings(),
+        email_draft="Hi Micheal,\n\nthank for sending this ovre",
+        http_post=fake_post,
+    )
+
+    assert seen["url"] == ANTHROPIC_MESSAGES_URL
+    assert "tools" not in seen["json"]
+    assert "Never use em dashes" in seen["json"]["system"]
+    assert "Return only the revised email" in seen["json"]["messages"][0]["content"]
+    assert result.assistant_text.startswith("Hi Michael")
+    assert result.context_state == "llm"
+    assert result.metadata == {
+        "general_llm_provider": "anthropic",
+        "general_llm_model_id": "claude-opus-4-7",
+        "email_cleanup": True,
+        "general_llm_input_tokens": 20,
+        "general_llm_output_tokens": 10,
+    }

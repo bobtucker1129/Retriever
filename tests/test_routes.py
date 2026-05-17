@@ -1329,6 +1329,55 @@ def test_fetch_general_question_uses_anthropic_llm_without_broker(monkeypatch) -
     assert "fetch-source-card-list" not in page.text
 
 
+def test_fetch_cleanup_email_uses_dedicated_llm_and_copy_button(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Email lane")
+
+    settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    captured: dict[str, object] = {}
+
+    def fake_cleanup(
+        _settings: AppSettings,
+        *,
+        email_draft: str,
+    ) -> fetch_routes.GeneralLlmTurnResult:
+        captured["email_draft"] = email_draft
+        return fetch_routes.GeneralLlmTurnResult(
+            "Hi Michael,\n\nThanks for sending this over.",
+            "llm",
+            "claude-opus-4-7",
+            {"email_cleanup": True, "general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_email_cleanup_llm", fake_cleanup)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/cleanup-email",
+        data={"question": "Hi Micheal,\n\nthank for sending this ovre"},
+    )
+
+    assert response.status_code == 303
+    assert captured["email_draft"] == "Hi Micheal,\n\nthank for sending this ovre"
+    assert db.fetch_messages[0]["route_key"] == "email_cleanup"
+    assert db.fetch_messages[0]["content"] == "Hi Micheal,\n\nthank for sending this ovre"
+    assert db.fetch_messages[1]["route_key"] == "email_cleanup"
+    assert db.fetch_messages[1]["metadata_json"] is not None
+    assert json.loads(db.fetch_messages[1]["metadata_json"])["email_cleanup"] is True
+    page = client.get(response.headers["location"])
+    assert page.status_code == 200
+    assert "Cleaned email" in page.text
+    assert "data-fetch-copy-target" in page.text
+    assert "Thanks for sending this over." in page.text
+
+
 def test_fetch_post_ask_broker_failure_keeps_conversation_usable(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")

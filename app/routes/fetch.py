@@ -49,6 +49,7 @@ from app.fetch.followup_routing import (
 )
 from app.fetch.general_llm import (
     GeneralLlmTurnResult,
+    call_email_cleanup_llm,
     call_general_conversation_llm,
     should_use_general_llm,
 )
@@ -549,4 +550,67 @@ async def ask_in_conversation(
         status_code=303,
     )
     ensure_session_cookie(request, response, user, settings)
+    return response
+
+
+@router.post("/conversations/{conversation_id}/cleanup-email", response_class=RedirectResponse)
+async def cleanup_email_in_conversation(
+    conversation_id: str,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+    question: str = Form(""),
+):
+    identity = get_identity_from_request(request, settings)
+    user = current_user_from_identity(identity, settings)
+    _require_fetch_shell_user(user)
+    if not settings.fetch_enabled:
+        return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    if not user.can_submit_fetch_ask():
+        raise HTTPException(status_code=403, detail=_FETCH_ASK_DISABLED_MSG)
+    repo = _repository(settings)
+    if repo is None:
+        raise HTTPException(status_code=503, detail=_NO_DB_MSG)
+    if repo.get_conversation(user.id, conversation_id) is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    draft = question.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not draft:
+        return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+
+    prior_records = repo.list_messages(user.id, conversation_id)
+    repo.append_message(
+        user.id,
+        conversation_id,
+        role="user",
+        content=draft,
+        route_key="email_cleanup",
+    )
+
+    llm_result: GeneralLlmTurnResult = call_email_cleanup_llm(
+        settings,
+        email_draft=draft,
+    )
+    assistant_text = llm_result.assistant_text
+    assistant_metadata = dict(llm_result.metadata) if llm_result.metadata else {}
+    assistant_metadata["email_cleanup"] = True
+    assistant_metadata.update(
+        fetch_thread_load_metadata_for_turn(prior_records, draft, assistant_text)
+    )
+    assistant = repo.append_message(
+        user.id,
+        conversation_id,
+        role="assistant",
+        content=assistant_text,
+        route_key="email_cleanup",
+        model_label=llm_result.model_label or settings.model_default,
+        context_percent=0,
+        context_state=llm_result.context_state,
+        metadata=assistant_metadata,
+    )
+    response = RedirectResponse(
+        url="/fetch?" + urlencode({"c": conversation_id, "focus": "latest"}),
+        status_code=303,
+    )
+    ensure_session_cookie(request, response, user, settings)
+    response.headers["X-Fetch-Assistant-Message-Id"] = assistant.message_id
     return response

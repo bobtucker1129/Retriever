@@ -85,6 +85,17 @@
           <div class="fetch-message {{ m.role }}">
             <div class="fetch-message-role">{{ m.role }}</div>
             {% if m.role == 'assistant' %}
+            {% if m.metadata and m.metadata.email_cleanup %}
+            <div class="fetch-email-toolbar" aria-label="Cleaned email actions">
+              <span class="fetch-email-toolbar-label">Cleaned email</span>
+              <button
+                type="button"
+                class="fetch-copy-button"
+                data-fetch-copy-target="fetch-copy-email-{{ m.message_id }}"
+              >Copy</button>
+              <textarea id="fetch-copy-email-{{ m.message_id }}" class="fetch-copy-source" readonly hidden aria-hidden="true" tabindex="-1">{{ m.content }}</textarea>
+            </div>
+            {% endif %}
             <div class="fetch-message-body">{{ m | fetch_assistant_body_display(settings) }}</div>
             <div class="fetch-assistant-status-line" aria-label="Answer status">{{ m | fetch_assistant_status(settings) }}</div>
             {% else %}
@@ -193,7 +204,12 @@
         </label>
         <div class="fetch-composer-buttons">
           <button type="button" class="secondary" disabled>Attach</button>
-          <button type="button" class="secondary" disabled>Clean Up Email</button>
+          <button
+            type="submit"
+            class="secondary"
+            formaction="{% if active_conversation_id %}/fetch/conversations/{{ active_conversation_id }}/cleanup-email{% else %}#{% endif %}"
+            {% if not fetch_can_use_composer %}disabled{% endif %}
+          >Clean Up Email</button>
           <button type="submit" {% if not fetch_can_use_composer %}disabled{% endif %}>Ask Fetch</button>
         </div>
       </div>
@@ -253,6 +269,55 @@
         var cur = (ta.value || "").trim();
         ta.value = cur ? cur + " " + insert : insert;
         ta.focus();
+      });
+    });
+
+    shell.querySelectorAll("[data-fetch-copy-target]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var targetId = btn.getAttribute("data-fetch-copy-target") || "";
+        var source = targetId ? document.getElementById(targetId) : null;
+        var text = source ? source.value : "";
+        if (!text) return;
+        function copied() {
+          var prior = btn.textContent;
+          btn.textContent = "Copied";
+          btn.disabled = true;
+          window.setTimeout(function () {
+            btn.textContent = prior || "Copy";
+            btn.disabled = false;
+          }, 1200);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(copied).catch(function () {
+            try {
+              var tmp = document.createElement("textarea");
+              tmp.value = text;
+              tmp.setAttribute("readonly", "readonly");
+              tmp.style.position = "fixed";
+              tmp.style.left = "-9999px";
+              document.body.appendChild(tmp);
+              tmp.focus();
+              tmp.select();
+              document.execCommand("copy");
+              document.body.removeChild(tmp);
+              copied();
+            } catch (ignored) {}
+          });
+          return;
+        }
+        try {
+          var tmp = document.createElement("textarea");
+          tmp.value = text;
+          tmp.setAttribute("readonly", "readonly");
+          tmp.style.position = "fixed";
+          tmp.style.left = "-9999px";
+          document.body.appendChild(tmp);
+          tmp.focus();
+          tmp.select();
+          document.execCommand("copy");
+          document.body.removeChild(tmp);
+          copied();
+        } catch (ignored) {}
       });
     });
 
@@ -392,10 +457,15 @@
     if (askForm && askWorking) {
       askForm.addEventListener("submit", function (e) {
         var action = askForm.getAttribute("action") || "";
-        if (action === "#" || action.indexOf("/ask") === -1) {
+        var submitter = e.submitter || null;
+        var submitterAction = submitter && submitter.getAttribute ? submitter.getAttribute("formaction") : "";
+        if (submitterAction) {
+          action = submitterAction;
+        }
+        if (action === "#" || (action.indexOf("/ask") === -1 && action.indexOf("/cleanup-email") === -1)) {
           return;
         }
-        var submitBtn = askForm.querySelector('button[type="submit"]');
+        var submitBtn = submitter || askForm.querySelector('button[type="submit"]');
         var ta = askForm.querySelector("#fetch-question");
         if (submitBtn && submitBtn.disabled) {
           return;
@@ -446,9 +516,9 @@
         askWorking.hidden = false;
         askForm.classList.add("fetch-composer-submitting");
         askForm.setAttribute("aria-busy", "true");
-        if (submitBtn) {
-          submitBtn.disabled = true;
-        }
+        askForm.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+          btn.disabled = true;
+        });
         if (ta && !ta.disabled) {
           ta.readOnly = true;
           ta.value = "";
@@ -458,9 +528,9 @@
           askWorking.hidden = true;
           askForm.classList.remove("fetch-composer-submitting");
           askForm.removeAttribute("aria-busy");
-          if (submitBtn) {
-            submitBtn.disabled = false;
-          }
+          askForm.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+            btn.disabled = false;
+          });
           if (ta && !ta.disabled) {
             ta.readOnly = false;
             ta.value = text;
