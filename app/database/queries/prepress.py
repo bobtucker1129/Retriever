@@ -941,8 +941,72 @@ def _load_sticky_open_invoice_state(
     """
 
     rows = _mysql_fetch_all(query, tuple(params) if params else None, PREPRESS_DB_NAME)
+    if rows:
+        return rows
 
-    return rows
+    return _load_legacy_open_invoice_state(view_mode=view_mode, selected_prepress_id=selected_prepress_id)
+
+
+def _load_legacy_open_invoice_state(
+    *,
+    view_mode: str,
+    selected_prepress_id: Optional[int],
+) -> List[Dict[str, Any]]:
+    """
+    Side-by-side migration fallback for existing old Retriever rows.
+
+    The live old PrePress data can have open invoice_state rows before the
+    sticky entry columns were populated. Show those rows in All and person
+    queues so the rebuild mirrors old Retriever while the sticky fields catch up.
+    """
+    cols = {c.lower() for c in (_get_table_columns(PREPRESS_DB_NAME, "invoice_state") or [])}
+    if "invoice_number" not in cols:
+        return []
+
+    select_fields = [
+        "invoice_number",
+        ("COALESCE(entered_at, working_started_at, updated_at) AS entered_at" if "entered_at" in cols else "COALESCE(working_started_at, updated_at) AS entered_at"),
+        (
+            "COALESCE(entered_prepress_id, owner_prepress_id) AS entered_prepress_id"
+            if "entered_prepress_id" in cols and "owner_prepress_id" in cols
+            else ("owner_prepress_id AS entered_prepress_id" if "owner_prepress_id" in cols else "NULL AS entered_prepress_id")
+        ),
+        ("entered_is_shared" if "entered_is_shared" in cols else "0 AS entered_is_shared"),
+        ("is_hold" if "is_hold" in cols else "0 AS is_hold"),
+        ("needs_data" if "needs_data" in cols else "0 AS needs_data"),
+        ("working_started_at" if "working_started_at" in cols else "NULL AS working_started_at"),
+        ("completed_at" if "completed_at" in cols else "NULL AS completed_at"),
+        ("notes" if "notes" in cols else "NULL AS notes"),
+        ("updated_at" if "updated_at" in cols else "NULL AS updated_at"),
+    ]
+    where = ["completed_at IS NULL" if "completed_at" in cols else "1=1"]
+    params: List[Any] = []
+
+    if view_mode == "shared":
+        if "entered_is_shared" in cols:
+            where.append("entered_is_shared = 1")
+        else:
+            return []
+    elif view_mode == "my":
+        if selected_prepress_id is None:
+            return []
+        if "entered_prepress_id" in cols and "owner_prepress_id" in cols:
+            where.append("COALESCE(entered_prepress_id, owner_prepress_id) = %s")
+        elif "owner_prepress_id" in cols:
+            where.append("owner_prepress_id = %s")
+        elif "entered_prepress_id" in cols:
+            where.append("entered_prepress_id = %s")
+        else:
+            return []
+        params.append(int(selected_prepress_id))
+
+    query = f"""
+    SELECT {', '.join(select_fields)}
+    FROM invoice_state
+    WHERE {' AND '.join(where)}
+    ORDER BY entered_at DESC, invoice_number
+    """
+    return _mysql_fetch_all(query, tuple(params) if params else None, PREPRESS_DB_NAME)
 
 
 def _load_all_open_sticky_invoice_assignments() -> List[Dict[str, Any]]:
@@ -1978,4 +2042,3 @@ def add_next_proof_event(invoice_number: str, job_part_number: str, sent_by: str
     VALUES (%s, %s, %s, %s)
     """
     return _mysql_execute(query, (invoice_number, job_part_number, next_round, sent_by), PREPRESS_DB_NAME)
-
