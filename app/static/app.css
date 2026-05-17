@@ -1912,7 +1912,7 @@ a.fetch-row-action:hover {
 }
 
 .prepress-content .prepress-search-control input {
-  width: min(22rem, 32vw) !important;
+  width: 13.75rem !important;
 }
 
 .prepress-content .prepress-page-size-control {
@@ -2002,7 +2002,7 @@ a.fetch-row-action:hover {
   }
 
   .prepress-content .prepress-search-control input {
-    width: min(16rem, 28vw) !important;
+    width: 12rem !important;
   }
 }
 
