@@ -39,7 +39,11 @@ def build_default_search_roots(config: Config, year_2digit: Optional[int] = None
 
 
 def parse_search_roots_from_config(config: Config) -> List[str]:
-    raw = (getattr(config, "PREPRESS_JOB_TICKET_SEARCH_ROOTS", None) or "").strip()
+    raw = (
+        getattr(config, "prepress_job_ticket_search_roots", None)
+        or getattr(config, "PREPRESS_JOB_TICKET_SEARCH_ROOTS", None)
+        or ""
+    ).strip()
     if not raw:
         return build_default_search_roots(config)
     parts = [p.strip() for p in raw.split(",")]

@@ -13,6 +13,7 @@ dependencies = [
   "nh3",
   "psycopg2-binary",
   "pydantic-settings",
+  "PyPDF2",
   "PyJWT[crypto]",
   "python-multipart",
   "uvicorn[standard]",

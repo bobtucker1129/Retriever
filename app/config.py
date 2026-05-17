@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
 
-from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic import AliasChoices, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,7 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        populate_by_name=True,
     )
 
     retriever_env: RetrieverEnvironment = RetrieverEnvironment.LOCAL
@@ -79,12 +80,18 @@ class AppSettings(BaseSettings):
     printsmith_token_authority_mode: TokenAuthorityMode = TokenAuthorityMode.DISABLED
     printsmith_token_proxy_url: Optional[str] = None
     printsmith_token_proxy_key: Optional[str] = None
-    printsmith_api_base_url: Optional[str] = None
+    printsmith_api_base_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("PRINTSMITH_API_BASE_URL", "PREPRESS_PRINTSMITH_API_BASE_URL"),
+    )
     printsmith_api_vendor: str = "LordTate"
     printsmith_api_username: Optional[str] = None
     printsmith_api_password: Optional[str] = None
     prepress_printsmith_report_base_url: str = "http://192.168.33.13:9191"
     prepress_job_ticket_save_enabled: bool = False
+    prepress_job_ticket_search_roots: Optional[str] = None
+    prepress_job_ticket_timezone: str = "America/Los_Angeles"
+    prepress_job_ticket_file_prefix: str = "Y1"
 
     booneops_broker_enabled: bool = False
     booneops_broker_url: Optional[str] = None
@@ -189,17 +196,11 @@ class AppSettings(BaseSettings):
             errors.append("DOCS_SERVICE_URL is required when docs route is enabled")
 
         mode = self.printsmith_token_authority_mode
-        has_direct_printsmith = any(
-            [
-                self.printsmith_api_base_url,
-                self.printsmith_api_username,
-                self.printsmith_api_password,
-            ]
-        )
+        has_direct_printsmith_credentials = any([self.printsmith_api_username, self.printsmith_api_password])
         if mode == TokenAuthorityMode.USING_OLD_AUTHORITY:
             if not self.printsmith_token_proxy_url or not self.printsmith_token_proxy_key:
                 errors.append("PrintSmith old-authority mode requires proxy URL and proxy key")
-            if has_direct_printsmith:
+            if has_direct_printsmith_credentials:
                 errors.append("Direct PrintSmith credentials conflict with old-authority mode")
         if mode == TokenAuthorityMode.USING_NEW_AUTHORITY:
             for field_name in (
@@ -211,6 +212,10 @@ class AppSettings(BaseSettings):
                     errors.append(f"{field_name.upper()} is required for new-authority mode")
         if self.printsmith_route_enabled and mode == TokenAuthorityMode.DISABLED:
             errors.append("PrintSmith route cannot be enabled when token authority is disabled")
+        if self.prepress_job_ticket_save_enabled and mode == TokenAuthorityMode.DISABLED:
+            errors.append("PrePress job ticket save requires a PrintSmith token authority mode")
+        if self.prepress_job_ticket_save_enabled and not self.printsmith_api_base_url:
+            errors.append("PrePress job ticket save requires PRINTSMITH_API_BASE_URL")
 
         if errors:
             raise ValueError("; ".join(errors))

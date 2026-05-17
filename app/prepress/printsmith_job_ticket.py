@@ -1,8 +1,9 @@
 """
 Fetch job ticket PDFs from PrintSmith REST API (token auth, base64 response).
 
-Token lifecycle: DB cache -> validate -> generate -> delete+regenerate.
-Persists tokens to retriever_prepress.printsmith_api_token for multi-worker safety.
+Token lifecycle:
+- old-authority mode borrows the token from old Retriever's token proxy
+- new-authority mode owns DB cache -> validate -> generate -> delete+regenerate
 """
 
 from __future__ import annotations
@@ -30,6 +31,15 @@ _DB_NAME = "retriever_prepress"
 _TOKEN_TABLE = "printsmith_api_token"
 _HTTPX_TIMEOUT = httpx.Timeout(120.0, connect=30.0)
 _TOKEN_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+
+
+def _setting(config: Config, lower_name: str, upper_name: str, default: str = "") -> str:
+    value = getattr(config, lower_name, None)
+    if value is None or value == "":
+        value = getattr(config, upper_name, None)
+    if hasattr(value, "value"):
+        value = value.value
+    return str(value or default)
 
 
 def _md5_hex(plaintext: str) -> str:
@@ -153,13 +163,28 @@ async def get_valid_token(config: Config) -> str:
     4. On vendor collision: delete stale token, regenerate
     5. On still-failing: reload from DB (another worker may have refreshed)
     """
-    base = (config.PREPRESS_PRINTSMITH_API_BASE_URL or "").rstrip("/")
-    vendor = config.PREPRESS_PRINTSMITH_API_VENDOR or ""
-    username = config.PREPRESS_PRINTSMITH_API_USERNAME or ""
-    password = config.PREPRESS_PRINTSMITH_API_PASSWORD or ""
+    mode = _setting(
+        config,
+        "printsmith_token_authority_mode",
+        "PRINTSMITH_TOKEN_AUTHORITY_MODE",
+        "disabled",
+    )
+    if mode == "using_old_authority":
+        return await get_proxy_token(config)
+
+    base = _setting(config, "printsmith_api_base_url", "PREPRESS_PRINTSMITH_API_BASE_URL").rstrip("/")
+    if not base:
+        base = _setting(config, "printsmith_api_base_url", "PRINTSMITH_API_BASE_URL").rstrip("/")
+    vendor = _setting(config, "printsmith_api_vendor", "PREPRESS_PRINTSMITH_API_VENDOR", "LordTate")
+    username = _setting(config, "printsmith_api_username", "PREPRESS_PRINTSMITH_API_USERNAME")
+    if not username:
+        username = _setting(config, "printsmith_api_username", "PRINTSMITH_API_USERNAME")
+    password = _setting(config, "printsmith_api_password", "PREPRESS_PRINTSMITH_API_PASSWORD")
+    if not password:
+        password = _setting(config, "printsmith_api_password", "PRINTSMITH_API_PASSWORD")
 
     if not all([base, vendor, username, password]):
-        raise ValueError("PrintSmith REST API credentials not configured (check PREPRESS_PRINTSMITH_API_* in config).")
+        raise ValueError("PrintSmith REST API credentials not configured.")
 
     cached_tok, cached_exp = load_cached_token(vendor)
 
@@ -230,7 +255,11 @@ async def get_valid_token(config: Config) -> str:
 async def _api_get_pdf(config: Config, path: str) -> bytes:
     """GET a jobTicket endpoint; decode base64 PDF from JSON wrapper."""
     token = await get_valid_token(config)
-    base = (config.PREPRESS_PRINTSMITH_API_BASE_URL or "").rstrip("/")
+    base = _setting(config, "printsmith_api_base_url", "PREPRESS_PRINTSMITH_API_BASE_URL").rstrip("/")
+    if not base:
+        base = _setting(config, "printsmith_api_base_url", "PRINTSMITH_API_BASE_URL").rstrip("/")
+    if not base:
+        raise ValueError("PrintSmith REST API base URL is not configured.")
     url = f"{base}{path}"
 
     try:
@@ -248,7 +277,7 @@ async def _api_get_pdf(config: Config, path: str) -> bytes:
     msg = data.get("responseMessage", "")
 
     if rc == 400 and "token" in msg.lower():
-        clear_cached_token(config.PREPRESS_PRINTSMITH_API_VENDOR or "")
+        await invalidate_token(config)
         token = await get_valid_token(config)
         async with httpx.AsyncClient(timeout=_HTTPX_TIMEOUT, verify=False) as client:
             r = await client.get(url, headers=_api_headers(token))
@@ -268,6 +297,52 @@ async def _api_get_pdf(config: Config, path: str) -> bytes:
         raise ValueError("PrintSmith API response did not decode to a valid PDF.")
 
     return pdf_bytes
+
+
+async def get_proxy_token(config: Config) -> str:
+    """Borrow the current PrintSmith token from the configured token authority."""
+    proxy_url = _setting(config, "printsmith_token_proxy_url", "PRINTSMITH_TOKEN_PROXY_URL").rstrip("/")
+    proxy_key = _setting(config, "printsmith_token_proxy_key", "PRINTSMITH_TOKEN_PROXY_KEY")
+    if not proxy_url or not proxy_key:
+        raise ValueError("PrintSmith token proxy is not configured.")
+
+    async with httpx.AsyncClient(timeout=_TOKEN_TIMEOUT) as client:
+        r = await client.get(proxy_url, headers={"X-Token-Proxy-Key": proxy_key})
+
+    if r.status_code == 401:
+        raise ValueError("PrintSmith token proxy rejected this server.")
+    if r.status_code != 200:
+        raise ValueError(f"PrintSmith token proxy returned HTTP {r.status_code}.")
+
+    data = r.json()
+    token = str(data.get("token") or "")
+    if not token:
+        raise ValueError("PrintSmith token proxy returned no token.")
+    return token
+
+
+async def invalidate_token(config: Config) -> None:
+    mode = _setting(
+        config,
+        "printsmith_token_authority_mode",
+        "PRINTSMITH_TOKEN_AUTHORITY_MODE",
+        "disabled",
+    )
+    if mode == "using_old_authority":
+        proxy_url = _setting(config, "printsmith_token_proxy_url", "PRINTSMITH_TOKEN_PROXY_URL").rstrip("/")
+        proxy_key = _setting(config, "printsmith_token_proxy_key", "PRINTSMITH_TOKEN_PROXY_KEY")
+        if not proxy_url or not proxy_key:
+            return
+        invalidate_url = f"{proxy_url}/invalidate"
+        try:
+            async with httpx.AsyncClient(timeout=_TOKEN_TIMEOUT) as client:
+                await client.post(invalidate_url, headers={"X-Token-Proxy-Key": proxy_key})
+        except httpx.HTTPError:
+            logger.warning("PrintSmith token proxy invalidate failed", exc_info=True)
+        return
+
+    vendor = _setting(config, "printsmith_api_vendor", "PREPRESS_PRINTSMITH_API_VENDOR", "LordTate")
+    clear_cached_token(vendor)
 
 
 # ── Public API ──────────────────────────────────────────────────────

@@ -342,6 +342,10 @@ h2 {
   padding: var(--space-lg);
 }
 
+.content:has(.prepress-content) {
+  max-width: none;
+}
+
 .page-intro,
 .notice-panel,
 .panel,
@@ -1907,7 +1911,7 @@ a.fetch-row-action:hover {
 }
 
 .prepress-content .prepress-main-filters #queue {
-  width: min(29rem, 36vw);
+  width: min(29rem, 31vw);
 }
 
 .prepress-content .prepress-main-filters #include_completed {

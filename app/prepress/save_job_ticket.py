@@ -45,7 +45,11 @@ async def save_job_ticket_to_remote(
     mode: str,
     job_part_numbers: List[str],
 ) -> JobTicketSaveResult:
-    if not getattr(config, "PREPRESS_JOB_TICKET_SAVE_ENABLED", False):
+    save_enabled = bool(
+        getattr(config, "prepress_job_ticket_save_enabled", False)
+        or getattr(config, "PREPRESS_JOB_TICKET_SAVE_ENABLED", False)
+    )
+    if not save_enabled:
         return JobTicketSaveResult(False, "Saving job tickets to disk is disabled (set PREPRESS_JOB_TICKET_SAVE_ENABLED).")
 
     if mode not in ("invoice", "parts"):
@@ -68,9 +72,18 @@ async def save_job_ticket_to_remote(
         logger.warning("Could not create Remote directory: %s", e)
         return JobTicketSaveResult(False, "Could not create or access the Remote folder for this job (see server logs).")
 
-    tz = ZoneInfo(getattr(config, "PREPRESS_JOB_TICKET_TIMEZONE", "America/Los_Angeles") or "America/Los_Angeles")
+    tz_name = (
+        getattr(config, "prepress_job_ticket_timezone", None)
+        or getattr(config, "PREPRESS_JOB_TICKET_TIMEZONE", None)
+        or "America/Los_Angeles"
+    )
+    tz = ZoneInfo(tz_name)
     stamp = datetime.now(tz).strftime("%Y%m%d-%H%M%S")
-    prefix = getattr(config, "PREPRESS_JOB_TICKET_FILE_PREFIX", "Y1") or "Y1"
+    prefix = (
+        getattr(config, "prepress_job_ticket_file_prefix", None)
+        or getattr(config, "PREPRESS_JOB_TICKET_FILE_PREFIX", None)
+        or "Y1"
+    )
     inv_seg = _safe_filename_segment(invoice_number)
     filename = f"{prefix}_JobTicket_{inv_seg}_{stamp}.pdf"
     out_path = os.path.join(remote_dir, filename)
