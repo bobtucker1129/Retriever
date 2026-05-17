@@ -157,7 +157,9 @@ def broker_message_url(settings: AppSettings) -> str:
 
 
 def map_user_to_broker_principal(user: CurrentUser) -> tuple[str, str]:
-    """Map every Retriever Fetch user to the same broker principal."""
+    """Map Retriever Fetch users to the broker role surfaced by app permissions."""
+    if user.is_admin or user.has_capability("booneops.admin"):
+        return "booneops.admin", "admin"
     return "booneops.production", "production"
 
 
@@ -1056,10 +1058,6 @@ def call_booneops_broker(
         dict(session_metadata_extra) if session_metadata_extra else {}
     )
     if route_label == "docs_candidate":
-        # Match the BooneOps #General behavior: docs-shaped Fetch turns should use
-        # the broker's local MCP docs fast path instead of the Retriever-only lane.
-        merged_session_extra.setdefault("source", "discord-booneops")
-        merged_session_extra.setdefault("retrieverMcpDocsFastPath", True)
         merged_session_extra["retrieverDocsPresentationGuidance"] = _DOCS_ROUTE_PRESENTATION_GUIDANCE
     broker_user_message = augment_fetch_broker_user_message_for_turn(
         user_message, route_label, merged_session_extra

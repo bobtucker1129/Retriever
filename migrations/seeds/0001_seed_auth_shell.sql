@@ -9,6 +9,7 @@ INSERT IGNORE INTO retriever_core.capabilities
 VALUES
   ('admin.manage_users', 'Manage users', 'Approve and manage Retriever users.', 'strict'),
   ('admin.manage_settings', 'Manage settings', 'Update app-level settings.', 'strict'),
+  ('booneops.admin', 'BooneOps admin', 'Use Tier 2 BooneOps admin interpretation tools.', 'strict'),
   ('prepress.access', 'Access PrePress', 'Open the PrePress module.', 'standard'),
   ('dsf.access', 'Access DSF', 'Open the DSF module.', 'standard'),
   ('fetch.access', 'Access Fetch', 'Open the Fetch module when enabled.', 'light'),

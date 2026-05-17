@@ -125,8 +125,10 @@ class AdminActionService:
         self.set_module_access(target_user_id, "proofs", proofs_level != "no", actor)
         if admin_module:
             self.grant_capability(target_user_id, "admin.manage_users", actor)
+            self.grant_capability(target_user_id, "booneops.admin", actor)
         else:
             self.revoke_capability(target_user_id, "admin.manage_users", actor)
+            self.revoke_capability(target_user_id, "booneops.admin", actor)
         if fetch_access:
             self.grant_capability(target_user_id, "fetch.access", actor)
         else:

@@ -23,6 +23,7 @@ from app.fetch.local_routing import (
         ("/help more", "help"),
         ("/docs Are there Switch elements for email approval?", "docs_candidate"),
         ("/printsmith open invoices last week", "printsmith_candidate"),
+        ("/ops-email summarize this customer note", "ops_email"),
         (
             "Are there any Switch elements that let you approve a step via email?",
             "docs_candidate",
@@ -46,6 +47,14 @@ from app.fetch.local_routing import (
             "printsmith_candidate",
         ),
         ("How many invoices were posted during FY2024?", "printsmith_candidate"),
+        (
+            "how much revenue was caputure from the charge prefight in january 2026",
+            "printsmith_candidate",
+        ),
+        ("How much freight was captured in January 2026?", "printsmith_candidate"),
+        ("What were total preflight charges for March 2026?", "printsmith_candidate"),
+        ("Can you pull Paychex hours for last week?", "blocked_write"),
+        ("Can you check QuickBooks for invoice totals?", "blocked_write"),
         ("Were more invoices entered in Sep 2026 or Nov 2026?", "printsmith_candidate"),
         (
             "Can you give me a list of job that were digital Color in the month of Jan, 2026",
@@ -119,8 +128,12 @@ def test_broker_message_after_slash_route_prefix() -> None:
     assert broker_message_after_slash_route_prefix("/printsmith open invoices", "printsmith_candidate") == (
         "open invoices"
     )
+    assert broker_message_after_slash_route_prefix("/ops-email customer note", "ops_email") == (
+        "customer note"
+    )
     assert broker_message_after_slash_route_prefix("/DOCS only", "docs_candidate") == "only"
     assert broker_message_after_slash_route_prefix("/docs", "docs_candidate") == "Documentation question."
+    assert broker_message_after_slash_route_prefix("/ops-email", "ops_email") == "Ops email question."
     assert (
         broker_message_after_slash_route_prefix("/printsmith", "printsmith_candidate")
         == "PrintSmith shop data question."

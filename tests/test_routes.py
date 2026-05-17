@@ -2152,6 +2152,7 @@ def test_admin_matrix_update_can_grant_admin(monkeypatch) -> None:
     assert db.user_by_id(1)["role_key"] == "owner_admin"
     assert "admin" in db.modules_by_user.get(1, set())
     assert "admin.manage_users" in db.capabilities_by_user.get(1, set())
+    assert "booneops.admin" in db.capabilities_by_user.get(1, set())
 
 
 def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:

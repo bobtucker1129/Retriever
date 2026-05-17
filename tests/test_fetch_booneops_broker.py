@@ -78,13 +78,17 @@ def test_broker_message_url_joins_path() -> None:
 
 def test_map_user_to_broker_principal() -> None:
     assert map_user_to_broker_principal(_make_user()) == ("booneops.production", "production")
-    assert map_user_to_broker_principal(_make_user(is_admin=True)) == ("booneops.production", "production")
+    assert map_user_to_broker_principal(_make_user(is_admin=True)) == ("booneops.admin", "admin")
+    assert map_user_to_broker_principal(
+        _make_user(capabilities=frozenset({"fetch.ask_internal", "booneops.admin"}))
+    ) == ("booneops.admin", "admin")
 
 
 def test_should_delegate_fetch_routes_when_broker_enabled() -> None:
     s = _make_settings()
     assert should_delegate_ask_to_booneops_broker("printsmith_candidate", s) is True
     assert should_delegate_ask_to_booneops_broker("docs_candidate", s) is True
+    assert should_delegate_ask_to_booneops_broker("ops_email", s) is True
     assert should_delegate_ask_to_booneops_broker("general_candidate", s) is False
     assert should_delegate_ask_to_booneops_broker("local", s) is False
 
@@ -611,8 +615,8 @@ def test_call_booneops_broker_docs_route_keeps_user_message_clean_and_sets_guida
     payload = json.loads(captured["content"].decode())
     assert payload["message"] == user_q
     sm = payload["sessionMetadata"]
-    assert sm["source"] == "discord-booneops"
-    assert sm["retrieverMcpDocsFastPath"] is True
+    assert sm["source"] == "retriever-fetch"
+    assert "retrieverMcpDocsFastPath" not in sm
     assert sm["retrieverDocsPresentationGuidance"].startswith("Lead with a short Summary")
     assert "sourceCards" in sm["retrieverDocsPresentationGuidance"]
     forbidden_in_message = (
