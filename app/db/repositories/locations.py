@@ -41,7 +41,7 @@ class ProductionLocationRepository:
 
     def list_active(self) -> list[ProductionLocation]:
         conn = self._connection_factory()
-        cursor = conn.cursor(dictionary=True)
+        cursor = _dict_cursor(conn)
         try:
             cursor.execute(
                 f"""
@@ -53,9 +53,41 @@ class ProductionLocationRepository:
                 """
             )
             return [
-                ProductionLocation(id=int(row["id"]), name=str(row["name"]))
+                ProductionLocation(
+                    id=int(_row_value(row, "id", 0)),
+                    name=str(_row_value(row, "name", 1)),
+                )
                 for row in cursor.fetchall()
             ]
         finally:
             cursor.close()
             conn.close()
+
+
+def _dict_cursor(conn: ConnectionLike) -> CursorLike:
+    """Open a dictionary-like cursor for either mysql-connector or psycopg2."""
+    try:
+        return conn.cursor(dictionary=True)
+    except TypeError:
+        real_dict_cursor = _real_dict_cursor_class()
+        if real_dict_cursor is not None:
+            try:
+                return conn.cursor(cursor_factory=real_dict_cursor)
+            except TypeError:
+                pass
+        return conn.cursor()
+
+
+def _real_dict_cursor_class():
+    try:
+        from psycopg2.extras import RealDictCursor
+
+        return RealDictCursor
+    except ImportError:
+        return None
+
+
+def _row_value(row, key: str, index: int):
+    if isinstance(row, dict):
+        return row[key]
+    return row[index]
