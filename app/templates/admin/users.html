@@ -41,19 +41,6 @@
         <tr>
           <td>{% if row.status == 'pending' %}<span class="status-pill status-pending">Pending</span>{% elif row.last_seen_at %}{{ row.last_seen_at.strftime('%Y-%m-%d %H:%M') }}{% else %}<span class="muted">Never</span>{% endif %}</td>
           <td><a href="mailto:{{ row.email }}">{{ row.email }}</a></td>
-          {% if row.is_seed_admin %}
-          <td>{{ row.full_name or row.display_name }}</td>
-          <td class="muted">{{ row.production_location_name or '—' }}</td>
-          <td colspan="7" class="muted">Seed operator — not editable in this matrix.</td>
-          <td><span class="status-pill status-{{ row.status }}">{{ row.status }}</span></td>
-          <td class="admin-matrix-actions">
-            {% if row.status == 'pending' %}
-            <form method="post" action="/admin/users/{{ row.id }}/activate" class="inline-form">
-              <button type="submit">Approve</button>
-            </form>
-            {% endif %}
-          </td>
-          {% else %}
           <td>
             <form id="user-matrix-{{ row.id }}" method="post" action="/admin/users/{{ row.id }}/matrix-update"></form>
             <label class="sr-only" for="name-{{ row.id }}">Full name</label>
@@ -74,9 +61,12 @@
           <td>
             <label class="sr-only" for="admin-mod-{{ row.id }}">Admin</label>
             <select form="user-matrix-{{ row.id }}" id="admin-mod-{{ row.id }}" name="admin_module" aria-label="Admin">
-              <option value="false" {% if not row.is_admin %}selected{% endif %}>No</option>
+              <option value="false" {% if not row.is_admin %}selected{% endif %} {% if row.is_seed_admin %}disabled{% endif %}>No</option>
               <option value="true" {% if row.is_admin %}selected{% endif %}>Yes</option>
             </select>
+            {% if row.is_seed_admin %}
+            <input form="user-matrix-{{ row.id }}" type="hidden" name="admin_module" value="true">
+            {% endif %}
           </td>
           <td>
             <label class="sr-only" for="fetch-mod-{{ row.id }}">Fetch</label>
@@ -138,8 +128,10 @@
             <form method="post" action="/admin/users/{{ row.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this user from Retriever? If they sign in through Cloudflare again, they will return as pending.');">
               <button type="submit" class="danger">Remove</button>
             </form>
+            {% if row.is_seed_admin %}
+            <span class="muted">Seed account: admin access is preserved.</span>
+            {% endif %}
           </td>
-          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

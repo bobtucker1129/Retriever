@@ -1,0 +1,99 @@
+{% if not parts %}
+<div class="card" style="margin: 6px 8px; padding: 8px;">
+    <div class="muted">No job parts found.</div>
+</div>
+{% else %}
+<div class="card" style="margin: 6px 8px; padding: 8px;">
+    <table class="data-table" style="margin: 0;">
+        <thead>
+            <tr>
+                {% if prepress_job_ticket_save_enabled %}
+                <th style="width: 36px;" title="Select for save">Sel</th>
+                {% endif %}
+                <th style="width: 90px;">Job Part</th>
+                <th>Description</th>
+                <th style="width: 180px;">Current Location</th>
+                <th style="width: 90px;">Proof #</th>
+                <th style="width: 140px;">Proof Date</th>
+                <th style="width: 110px;">Ticket</th>
+                <th style="width: 320px;">Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in parts %}
+            <tr>
+                {% if prepress_job_ticket_save_enabled %}
+                <td style="text-align: center;">
+                    <input type="checkbox" class="pp-part-sel" data-job-part="{{ p.job_part_number }}" title="Include in merged PDF" />
+                </td>
+                {% endif %}
+                <td>
+                    <strong>{{ invoice_number }}/{{ p.job_part_number }}</strong>
+                    <button type="button" class="pp-copy-btn" data-copy-value="{{ invoice_number }}/{{ p.job_part_number }}" title="Copy job part number">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>
+                </td>
+                <td>{{ p.part_description }}</td>
+                <td>{{ p.job_location or '-' }}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <span>{{ p.proof_round or 0 }}</span>
+                        <form class="inline-form"
+                              hx-post="/prepress/api/job/{{ invoice_number }}/{{ p.job_part_number }}/update"
+                              hx-target="#parts-{{ invoice_number }}"
+                              hx-swap="innerHTML">
+                            <input type="hidden" name="action" value="add_proof">
+                            <button type="submit" class="btn btn-secondary" style="padding: 2px 6px; font-size: var(--font-size-xs);">Add</button>
+                        </form>
+                    </div>
+                </td>
+                <td>
+                    {% if p.proof_sent_at %}
+                        {{ p.proof_sent_at.strftime('%m/%d %H:%M') }}
+                    {% else %}
+                        <span class="muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if p.job_id %}
+                    <a class="btn btn-action"
+                       style="padding: 2px 6px; font-size: var(--font-size-xs); text-decoration: none;"
+                       href="{{ printsmith_report_base_url }}/PrintSmith/reportservlet?jobTicket=PSV_jobTicket.rpt&reportParameter={{ p.job_id }}&showShippingCharges=true&showBarcode=true"
+                       target="_blank"
+                       rel="noopener">Part</a>
+                    {% else %}
+                    <span class="muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <form class="inline-form"
+                              hx-post="/prepress/api/job/{{ invoice_number }}/{{ p.job_part_number }}/update"
+                              hx-target="#parts-{{ invoice_number }}"
+                              hx-swap="innerHTML"
+                              style="display: inline-flex; gap: 6px; width: 100%;">
+                            <input type="hidden" name="action" value="set_notes">
+                            <input type="text"
+                                   name="notes"
+                                   value="{{ p.notes }}"
+                                   style="width: 240px; padding: 3px 6px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary);" />
+                            <button type="submit" class="btn btn-secondary" style="padding: 2px 6px; font-size: var(--font-size-xs);">Save</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if prepress_job_ticket_save_enabled %}
+    <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <button type="button" class="pp-save-parts-ticket"
+                data-invoice="{{ invoice_number }}"
+                style="padding: 4px 10px; font-size: var(--font-size-xs);">Save selected parts as one PDF</button>
+        <span class="muted">Select one or more rows, then save. Order follows row order.</span>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+

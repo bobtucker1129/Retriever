@@ -52,6 +52,12 @@
           </a>
           {% endif %}
           {% endif %}
+          {% if user and user.status == 'active' and user.can_open_prepress() %}
+          <a class="nav-item{% if active_nav == 'prepress' %} active{% endif %}" href="/prepress/" title="PrePress">
+            <span class="nav-abbrev">P</span>
+            <span class="nav-label">PrePress</span>
+          </a>
+          {% endif %}
           {% endif %}
         </nav>
         {% if shell != 'minimal' and user and user.is_admin %}

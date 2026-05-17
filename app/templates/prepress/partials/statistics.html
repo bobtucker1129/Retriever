@@ -1,0 +1,85 @@
+<div class="card" style="padding: 8px; margin-top: 10px;">
+    <div class="section-header" style="margin-bottom: 6px;">
+        <h3 class="section-title">Statistics (v1)</h3>
+    </div>
+
+    <div class="muted" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 8px;">
+        <div>Open: <strong>{{ summary.open_all }}</strong></div>
+        {% if filters.include_completed %}
+        <div>Completed: <strong>{{ summary.completed_all }}</strong></div>
+        {% endif %}
+        <div>Revenue: <strong>{{ summary.revenue_all_display }}</strong></div>
+    </div>
+
+    <form id="statistics-filters"
+          class="filter-controls"
+          hx-get="/prepress/partials/statistics"
+          hx-target="#statistics-container"
+          hx-swap="innerHTML"
+          hx-trigger="change delay:250ms">
+        <label for="include_completed_stats">Include Completed</label>
+        <select id="include_completed_stats" name="include_completed" style="min-width: 120px;">
+            <option value="0" {% if not filters.include_completed %}selected{% endif %}>No</option>
+            <option value="1" {% if filters.include_completed %}selected{% endif %}>Yes</option>
+        </select>
+
+        {% if filters.include_completed %}
+        <label for="date_from">Completed From</label>
+        {% else %}
+        <label for="date_from">Working From</label>
+        {% endif %}
+        <input id="date_from" name="date_from" type="date" value="{{ filters.date_from }}"
+               style="padding: 4px 8px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary);" />
+
+        <label for="date_to">To</label>
+        <input id="date_to" name="date_to" type="date" value="{{ filters.date_to }}"
+               style="padding: 4px 8px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary);" />
+    </form>
+
+    <table class="data-table" style="margin-top: 8px;">
+        <thead>
+            <tr>
+                <th style="width: 180px;">Name</th>
+                <th style="width: 130px;">Open Invoices</th>
+                {% if filters.include_completed %}
+                <th style="width: 120px;">Completed</th>
+                {% endif %}
+                <th style="width: 170px;">Longest (Working → End)</th>
+                <th style="width: 130px;">Most Proof</th>
+                <th style="width: 140px;">Revenue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>
+                    {% if r.is_all %}
+                        <strong>{{ r.name }}</strong>
+                    {% else %}
+                        <strong>{{ r.name }}</strong>
+                    {% endif %}
+                </td>
+                <td>{{ r.open_invoices }}</td>
+                {% if filters.include_completed %}
+                <td>{{ r.completed_invoices }}</td>
+                {% endif %}
+                <td>
+                    {% if r.longest_days is not none %}
+                        {{ r.longest_days }} day{{ '' if r.longest_days == 1 else 's' }}
+                    {% else %}
+                        <span class="muted">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.most_proof_round }}</td>
+                <td>{{ r.revenue_display }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="muted" style="margin-top: 6px;">
+        Next: week-over-week trends, by person/customer/PM, cycle time, proof-round distribution.
+    </div>
+</div>
+
+

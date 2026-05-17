@@ -1,0 +1,395 @@
+{% if not completed_reference_mode %}
+<script type="application/json" id="prepress-wip-payload">{{ wip_payload_json | safe }}</script>
+{% endif %}
+
+{% if completed_reference_mode %}
+<div class="muted" style="margin-bottom: 8px; color: var(--text-muted);">
+    Reference view: completed workflow state comes from <strong>retriever_prepress</strong> with account/taken-by header enrichment from MIS. Only the Completed toggle is active so you can restore mistakes.
+</div>
+
+<div class="table-container">
+<table class="data-table" style="opacity: 0.72;">
+    <thead>
+        <tr>
+            <th style="width: 120px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Invoice</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="invoice_number" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="invoice_number" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 140px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Working</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="working_started_at" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="working_started_at" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 160px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Completed</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="completed_at" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="completed_at" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 160px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Completed By</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="completed_set_by" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="completed_set_by" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 120px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Most Proof</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="most_proof_round" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="most_proof_round" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 110px;">Completed</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if not invoices %}
+        <tr>
+            <td colspan="7" class="muted">No completed invoices found.</td>
+        </tr>
+        {% endif %}
+
+        <tr data-prepress-empty-state style="display: none;">
+            <td colspan="7" class="muted">No rows match the current search.</td>
+        </tr>
+
+        {% for inv in invoices %}
+        {% set invoice_number = inv.invoice_number %}
+        <tr data-prepress-invoice="{{ invoice_number }}" data-search-text="{{ inv.search_text or '' }}">
+            <td>
+                <strong><span data-pp-highlight="1">{{ invoice_number }}</span></strong>
+                <button type="button" class="pp-copy-btn" data-copy-value="{{ invoice_number }}" title="Copy invoice number">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+            </td>
+            <td>
+                {% if inv.working_started_at %}
+                    <span data-pp-highlight="1">{{ inv.working_started_at.strftime('%m/%d %H:%M') }}</span>
+                {% else %}
+                    <span class="muted">-</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if inv.completed_at %}
+                    <span data-pp-highlight="1">{{ inv.completed_at.strftime('%m/%d %H:%M') }}</span>
+                {% else %}
+                    <span class="muted">-</span>
+                {% endif %}
+            </td>
+            <td><span data-pp-highlight="1">{{ inv.completed_set_by or '-' }}</span></td>
+            <td><span data-pp-highlight="1">{{ inv.most_proof_round }}</span></td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="1">
+                    <input type="hidden" name="action" value="toggle_completed">
+                    <input type="hidden" name="value" value="0">
+                    <button type="submit" class="btn btn-secondary"
+                            style="padding: 2px 6px; font-size: var(--font-size-xs); opacity: 1;">
+                        Set to No
+                    </button>
+                </form>
+            </td>
+            <td>
+                <input type="text"
+                       value="{{ inv.notes }}"
+                       data-pp-highlight-notes="1"
+                       disabled
+                       style="width: 320px; padding: 3px 6px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary);" />
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+
+{% set show_assigned_to = (queue == 'all') %}
+{% set table_colspan = (12 if show_assigned_to else 11) %}
+
+<div class="table-container">
+<table class="data-table">
+    <thead>
+        <tr>
+            <th style="width: 36px;">Parts</th>
+            <th style="width: 90px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Invoice</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="invoice_number" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="invoice_number" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            {% if show_assigned_to %}
+            <th style="width: 140px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Assigned To</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="assigned_to" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="assigned_to" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            {% endif %}
+            <th style="width: 340px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Account</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="account_name" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="account_name" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 140px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Project Manager</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="taken_by" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="taken_by" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 30px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Proof By</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="proof_date" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="proof_date" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 70px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Hold</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="is_hold" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="is_hold" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 70px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Data</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="needs_data" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="needs_data" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 110px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <span>Working</span>
+                    <span style="display: inline-flex; gap: 2px; margin-left: auto;">
+                        <a href="#" data-sort-by="working_started_at" data-sort-dir="asc" class="muted" style="text-decoration: none;">▲</a>
+                        <a href="#" data-sort-by="working_started_at" data-sort-dir="desc" class="muted" style="text-decoration: none;">▼</a>
+                    </span>
+                </div>
+            </th>
+            <th style="width: 110px;">Done</th>
+            <th style="width: 120px;">Ticket</th>
+            <th style="width: 260px;">Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if not invoices %}
+        <tr>
+            <td colspan="{{ table_colspan }}" class="muted">No invoices found for current filters.</td>
+        </tr>
+        {% endif %}
+
+        <tr data-prepress-empty-state style="display: none;">
+            <td colspan="{{ table_colspan }}" class="muted">No rows match the current search.</td>
+        </tr>
+
+        {% for inv in invoices %}
+        {% set inv_id = inv.invoice_id %}
+        {% set invoice_number = inv.invoice_number %}
+        {% set parts_target_id = "parts-" ~ invoice_number %}
+
+        <tr data-prepress-invoice="{{ invoice_number }}" data-search-text="{{ inv.search_text or '' }}">
+            <td>
+                <button class="btn btn-secondary"
+                        style="padding: 2px 6px; font-size: var(--font-size-xs);"
+                        id="toggle-{{ invoice_number }}"
+                        type="button"
+                        onclick="toggleInvoiceParts('{{ invoice_number }}')">
+                    +
+                </button>
+            </td>
+            <td class="prepress-invoice-cell">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <strong><span data-pp-highlight="1">{{ invoice_number }}</span></strong>
+                    <button type="button" class="pp-copy-btn" data-copy-value="{{ invoice_number }}" title="Copy invoice number">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>
+                    {% if inv.matched_operator_ids|length > 1 %}
+                        <span class="pp-badge pp-badge-warn">Shared</span>
+                    {% endif %}
+                    {% if inv.has_hard_copy_proof %}
+                        <span class="pp-badge pp-badge-danger pp-badge-pulse pp-badge-compact"
+                              title="Hard Copy Proof">HCP</span>
+                    {% endif %}
+                </div>
+                {% if inv.invoice_amount_display %}
+                <div class="muted" style="margin-top: 2px; font-size: var(--font-size-xs);">
+                    {{ inv.invoice_amount_display }}
+                </div>
+                {% endif %}
+            </td>
+            {% if show_assigned_to %}
+            <td><span data-pp-highlight="1">{{ inv.assigned_to_name or '-' }}</span></td>
+            {% endif %}
+            <td><span data-pp-highlight="1">{{ inv.account_name }}</span></td>
+            <td><span data-pp-highlight="1">{{ inv.taken_by or '-' }}</span></td>
+            <td class="proof-date-cell" data-urgency="{{ inv.proof_date_urgency or '' }}">
+                {% if inv.proof_date %}
+                    <span data-pp-highlight="1" class="proof-date-value {% if inv.proof_date_urgency == 'today' %}date-urgent-today{% elif inv.proof_date_urgency == 'day_after' %}date-urgent-dayafter{% endif %}">
+                        {{ inv.proof_date.strftime('%m/%d/%Y') if inv.proof_date.__class__.__name__ != 'str' else inv.proof_date }}
+                    </span>
+                {% else %}
+                    <span class="muted">-</span>
+                {% endif %}
+            </td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="{{ 1 if include_completed else 0 }}">
+                    <input type="hidden" name="action" value="toggle_hold">
+                    <input type="hidden" name="value" value="{{ 0 if inv.is_hold else 1 }}">
+                    <button type="submit" class="btn {{ 'btn-reject' if inv.is_hold else 'btn-secondary' }}"
+                            style="padding: 2px 6px; font-size: var(--font-size-xs);">
+                        {{ 'Yes' if inv.is_hold else 'No' }}
+                    </button>
+                </form>
+            </td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="{{ 1 if include_completed else 0 }}">
+                    <input type="hidden" name="action" value="toggle_needs_data">
+                    <input type="hidden" name="value" value="{{ 0 if inv.needs_data else 1 }}">
+                    <button type="submit" class="btn {{ 'btn-warning' if inv.needs_data else 'btn-secondary' }}"
+                            style="padding: 2px 6px; font-size: var(--font-size-xs);">
+                        {{ 'Yes' if inv.needs_data else 'No' }}
+                    </button>
+                </form>
+            </td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="{{ 1 if include_completed else 0 }}">
+                    <input type="hidden" name="action" value="toggle_working">
+                    <input type="hidden" name="value" value="{{ 0 if inv.working_started_at else 1 }}">
+                    <button type="submit" class="btn {{ 'btn-success' if inv.working_started_at else 'btn-secondary' }}"
+                            style="padding: 2px 6px; font-size: var(--font-size-xs);">
+                        {{ 'On' if inv.working_started_at else 'Off' }}
+                    </button>
+                </form>
+                {% if inv.working_started_at %}
+                <div class="muted">{{ inv.working_started_at.strftime('%m/%d %H:%M') }}</div>
+                {% endif %}
+            </td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="{{ 1 if include_completed else 0 }}">
+                    <input type="hidden" name="action" value="toggle_completed">
+                    <input type="hidden" name="value" value="{{ 0 if inv.completed_at else 1 }}">
+                    <button type="submit" class="btn {{ 'btn-success' if inv.completed_at else 'btn-secondary' }}"
+                            style="padding: 2px 6px; font-size: var(--font-size-xs);">
+                        {{ 'Yes' if inv.completed_at else 'No' }}
+                    </button>
+                </form>
+                {% if inv.completed_at %}
+                <div class="muted">{{ inv.completed_at.strftime('%m/%d %H:%M') }}</div>
+                {% endif %}
+            </td>
+            <td>
+                {% if inv_id %}
+                <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-start;">
+                    <a class="btn btn-action ticket-link"
+                       style="padding: 2px 6px; font-size: var(--font-size-xs);"
+                       href="{{ printsmith_report_base_url }}/PrintSmith/reportservlet?invoiceTicket=PSV_jobTicket.rpt&reportParameter={{ inv_id }}&showShippingCharges=true&showBarcode=true&showInvoiceCharges=true"
+                       target="_blank"
+                       rel="noopener">View</a>
+                    {% if prepress_job_ticket_save_enabled %}
+                    <button type="button"
+                            class="pp-save-ticket"
+                            data-invoice="{{ invoice_number }}">Save</button>
+                    {% endif %}
+                </div>
+                {% else %}
+                <span class="muted">-</span>
+                {% endif %}
+            </td>
+            <td>
+                <form class="inline-form"
+                      hx-post="/prepress/api/invoice/{{ invoice_number }}/update"
+                      hx-target="#wip-table-container"
+                      hx-swap="innerHTML"
+                      hx-include="#prepress-filters, #prepress-footer-controls"
+                      style="width: 100%;">
+                    <input type="hidden" name="queue" value="{{ queue }}">
+                    <input type="hidden" name="include_completed" value="{{ 1 if include_completed else 0 }}">
+                    <input type="hidden" name="action" value="set_notes">
+                    <input type="text"
+                           name="notes"
+                           value="{{ inv.notes }}"
+                           data-pp-highlight-notes="1"
+                           style="width: 210px; padding: 3px 6px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary);" />
+                    <button type="submit" class="btn btn-secondary" style="padding: 2px 6px; font-size: var(--font-size-xs);">Save</button>
+                </form>
+            </td>
+        </tr>
+
+        <tr data-prepress-parts="{{ invoice_number }}">
+            <td colspan="{{ table_colspan }}" style="padding: 0; border-top: 0;">
+                <div id="{{ parts_target_id }}"></div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+

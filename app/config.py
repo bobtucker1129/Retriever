@@ -83,6 +83,8 @@ class AppSettings(BaseSettings):
     printsmith_api_vendor: str = "LordTate"
     printsmith_api_username: Optional[str] = None
     printsmith_api_password: Optional[str] = None
+    prepress_printsmith_report_base_url: str = "http://192.168.33.13:9191"
+    prepress_job_ticket_save_enabled: bool = False
 
     booneops_broker_enabled: bool = False
     booneops_broker_url: Optional[str] = None

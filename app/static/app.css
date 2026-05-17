@@ -1812,3 +1812,110 @@ a.fetch-row-action:hover {
   min-width: 1.5rem;
   text-align: center;
 }
+
+/* PrePress: legacy operational table inside the rebuild shell. */
+.prepress-content {
+  --font-size-xs: 0.68rem;
+  --font-size-sm: 0.78rem;
+  --text-muted: var(--color-muted);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-muted);
+  --bg-surface: var(--color-surface);
+  --bg-surface-alt: var(--color-surface-2);
+  --border-color: var(--color-border);
+  display: grid;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.prepress-content .table-container {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+}
+
+.prepress-content .data-table {
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  min-width: 78rem;
+  width: 100%;
+}
+
+.prepress-content .data-table th {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.prepress-content .data-table th,
+.prepress-content .data-table td {
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.prepress-content input[type="text"],
+.prepress-content input[type="date"],
+.prepress-content textarea {
+  font: inherit;
+}
+
+.prepress-content .card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.prepress-content .btn {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  justify-content: center;
+  min-height: 1.35rem;
+}
+
+.prepress-content .btn-secondary,
+.prepress-content button.btn-secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.prepress-content .btn-action {
+  background: var(--brand-blue);
+  color: #000006;
+}
+
+.prepress-content .btn-success {
+  background: #2f8f4e;
+}
+
+.prepress-content .btn-warning {
+  background: var(--brand-gold);
+  color: #000006;
+}
+
+.prepress-content .btn-reject {
+  background: var(--brand-red);
+}
+
+.prepress-content .proof-date-cell[data-urgency="today"] {
+  background: color-mix(in srgb, var(--brand-red) 9%, transparent);
+}
+
+.prepress-content .proof-date-cell[data-urgency="day_after"] {
+  background: color-mix(in srgb, var(--brand-gold) 18%, transparent);
+}
+
+.prepress-content .pp-copy-btn {
+  background: transparent;
+  color: var(--color-muted);
+  min-height: 1rem;
+  padding: 0.05rem;
+}
+
+.prepress-content .pp-copy-btn:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}

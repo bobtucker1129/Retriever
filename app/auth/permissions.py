@@ -30,3 +30,8 @@ class CurrentUser:
     def can_submit_fetch_ask(self) -> bool:
         """POST /fetch/.../ask for the #printsmith-equivalent internal lane."""
         return self.can_open_fetch_shell()
+
+    def can_open_prepress(self) -> bool:
+        if self.status != "active":
+            return False
+        return self.has_module("prepress") or self.has_capability("prepress.access")

@@ -106,7 +106,7 @@ class AdminActionService:
         if not target:
             raise ValueError("Unknown user")
         if target.is_seed_admin:
-            raise ValueError("The seed operator account cannot be changed from this matrix.")
+            admin_module = True
         role_key = "owner_admin" if admin_module else "viewer"
         self.repositories.users.update_admin_matrix_profile(
             target_user_id,
@@ -116,31 +116,34 @@ class AdminActionService:
             inventory_level=inventory_level,
             proofs_level=proofs_level,
         )
-        self.assign_role(target_user_id, role_key, actor)
-        self.set_module_access(target_user_id, "admin", admin_module, actor)
-        self.set_module_access(target_user_id, "fetch", fetch_module, actor)
-        self.set_module_access(target_user_id, "prepress", prepress_module, actor)
-        self.set_module_access(target_user_id, "dsf", dsf_module, actor)
-        self.set_module_access(target_user_id, "inventory", inventory_level != "no", actor)
-        self.set_module_access(target_user_id, "proofs", proofs_level != "no", actor)
+        self.repositories.users.assign_role(target_user_id, role_key)
+        self._audit(actor, "admin.user.role_assigned", target_user_id, "succeeded")
+        self.repositories.users.set_module_access(target_user_id, "admin", admin_module)
+        self.repositories.users.set_module_access(target_user_id, "fetch", fetch_module)
+        self.repositories.users.set_module_access(target_user_id, "prepress", prepress_module)
+        self.repositories.users.set_module_access(target_user_id, "dsf", dsf_module)
+        self.repositories.users.set_module_access(target_user_id, "inventory", inventory_level != "no")
+        self.repositories.users.set_module_access(target_user_id, "proofs", proofs_level != "no")
+        self._audit(actor, "admin.user.module_access_set", target_user_id, "succeeded")
         if admin_module:
-            self.grant_capability(target_user_id, "admin.manage_users", actor)
-            self.grant_capability(target_user_id, "booneops.admin", actor)
+            self.repositories.users.grant_capability(target_user_id, "admin.manage_users", actor.id)
+            self.repositories.users.grant_capability(target_user_id, "booneops.admin", actor.id)
         else:
-            self.revoke_capability(target_user_id, "admin.manage_users", actor)
-            self.revoke_capability(target_user_id, "booneops.admin", actor)
+            self.repositories.users.revoke_capability(target_user_id, "admin.manage_users")
+            self.repositories.users.revoke_capability(target_user_id, "booneops.admin")
         if fetch_access:
-            self.grant_capability(target_user_id, "fetch.access", actor)
+            self.repositories.users.grant_capability(target_user_id, "fetch.access", actor.id)
         else:
-            self.revoke_capability(target_user_id, "fetch.access", actor)
+            self.repositories.users.revoke_capability(target_user_id, "fetch.access")
         if prepress_module:
-            self.grant_capability(target_user_id, "prepress.access", actor)
+            self.repositories.users.grant_capability(target_user_id, "prepress.access", actor.id)
         else:
-            self.revoke_capability(target_user_id, "prepress.access", actor)
+            self.repositories.users.revoke_capability(target_user_id, "prepress.access")
         if dsf_module:
-            self.grant_capability(target_user_id, "dsf.access", actor)
+            self.repositories.users.grant_capability(target_user_id, "dsf.access", actor.id)
         else:
-            self.revoke_capability(target_user_id, "dsf.access", actor)
+            self.repositories.users.revoke_capability(target_user_id, "dsf.access")
+        self._audit(actor, "admin.user.capabilities_applied", target_user_id, "succeeded")
 
     def _require_mutable_target(self, target_user_id: int) -> None:
         target = self.repositories.users.get_by_id(target_user_id)

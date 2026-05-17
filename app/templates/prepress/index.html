@@ -1,0 +1,721 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}PrePress{% endblock %}
+{% block title %}WIP Tracker{% endblock %}
+
+{% block content %}
+<section class="prepress-content">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        .prepress-content .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .prepress-content .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: var(--font-size-sm);
+        }
+
+        .prepress-content .filter-controls select {
+            min-width: 220px;
+        }
+
+        .prepress-content .data-table th,
+        .prepress-content .data-table td {
+            padding: 5px 8px;
+            vertical-align: middle;
+        }
+
+        .prepress-content .muted {
+            color: var(--text-muted);
+            font-size: var(--font-size-xs);
+        }
+
+        .prepress-content .inline-form {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .prepress-content textarea {
+            min-height: 56px;
+            resize: vertical;
+        }
+
+        .prepress-content .ticket-link {
+            text-decoration: none;
+        }
+
+        .prepress-content .pp-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            background: var(--bg-surface-alt);
+        }
+
+        .prepress-content .pp-badge-compact {
+            padding: 2px 6px;
+            font-size: var(--font-size-xs);
+            letter-spacing: 0.2px;
+            line-height: 1;
+        }
+
+        .prepress-content .prepress-invoice-cell {
+            white-space: nowrap;
+        }
+
+        .prepress-content .pp-badge-info {
+            border-color: rgba(94, 174, 224, 0.5);
+            background: rgba(94, 174, 224, 0.15);
+        }
+
+        .prepress-content .pp-badge-warn {
+            border-color: rgba(241, 187, 64, 0.75);
+            background: rgba(241, 187, 64, 0.15);
+        }
+
+        .prepress-content .pp-badge-danger {
+            border-color: var(--brand-red);
+            background: rgba(220, 53, 69, 0.15);
+            color: var(--brand-red);
+        }
+
+        @keyframes ppPulseRed {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.55); }
+            70% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0.0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.0); }
+        }
+
+        .prepress-content .pp-badge-pulse {
+            animation: ppPulseRed 1.6s ease-out infinite;
+        }
+
+        .prepress-content .pp-search-hit {
+            background: rgba(241, 187, 64, 0.22);
+            border-bottom: 1px solid rgba(241, 187, 64, 0.55);
+            padding: 0 1px;
+            border-radius: 2px;
+        }
+
+        .prepress-content .pp-search-hit-input {
+            border-color: rgba(241, 187, 64, 0.75) !important;
+            box-shadow: 0 0 0 2px rgba(241, 187, 64, 0.22);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .prepress-content .pp-badge-pulse {
+                animation: none;
+            }
+        }
+
+        .prepress-content .pp-save-ticket,
+        .prepress-content .pp-save-parts-ticket {
+            background: none;
+            border: none;
+            padding: 2px 6px;
+            font-size: var(--font-size-xs);
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 3px;
+            transition: color 0.15s, background 0.15s;
+        }
+        .prepress-content .pp-save-ticket:hover:not(:disabled),
+        .prepress-content .pp-save-parts-ticket:hover:not(:disabled) {
+            color: var(--text-primary);
+            background: var(--bg-surface-alt);
+        }
+        .prepress-content .pp-save-ticket:disabled,
+        .prepress-content .pp-save-parts-ticket:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        #pp-toast-container {
+            position: fixed;
+            top: 12px;
+            right: 16px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            pointer-events: none;
+        }
+        .pp-toast {
+            pointer-events: auto;
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-size: var(--font-size-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+            opacity: 0;
+            transform: translateX(20px);
+            animation: ppToastIn 0.2s ease-out forwards;
+        }
+        .pp-toast.pp-toast-out {
+            animation: ppToastOut 0.25s ease-in forwards;
+        }
+        .pp-toast-success { border-left: 3px solid var(--color-success, #22c55e); }
+        .pp-toast-error   { border-left: 3px solid var(--brand-red, #dc3545); }
+        .pp-toast-info    { border-left: 3px solid rgba(94, 174, 224, 0.7); }
+
+        @keyframes ppToastIn {
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes ppToastOut {
+            from { opacity: 1; transform: translateX(0); }
+            to   { opacity: 0; transform: translateX(20px); }
+        }
+    </style>
+
+    <div id="pp-toast-container"></div>
+
+    <div class="panel">
+        <div class="section-header">
+            <h2 class="section-title">PrePress WIP</h2>
+        </div>
+
+        <div class="muted" style="margin-bottom: 8px;">
+            Invoices appear when any job part is located to a PrePress person’s MIS location. Shared Queue shows invoices split across multiple operators until owned.
+        </div>
+
+        <div class="filter-controls" id="prepress-filters" style="margin-bottom: 10px;">
+            <label for="queue">Queue</label>
+            <select id="queue" name="queue">
+                <option value="all" data-base-label="All">All</option>
+                <option value="shared" data-base-label="Shared Queue">Shared Queue</option>
+                {% for op in operators %}
+                <option value="{{ op.id }}" data-base-label="{{ op.name }}">{{ op.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="include_completed" style="margin-left: 8px;">Show Completed (Reference)</label>
+            <select id="include_completed" name="include_completed" style="min-width: 110px;">
+                <option value="0" selected>No</option>
+                <option value="1">Yes</option>
+            </select>
+
+            <button type="button"
+                    class="btn btn-secondary"
+                    id="prepress-refresh"
+                    hx-get="/prepress/partials/wip-table"
+                    hx-target="#wip-table-container"
+                    hx-swap="innerHTML"
+                    hx-include="#prepress-filters, #prepress-footer-controls"
+                    hx-on::after-request="if (window.htmx) { window.htmx.trigger(document.body, 'prepressRefresh'); }">
+                Refresh WIP
+            </button>
+
+            <div style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end;">
+                <label for="prepress-search" style="margin-left: 8px;">Search</label>
+                <input id="prepress-search"
+                       name="prepress_search"
+                       type="text"
+                       inputmode="search"
+                       autocomplete="off"
+                       spellcheck="false"
+                       placeholder="Search invoices"
+                       style="min-width: 220px; padding: 4px 6px; font-size: var(--font-size-sm); border: 1px solid var(--border-color); border-radius: 3px; background: var(--bg-surface); color: var(--text-primary); text-align: right;" />
+            </div>
+        </div>
+
+        <div id="wip-table-container"
+             hx-get="/prepress/partials/wip-table"
+             hx-trigger="load"
+             hx-target="this"
+             hx-swap="innerHTML"
+             hx-include="#prepress-filters, #prepress-footer-controls">
+            <div class="muted">Loading...</div>
+        </div>
+
+        <div id="prepress-footer-controls" class="filter-controls" style="justify-content: flex-end; margin-top: 8px;">
+            <label for="page_size">Show</label>
+            <select id="page_size" name="page_size" style="min-width: 120px;">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="all">All</option>
+            </select>
+
+            <input type="hidden" id="sort_by" name="sort_by" value="invoice_number" />
+            <input type="hidden" id="sort_dir" name="sort_dir" value="asc" />
+        </div>
+
+        <div id="statistics-container"
+             hx-get="/prepress/partials/statistics"
+             hx-trigger="load, prepressRefresh from:body"
+             hx-target="this"
+             hx-swap="innerHTML"
+             hx-on::response-error="this.innerHTML = '<div class=&quot;muted&quot; style=&quot;color: var(--brand-red);&quot;>Failed to load statistics. Refresh the page, and if it persists restart the server.</div>';">
+            <div class="muted">Loading statistics...</div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const STORAGE_KEY = "prepressFilters";
+
+        function saveFilters() {
+            const data = {
+                queue: document.getElementById("queue")?.value || "all",
+                include_completed: document.getElementById("include_completed")?.value || "0",
+                page_size: document.getElementById("page_size")?.value || "25",
+                sort_by: document.getElementById("sort_by")?.value || "invoice_number",
+                sort_dir: document.getElementById("sort_dir")?.value || "asc",
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        function loadFilters() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                const queue = document.getElementById("queue");
+                if (queue && data.queue) queue.value = data.queue;
+                const includeCompleted = document.getElementById("include_completed");
+                if (includeCompleted && data.include_completed) includeCompleted.value = data.include_completed;
+                const pageSize = document.getElementById("page_size");
+                if (pageSize && data.page_size) pageSize.value = data.page_size;
+                const sortBy = document.getElementById("sort_by");
+                if (sortBy && data.sort_by) sortBy.value = data.sort_by;
+                const sortDir = document.getElementById("sort_dir");
+                if (sortDir && data.sort_dir) sortDir.value = data.sort_dir;
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function updateAnalyticsAndCountsFromWip() {
+            const el = document.getElementById("prepress-wip-payload");
+            if (!el) return;
+            let payload = null;
+            try {
+                payload = JSON.parse(el.textContent || "{}");
+            } catch (e) {
+                payload = null;
+            }
+            if (!payload) return;
+
+            const operatorCounts = payload.operator_counts || {};
+            const sharedCount = payload.shared_queue_count || 0;
+
+            const queueSelect = document.getElementById("queue");
+            if (!queueSelect) return;
+
+            for (const opt of Array.from(queueSelect.options)) {
+                const baseLabel = opt.getAttribute("data-base-label") || opt.textContent || "";
+
+                if (opt.value === "shared") {
+                    opt.textContent = sharedCount ? `${baseLabel} (${sharedCount})` : baseLabel;
+                    continue;
+                }
+
+                if (opt.value === "all") {
+                    opt.textContent = baseLabel;
+                    continue;
+                }
+
+                const count = operatorCounts[String(opt.value)] || 0;
+                opt.textContent = count ? `${baseLabel} (${count})` : baseLabel;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            loadFilters();
+
+            const filters = document.getElementById("prepress-filters");
+            if (filters) {
+                filters.addEventListener("change", function () {
+                    saveFilters();
+                    const btn = document.getElementById("prepress-refresh");
+                    if (btn) btn.click();
+                });
+            }
+
+            const footer = document.getElementById("prepress-footer-controls");
+            if (footer) {
+                footer.addEventListener("change", function () {
+                    saveFilters();
+                    const btn = document.getElementById("prepress-refresh");
+                    if (btn) btn.click();
+                });
+            }
+
+            // Initial refresh after filters load
+            const btn = document.getElementById("prepress-refresh");
+            if (btn) btn.click();
+
+            // Copy-to-clipboard for invoice/part numbers (delegated, survives HTMX swaps)
+            function copyTextWithFallback(text) {
+                var val = (text || "").toString();
+                if (!val) return Promise.resolve(false);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    return navigator.clipboard.writeText(val)
+                        .then(function () { return true; })
+                        .catch(function () { return false; });
+                }
+                return Promise.resolve(false);
+            }
+
+            function legacyCopyText(text) {
+                var val = (text || "").toString();
+                if (!val) return false;
+                try {
+                    var ta = document.createElement("textarea");
+                    ta.value = val;
+                    ta.setAttribute("readonly", "");
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    ta.style.pointerEvents = "none";
+                    ta.style.left = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    var ok = !!document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    return ok;
+                } catch (err) {
+                    return false;
+                }
+            }
+
+            var wipContainer = document.getElementById("wip-table-container");
+            if (wipContainer) {
+                wipContainer.addEventListener("click", function (e) {
+                    var el = null;
+                    if (e.target && e.target.nodeType === 1) {
+                        el = e.target;
+                    } else if (e.target && e.target.parentElement) {
+                        el = e.target.parentElement;
+                    }
+                    var copyBtn = el && el.closest ? el.closest(".pp-copy-btn") : null;
+                    if (!copyBtn) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var val = copyBtn.getAttribute("data-copy-value");
+                    if (!val) return;
+
+                    copyTextWithFallback(val).then(function (ok) {
+                        if (!ok) ok = legacyCopyText(val);
+                        if (!ok) return;
+                        copyBtn.classList.add("copied");
+                        setTimeout(function () { copyBtn.classList.remove("copied"); }, 800);
+                    });
+                });
+            }
+        });
+
+        // Sort handling (header clicks inside HTMX-swapped table)
+        document.body.addEventListener("click", function (evt) {
+            let el = null;
+            if (evt.target && evt.target.nodeType === 1) {
+                // Element
+                el = evt.target;
+            } else if (evt.target && evt.target.parentElement) {
+                // Text node inside an element (some browsers)
+                el = evt.target.parentElement;
+            }
+
+            const target = el && el.closest ? el.closest("[data-sort-by]") : null;
+            if (!target) return;
+            evt.preventDefault();
+
+            const sortByEl = document.getElementById("sort_by");
+            const sortDirEl = document.getElementById("sort_dir");
+            if (!sortByEl || !sortDirEl) return;
+
+            const requested = target.getAttribute("data-sort-by") || "invoice_number";
+            const requestedDirRaw = (target.getAttribute("data-sort-dir") || "").toLowerCase();
+            const requestedDir = requestedDirRaw === "desc" ? "desc" : (requestedDirRaw === "asc" ? "asc" : "");
+
+            if (requestedDir) {
+                sortByEl.value = requested;
+                sortDirEl.value = requestedDir;
+            } else {
+                // Legacy behavior: toggle direction when clicking the column label itself
+                const currentBy = sortByEl.value || "invoice_number";
+                const currentDir = (sortDirEl.value || "asc").toLowerCase();
+                if (requested === currentBy) {
+                    sortDirEl.value = currentDir === "asc" ? "desc" : "asc";
+                } else {
+                    sortByEl.value = requested;
+                    sortDirEl.value = "asc";
+                }
+            }
+
+            saveFilters();
+            const btn = document.getElementById("prepress-refresh");
+            if (btn) btn.click();
+        });
+
+        // After WIP table loads, update dropdown labels with counts
+        document.body.addEventListener("htmx:afterSwap", function (evt) {
+            const target = evt.detail && evt.detail.target;
+            if (target && target.id === "wip-table-container") {
+                updateAnalyticsAndCountsFromWip();
+                applySearchFilter();
+            }
+        });
+
+        function normalizeSearch(str) {
+            return (str || "").toString().trim().toLowerCase();
+        }
+
+        function escapeHtml(str) {
+            return (str || "").toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function escapeRegex(str) {
+            return (str || "").toString().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+
+        function getSearchRegex(q) {
+            const tokens = normalizeSearch(q).split(/\s+/).filter(Boolean);
+            if (!tokens.length) return null;
+            const unique = Array.from(new Set(tokens)).slice(0, 8);
+            unique.sort((a, b) => b.length - a.length);
+            const parts = unique.map(escapeRegex);
+            try {
+                return new RegExp("(" + parts.join("|") + ")", "gi");
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function clearHighlights() {
+            const spans = document.querySelectorAll("#wip-table-container [data-pp-highlight]");
+            for (const el of Array.from(spans)) {
+                if (!el.dataset.ppOriginalText) {
+                    el.dataset.ppOriginalText = el.textContent || "";
+                }
+                el.textContent = el.dataset.ppOriginalText || "";
+            }
+
+            const inputs = document.querySelectorAll("#wip-table-container input[data-pp-highlight-notes]");
+            for (const input of Array.from(inputs)) {
+                input.classList.remove("pp-search-hit-input");
+            }
+        }
+
+        function applyHighlights(regex) {
+            const spans = document.querySelectorAll("#wip-table-container tr[data-prepress-invoice]:not([style*='display: none']) [data-pp-highlight]");
+            for (const el of Array.from(spans)) {
+                if (!el.dataset.ppOriginalText) {
+                    el.dataset.ppOriginalText = el.textContent || "";
+                }
+                const orig = el.dataset.ppOriginalText || "";
+                const safe = escapeHtml(orig);
+                el.innerHTML = safe.replace(regex, '<span class="pp-search-hit">$1</span>');
+            }
+
+            const inputs = document.querySelectorAll("#wip-table-container tr[data-prepress-invoice]:not([style*='display: none']) input[data-pp-highlight-notes]");
+            for (const input of Array.from(inputs)) {
+                const val = (input.value || "").toString();
+                if (regex.test(val)) {
+                    input.classList.add("pp-search-hit-input");
+                } else {
+                    input.classList.remove("pp-search-hit-input");
+                }
+                regex.lastIndex = 0;
+            }
+        }
+
+        function applySearchFilter() {
+            const input = document.getElementById("prepress-search");
+            const q = normalizeSearch(input ? input.value : "");
+            const regex = getSearchRegex(q);
+
+            const rows = document.querySelectorAll("#wip-table-container tr[data-prepress-invoice]");
+            const emptyState = document.querySelector("#wip-table-container tr[data-prepress-empty-state]");
+
+            let visibleCount = 0;
+            for (const row of Array.from(rows)) {
+                const inv = row.getAttribute("data-prepress-invoice") || "";
+                const text = normalizeSearch(row.getAttribute("data-search-text") || "");
+                const isMatch = !q || text.indexOf(q) !== -1;
+                row.style.display = isMatch ? "" : "none";
+
+                const safeInv = (window.CSS && CSS.escape) ? CSS.escape(inv) : inv.replace(/["\\]/g, "\\$&");
+                const partsRow = document.querySelector(`#wip-table-container tr[data-prepress-parts="${safeInv}"]`);
+                if (partsRow) partsRow.style.display = isMatch ? "" : "none";
+
+                if (isMatch) visibleCount += 1;
+            }
+
+            if (emptyState) {
+                emptyState.style.display = (q && visibleCount === 0) ? "" : "none";
+            }
+
+            // Highlight hits (only on currently loaded/visible rows)
+            clearHighlights();
+            if (regex) {
+                applyHighlights(regex);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const search = document.getElementById("prepress-search");
+            if (search) {
+                let searchDebounce = null;
+                search.addEventListener("input", function () {
+                    applySearchFilter();
+                    if (searchDebounce) {
+                        clearTimeout(searchDebounce);
+                    }
+                    searchDebounce = setTimeout(function () {
+                        const btn = document.getElementById("prepress-refresh");
+                        if (btn) btn.click();
+                    }, 400);
+                });
+            }
+        });
+    })();
+</script>
+
+<script>
+    window.PREPRESS_JOB_TICKET_SAVE = {% if prepress_job_ticket_save_enabled %}true{% else %}false{% endif %};
+
+    function ppToast(message, type) {
+        type = type || "info";
+        var container = document.getElementById("pp-toast-container");
+        if (!container) return;
+        var el = document.createElement("div");
+        el.className = "pp-toast pp-toast-" + type;
+        el.textContent = message;
+        container.appendChild(el);
+        setTimeout(function () {
+            el.classList.add("pp-toast-out");
+            setTimeout(function () { el.remove(); }, 300);
+        }, 4000);
+    }
+
+    function _ppSetBtnLoading(btn, loading) {
+        if (!btn) return;
+        if (loading) {
+            btn.dataset.ppOrigLabel = btn.textContent;
+            btn.textContent = "...";
+            btn.disabled = true;
+        } else {
+            btn.textContent = btn.dataset.ppOrigLabel || "Save";
+            btn.disabled = false;
+        }
+    }
+
+    async function prepressSaveInvoiceTicket(invoiceNumber, triggerBtn) {
+        if (!window.PREPRESS_JOB_TICKET_SAVE) {
+            ppToast("Job ticket saving is not enabled on this server.", "error");
+            return;
+        }
+        _ppSetBtnLoading(triggerBtn, true);
+        try {
+            var r = await fetch("/prepress/api/invoice/" + encodeURIComponent(invoiceNumber) + "/save-job-ticket", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: "invoice", job_part_numbers: [] }),
+            });
+            var j = await r.json();
+            ppToast(j.message || (j.ok ? "Saved." : "Save failed."), j.ok ? "success" : "error");
+        } catch (e) {
+            ppToast("Save failed (network error).", "error");
+        } finally {
+            _ppSetBtnLoading(triggerBtn, false);
+        }
+    }
+
+    async function prepressSavePartsTicket(invoiceNumber, triggerBtn) {
+        if (!window.PREPRESS_JOB_TICKET_SAVE) {
+            ppToast("Job ticket saving is not enabled on this server.", "error");
+            return;
+        }
+        var container = document.getElementById("parts-" + invoiceNumber);
+        if (!container) return;
+        var checked = Array.from(container.querySelectorAll("input.pp-part-sel:checked"));
+        var parts = checked.map(function (cb) { return cb.getAttribute("data-job-part") || ""; }).filter(Boolean);
+        if (parts.length === 0) {
+            ppToast("Select at least one job part.", "info");
+            return;
+        }
+        _ppSetBtnLoading(triggerBtn, true);
+        try {
+            var r = await fetch("/prepress/api/invoice/" + encodeURIComponent(invoiceNumber) + "/save-job-ticket", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mode: "parts", job_part_numbers: parts }),
+            });
+            var j = await r.json();
+            ppToast(j.message || (j.ok ? "Saved." : "Save failed."), j.ok ? "success" : "error");
+        } catch (e) {
+            ppToast("Save failed (network error).", "error");
+        } finally {
+            _ppSetBtnLoading(triggerBtn, false);
+        }
+    }
+
+    // Delegated click handlers for save buttons (survive HTMX swaps)
+    document.body.addEventListener("click", function (evt) {
+        var el = evt.target && evt.target.nodeType === 1 ? evt.target : (evt.target ? evt.target.parentElement : null);
+        if (!el) return;
+
+        var saveBtn = el.closest ? el.closest(".pp-save-ticket") : null;
+        if (saveBtn) {
+            evt.preventDefault();
+            var inv = saveBtn.getAttribute("data-invoice");
+            if (inv) prepressSaveInvoiceTicket(inv, saveBtn);
+            return;
+        }
+
+        var partsBtn = el.closest ? el.closest(".pp-save-parts-ticket") : null;
+        if (partsBtn) {
+            evt.preventDefault();
+            var inv2 = partsBtn.getAttribute("data-invoice");
+            if (inv2) prepressSavePartsTicket(inv2, partsBtn);
+            return;
+        }
+    });
+
+    function toggleInvoiceParts(invoiceNumber) {
+        var container = document.getElementById("parts-" + invoiceNumber);
+        var btn = document.getElementById("toggle-" + invoiceNumber);
+        if (!container) return;
+
+        if ((container.innerHTML || "").trim().length > 0) {
+            container.innerHTML = "";
+            if (btn) btn.textContent = "+";
+            return;
+        }
+
+        if (btn) btn.textContent = "-";
+        if (window.htmx) {
+            window.htmx.ajax("GET", "/prepress/partials/invoice/" + invoiceNumber + "/parts", { target: container, swap: "innerHTML" });
+        }
+    }
+</script>
+{% endblock %}

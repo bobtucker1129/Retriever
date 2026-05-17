@@ -2076,6 +2076,29 @@ def test_admin_users_page_lists_pending_users(monkeypatch) -> None:
     assert ">Save<" in response.text
 
 
+def test_seed_admin_can_load_prepress_shell_without_db() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/prepress/")
+
+    assert response.status_code == 200
+    assert "PrePress WIP" in response.text
+    assert "hx-get=\"/prepress/partials/wip-table\"" in response.text
+
+
+def test_active_user_without_prepress_is_forbidden(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("plain@boonegraphics.net", "Plain User", "active")
+    db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
+    settings = make_settings(email="plain@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
+
+    response = client.get("/prepress/")
+
+    assert response.status_code == 403
+
+
 def test_admin_suspend_self_returns_400(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
@@ -2204,7 +2227,7 @@ def test_admin_matrix_update_can_grant_admin(monkeypatch) -> None:
     assert "booneops.admin" in db.capabilities_by_user.get(1, set())
 
 
-def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:
+def test_admin_matrix_update_allows_seed_location_but_preserves_admin(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("state@boonegraphics.net", "Master Tate", "active", is_seed_admin=True)
     settings = make_settings(with_db=True)
@@ -2215,8 +2238,8 @@ def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:
     response = client.post(
         "/admin/users/1/matrix-update",
         data={
-            "full_name": "Seed User",
-            "production_location_choice": "",
+            "full_name": "Scott Tate",
+            "production_location_choice": "1|100/Scott Working",
             "admin_module": "false",
             "fetch_module": "false",
             "fetch_access": "false",
@@ -2227,7 +2250,13 @@ def test_admin_matrix_update_rejects_seed_row(monkeypatch) -> None:
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 303
+    assert db.user_by_id(1)["full_name"] == "Scott Tate"
+    assert db.user_by_id(1)["production_location_id"] == 1
+    assert db.user_by_id(1)["production_location_name"] == "100/Scott Working"
+    assert db.user_by_id(1)["role_key"] == "owner_admin"
+    assert "admin" in db.modules_by_user.get(1, set())
+    assert "admin.manage_users" in db.capabilities_by_user.get(1, set())
 
 
 def test_admin_activate_post_updates_user_and_redirects(monkeypatch) -> None:
