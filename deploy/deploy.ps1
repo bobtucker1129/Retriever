@@ -521,14 +521,25 @@ if (Test-Path "$AppRepo\.git") {
     Invoke-Git -GitArgs @("clone", $GithubUrl, $AppRepo)
 }
 
-# Resolve ref to full SHA (PS 5.1 compatible)
+# Resolve ref to full SHA (PS 5.1 compatible). Prefer origin/<branch> for
+# branch-like refs so manual dispatch with "main" cannot use a stale local branch
+# in D:\retriever-rebuild\repo.
 $fullSha = ""
-$gitOutput = & git -C $AppRepo rev-parse --verify "$GitRef^{commit}" 2>$null
-if ($LASTEXITCODE -eq 0 -and $gitOutput) {
-    $fullSha = $gitOutput.Trim()
+$resolveCandidates = New-Object System.Collections.Generic.List[string]
+if ($GitRef -match '^[A-Za-z0-9._/-]+$' -and $GitRef -notmatch '^refs/' -and $GitRef -notmatch '^[0-9a-fA-F]{7,40}$') {
+    [void]$resolveCandidates.Add("origin/$GitRef")
+}
+[void]$resolveCandidates.Add($GitRef)
+
+foreach ($candidate in $resolveCandidates) {
+    $gitOutput = & git -C $AppRepo rev-parse --verify "$candidate^{commit}" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitOutput) {
+        $fullSha = $gitOutput.Trim()
+        Write-Log "Resolved $GitRef via $candidate -> $fullSha"
+        break
+    }
 }
 if (-not $fullSha) { Write-Error "Could not resolve ref '$GitRef' to a commit in $AppRepo"; exit 1 }
-Write-Log "Resolved $GitRef -> $fullSha"
 
 $releaseDir = "$AppReleases\$fullSha"
 
