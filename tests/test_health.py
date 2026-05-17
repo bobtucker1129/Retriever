@@ -128,7 +128,10 @@ def test_production_locations_diagnostics_reports_error_without_secrets(monkeypa
             pass
 
         def list_active(self):
-            raise RuntimeError("permission denied for table productionlocations")
+            raise RuntimeError(
+                'connection to server at "192.168.33.13", port 5432 failed: '
+                'FATAL: password authentication failed for user "reporter"'
+            )
 
     monkeypatch.setattr(health, "ProductionLocationRepository", BrokenRepository)
 
@@ -137,5 +140,7 @@ def test_production_locations_diagnostics_reports_error_without_secrets(monkeypa
     assert production_locations_check(settings) == "degraded"
     assert diagnostic["status"] == "error"
     assert diagnostic["errorType"] == "RuntimeError"
-    assert "permission denied" in str(diagnostic["error"])
+    assert "password authentication failed" in str(diagnostic["error"])
+    assert "192.168.33.13" not in str(diagnostic["error"])
+    assert "reporter" not in str(diagnostic["error"])
     assert "super-secret" not in str(diagnostic)

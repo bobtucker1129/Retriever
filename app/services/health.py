@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from app.config import AppSettings
@@ -88,8 +89,20 @@ def production_locations_diagnostics(settings: AppSettings) -> dict[str, object]
     except Exception as exc:
         diagnostic["status"] = "error"
         diagnostic["errorType"] = type(exc).__name__
-        diagnostic["error"] = str(exc)[:240]
+        diagnostic["error"] = _safe_location_error(exc)
     return diagnostic
+
+
+def _safe_location_error(exc: Exception) -> str:
+    message = str(exc)
+    message = re.sub(r'user "[^"]+"', 'user "<redacted>"', message, flags=re.IGNORECASE)
+    message = re.sub(
+        r'server at "[^"]+", port \d+',
+        'server at "<redacted>"',
+        message,
+        flags=re.IGNORECASE,
+    )
+    return message[:240]
 
 
 def overall_status(checks: dict[str, CheckState]) -> CheckState:
