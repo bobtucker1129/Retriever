@@ -90,7 +90,7 @@ _TEMPORAL_THIS_RE: Final[re.Pattern[str]] = re.compile(
 )
 
 _NO_OVERRIDE_ROUTES: Final[frozenset[str]] = frozenset(
-    {"help", "sources", "health", "blocked_write", "email_cleanup", "ops_email"}
+    {"help", "sources", "health", "blocked_write", "email_cleanup"}
 )
 
 # ``classify_fetch_intent`` lands here for many natural follow-ups (``?``, "can you…", etc.);

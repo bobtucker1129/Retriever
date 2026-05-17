@@ -23,7 +23,6 @@ from app.fetch.local_routing import (
         ("/help more", "help"),
         ("/docs Are there Switch elements for email approval?", "docs_candidate"),
         ("/printsmith open invoices last week", "printsmith_candidate"),
-        ("/ops-email summarize this customer note", "ops_email"),
         (
             "Are there any Switch elements that let you approve a step via email?",
             "docs_candidate",
@@ -128,12 +127,8 @@ def test_broker_message_after_slash_route_prefix() -> None:
     assert broker_message_after_slash_route_prefix("/printsmith open invoices", "printsmith_candidate") == (
         "open invoices"
     )
-    assert broker_message_after_slash_route_prefix("/ops-email customer note", "ops_email") == (
-        "customer note"
-    )
     assert broker_message_after_slash_route_prefix("/DOCS only", "docs_candidate") == "only"
     assert broker_message_after_slash_route_prefix("/docs", "docs_candidate") == "Documentation question."
-    assert broker_message_after_slash_route_prefix("/ops-email", "ops_email") == "Ops email question."
     assert (
         broker_message_after_slash_route_prefix("/printsmith", "printsmith_candidate")
         == "PrintSmith shop data question."

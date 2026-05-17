@@ -17,7 +17,6 @@ FETCH_ROUTE_LABELS: Final[tuple[str, ...]] = (
     "sources",
     "health",
     "email_cleanup",
-    "ops_email",
     "printsmith_candidate",
     "docs_candidate",
     "fetch_html_export",
@@ -250,9 +249,6 @@ def broker_message_after_slash_route_prefix(text: str, route_label: str) -> str:
     if route_label == "printsmith_candidate" and head == "/printsmith":
         rest = parts[1].strip() if len(parts) > 1 else ""
         return rest or "PrintSmith shop data question."
-    if route_label == "ops_email" and head == "/ops-email":
-        rest = parts[1].strip() if len(parts) > 1 else ""
-        return rest or "Ops email question."
     return cleaned
 
 
@@ -268,8 +264,6 @@ def classify_fetch_intent(text: str) -> str:
         return "docs_candidate"
     if slash_key == "/printsmith":
         return "printsmith_candidate"
-    if slash_key == "/ops-email":
-        return "ops_email"
     if slash_key in _SLASH_COMMANDS:
         return slash_key[1:]  # help | sources | health
 
@@ -320,7 +314,7 @@ def should_delegate_ask_to_booneops_broker(route: str, settings: AppSettings) ->
     """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``)."""
     if not settings.booneops_broker_enabled:
         return False
-    if route in ("printsmith_candidate", "docs_candidate", "ops_email"):
+    if route in ("printsmith_candidate", "docs_candidate"):
         return True
     return False
 
@@ -333,8 +327,7 @@ _STATUS_OFFLINE: Final[str] = (
 
 _FUTURE_ROUTES: Final[str] = (
     "When routing is turned on, planned labels include: local, help, sources, health, "
-    "docs, printsmith, ops-email (slash commands), email_cleanup, printsmith_candidate, "
-    "docs_candidate, "
+    "docs, printsmith (slash commands), email_cleanup, printsmith_candidate, docs_candidate, "
     "general_candidate; blocked_write stays safety-screened."
 )
 
@@ -388,13 +381,6 @@ def build_fetch_stub_reply(route: str) -> str:
             f"{_STATUS_OFFLINE}\n\n"
             "When enabled, this lane would run only under explicit internal policy and "
             "would not touch mail in stub mode."
-        )
-
-    if route == "ops_email":
-        return (
-            "Ops email is classified as an internal assisted workflow.\n\n"
-            f"{_STATUS_OFFLINE}\n\n"
-            "When live, this lane would use the approved BooneOps email skill with policy checks."
         )
 
     if route == "printsmith_candidate":
