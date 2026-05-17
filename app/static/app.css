@@ -1853,7 +1853,13 @@ a.fetch-row-action:hover {
 .prepress-content .data-table th,
 .prepress-content .data-table td {
   border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
   text-align: left;
+}
+
+.prepress-content .data-table th:last-child,
+.prepress-content .data-table td:last-child {
+  border-right: 0;
 }
 
 .prepress-content input[type="text"],
@@ -1891,8 +1897,8 @@ a.fetch-row-action:hover {
 }
 
 .prepress-content .prepress-main-filters {
-  display: grid;
-  grid-template-columns: auto minmax(12rem, 22rem) auto 11rem auto minmax(14rem, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   width: 100%;
 }
 
@@ -1901,14 +1907,18 @@ a.fetch-row-action:hover {
 }
 
 .prepress-content .prepress-main-filters #queue {
-  width: 100%;
+  width: min(29rem, 36vw);
+}
+
+.prepress-content .prepress-main-filters #include_completed {
+  width: 11rem;
 }
 
 .prepress-content .prepress-search-control {
   align-items: center;
   display: inline-flex;
   gap: 0.45rem;
-  justify-self: end;
+  margin-left: auto;
 }
 
 .prepress-content .prepress-search-control input {
@@ -1997,8 +2007,8 @@ a.fetch-row-action:hover {
 }
 
 @media (max-width: 86rem) {
-  .prepress-content .prepress-main-filters {
-    grid-template-columns: auto minmax(10rem, 18rem) auto 9rem auto minmax(12rem, 1fr);
+  .prepress-content .prepress-main-filters #queue {
+    width: min(24rem, 34vw);
   }
 
   .prepress-content .prepress-search-control input {
@@ -2007,7 +2017,6 @@ a.fetch-row-action:hover {
 }
 
 @media (max-width: 62rem) {
-  .prepress-content .prepress-main-filters,
   .prepress-content .prepress-stat-filters {
     display: flex;
     flex-wrap: wrap;
@@ -2020,6 +2029,6 @@ a.fetch-row-action:hover {
 
   .prepress-content .prepress-search-control {
     flex: 1 1 100%;
-    justify-self: stretch;
+    margin-left: 0;
   }
 }
