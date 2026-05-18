@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Wiki{% endblock %}
+{% block title %}Boone Wiki{% endblock %}
+
+{% block content %}
+<section class="wiki-content">
+  <div class="page-intro wiki-intro">
+    <p>Internal Boone reference for quality, security, production, services, training, and company knowledge. The first source set is the ISO Drive library plus the public Boone website, rewritten for employee use.</p>
+  </div>
+
+  <section class="panel wiki-work-instructions" aria-labelledby="wiki-work-instructions-title">
+    <div class="wiki-feature-copy">
+      <div class="wiki-kicker">Shop floor reference</div>
+      <h2 id="wiki-work-instructions-title" class="section-title">Work Instructions</h2>
+      <p>Fast access to Boone work instructions should be one of the main reasons employees open the Wiki. These will be indexed from the ISO Work Instructions collection and cross-linked from the existing internal wiki page.</p>
+      <div class="wiki-feature-source">Source: Google Drive Level 3 Work Instructions + boonegraphics.net/internal-wiki</div>
+    </div>
+    <div class="wiki-instruction-list" role="list" aria-label="Example work instructions">
+      {% for code, title in work_instruction_highlights %}
+      <div class="wiki-instruction-chip" role="listitem">
+        <strong>{{ code }}</strong>
+        <span>{{ title }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel wiki-panel" aria-labelledby="wiki-start-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-start-title" class="section-title">Starting map</h2>
+        <p class="muted">Draft categories for the first wiki import. ISO source documents stay in Drive until a controlled import path exists.</p>
+      </div>
+    </div>
+    <div class="wiki-card-grid">
+      {% for section in wiki_sections %}
+      <article class="wiki-card">
+        <div class="wiki-kicker">{{ section.kicker }}</div>
+        <h3>{{ section.title }}</h3>
+        <p>{{ section.description }}</p>
+        <div class="wiki-source">{{ section.source }}</div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel wiki-panel" aria-labelledby="wiki-iso-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-iso-title" class="section-title">ISO source spine</h2>
+        <p class="muted">These are the Drive collections identified for the first quality-system pass.</p>
+      </div>
+    </div>
+    <div class="wiki-source-list" role="list">
+      {% for title, description in iso_source_map %}
+      <div class="wiki-source-row" role="listitem">
+        <strong>{{ title }}</strong>
+        <span>{{ description }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</section>
+{% endblock %}

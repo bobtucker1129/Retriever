@@ -189,6 +189,29 @@ def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     assert 'data-fetch-suggestion="/printsmith"' in response.text
 
 
+def test_wiki_renders_for_active_seed_admin() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/wiki/")
+
+    assert response.status_code == 200
+    assert "Boone Wiki" in response.text
+    assert "Work Instructions" in response.text
+    assert "WI-022" in response.text
+    assert "Quality &amp; ISO" in response.text
+    assert "Level 1 Quality Manual" in response.text
+    assert 'href="/wiki/" title="Wiki"' in response.text
+    assert 'nav-abbrev">W<' in response.text
+
+
+def test_wiki_requires_active_user() -> None:
+    client = make_client(make_settings(email="pending@boonegraphics.net"))
+
+    response = client.get("/wiki/")
+
+    assert response.status_code == 403
+
+
 _FETCH_SHELL_REMOVED_PHRASES = (
     "Thread Reports",
     "What runs depends on how this server is configured",

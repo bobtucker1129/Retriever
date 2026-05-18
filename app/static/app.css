@@ -346,6 +346,10 @@ h2 {
   max-width: none;
 }
 
+.content:has(.wiki-content) {
+  max-width: 82rem;
+}
+
 .page-intro,
 .notice-panel,
 .panel,
@@ -424,6 +428,148 @@ button.secondary {
   color: var(--color-muted);
   font-size: 0.75rem;
   padding: 0.05rem 0.4rem;
+}
+
+.wiki-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.wiki-intro {
+  max-width: 58rem;
+}
+
+.wiki-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.wiki-work-instructions {
+  align-items: start;
+  display: grid;
+  gap: var(--space-lg);
+  grid-template-columns: minmax(18rem, 0.9fr) minmax(18rem, 1.1fr);
+}
+
+.wiki-feature-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.wiki-feature-copy h2,
+.wiki-feature-copy p {
+  margin: 0;
+}
+
+.wiki-feature-copy p {
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.wiki-feature-source {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-xs);
+}
+
+.wiki-instruction-list {
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  width: 100%;
+}
+
+.wiki-instruction-chip {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--brand-red);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 4.5rem;
+  padding: var(--space-sm);
+}
+
+.wiki-instruction-chip strong {
+  font-size: var(--font-size-xs);
+}
+
+.wiki-instruction-chip span {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+
+.wiki-card-grid {
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.wiki-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-height: 13rem;
+  padding: var(--space-md);
+}
+
+.wiki-card h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.wiki-card p {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.wiki-kicker,
+.wiki-source {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.wiki-kicker {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.wiki-source {
+  border-top: 1px solid var(--color-border);
+  margin-top: auto;
+  padding-top: var(--space-xs);
+}
+
+.wiki-source-list {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.wiki-source-row {
+  align-items: start;
+  display: grid;
+  gap: var(--space-sm);
+  grid-template-columns: minmax(12rem, 0.45fr) minmax(0, 1fr);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.wiki-source-row + .wiki-source-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.wiki-source-row span {
+  color: var(--color-muted);
 }
 
 .user-list {
@@ -1547,6 +1693,11 @@ a.fetch-row-action:hover {
 
 @media (max-width: 760px) {
   .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .wiki-work-instructions,
+  .wiki-source-row {
     grid-template-columns: 1fr;
   }
 

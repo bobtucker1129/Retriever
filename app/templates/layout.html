@@ -58,6 +58,12 @@
             <span class="nav-label">PrePress</span>
           </a>
           {% endif %}
+          {% if user and user.status == 'active' and user.can_open_wiki() %}
+          <a class="nav-item{% if active_nav == 'wiki' %} active{% endif %}" href="/wiki/" title="Wiki">
+            <span class="nav-abbrev">W</span>
+            <span class="nav-label">Wiki</span>
+          </a>
+          {% endif %}
           {% endif %}
         </nav>
         {% if shell != 'minimal' and user and user.is_admin %}
