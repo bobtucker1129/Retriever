@@ -25,12 +25,12 @@
           <th scope="col">Cloudflare Email Auth</th>
           <th scope="col">Full Name</th>
           <th scope="col">Location</th>
-          <th scope="col">Admin</th>
-          <th scope="col">Fetch</th>
-          <th scope="col">PrePress</th>
-          <th scope="col">DSF</th>
-          <th scope="col">Inventory</th>
-          <th scope="col">Proofs</th>
+          <th scope="col" class="admin-module-col">Admin</th>
+          <th scope="col" class="admin-module-col">Fetch</th>
+          <th scope="col" class="admin-module-col">PrePress</th>
+          <th scope="col" class="admin-module-col">DSF</th>
+          <th scope="col" class="admin-level-col">Inventory</th>
+          <th scope="col" class="admin-level-col">Proofs</th>
           <th scope="col">Role</th>
           <th scope="col">Status</th>
           <th scope="col">Actions</th>
@@ -58,7 +58,7 @@
               {% endif %}
             </select>
           </td>
-          <td>
+          <td class="admin-module-col">
             <label class="sr-only" for="admin-mod-{{ row.id }}">Admin</label>
             <select form="user-matrix-{{ row.id }}" id="admin-mod-{{ row.id }}" name="admin_module" aria-label="Admin">
               <option value="false" {% if not row.is_admin %}selected{% endif %} {% if row.is_seed_admin %}disabled{% endif %}>No</option>
@@ -68,7 +68,7 @@
             <input form="user-matrix-{{ row.id }}" type="hidden" name="admin_module" value="true">
             {% endif %}
           </td>
-          <td>
+          <td class="admin-module-col">
             <label class="sr-only" for="fetch-mod-{{ row.id }}">Fetch</label>
             <select form="user-matrix-{{ row.id }}" id="fetch-mod-{{ row.id }}" name="fetch_module" aria-label="Fetch">
               <option value="false" {% if 'fetch' not in row.modules %}selected{% endif %}>No</option>
@@ -76,21 +76,21 @@
             </select>
             <input form="user-matrix-{{ row.id }}" type="hidden" name="fetch_access" value="{% if 'fetch.access' in row.capabilities %}true{% else %}false{% endif %}" data-mirror-for="fetch-mod-{{ row.id }}">
           </td>
-          <td>
+          <td class="admin-module-col">
             <label class="sr-only" for="prepress-mod-{{ row.id }}">PrePress</label>
             <select form="user-matrix-{{ row.id }}" id="prepress-mod-{{ row.id }}" name="prepress_module" aria-label="PrePress">
               <option value="false" {% if 'prepress' not in row.modules %}selected{% endif %}>No</option>
               <option value="true" {% if 'prepress' in row.modules %}selected{% endif %}>Yes</option>
             </select>
           </td>
-          <td>
+          <td class="admin-module-col">
             <label class="sr-only" for="dsf-mod-{{ row.id }}">DSF</label>
             <select form="user-matrix-{{ row.id }}" id="dsf-mod-{{ row.id }}" name="dsf_module" aria-label="DSF">
               <option value="false" {% if 'dsf' not in row.modules %}selected{% endif %}>No</option>
               <option value="true" {% if 'dsf' in row.modules %}selected{% endif %}>Yes</option>
             </select>
           </td>
-          <td>
+          <td class="admin-level-col">
             <label class="sr-only" for="inventory-{{ row.id }}">Inventory</label>
             <select form="user-matrix-{{ row.id }}" id="inventory-{{ row.id }}" name="inventory_level" aria-label="Inventory">
               <option value="no" {% if row.inventory_level == 'no' %}selected{% endif %}>No</option>
@@ -98,7 +98,7 @@
               <option value="manager" {% if row.inventory_level == 'manager' %}selected{% endif %}>Manager</option>
             </select>
           </td>
-          <td>
+          <td class="admin-level-col">
             <label class="sr-only" for="proofs-{{ row.id }}">Proofs</label>
             <select form="user-matrix-{{ row.id }}" id="proofs-{{ row.id }}" name="proofs_level" aria-label="Proofs">
               <option value="no" {% if row.proofs_level == 'no' %}selected{% endif %}>No</option>
@@ -118,11 +118,6 @@
             {% if row.status == 'active' %}
             <form method="post" action="/admin/users/{{ row.id }}/suspend" class="inline-form" onsubmit="return confirm('Suspend this user? They will be signed out.');">
               <button type="submit" class="secondary">Suspend</button>
-            </form>
-            {% endif %}
-            {% if row.status in ('active', 'suspended') %}
-            <form method="post" action="/admin/users/{{ row.id }}/block" class="inline-form" onsubmit="return confirm('Block this user? This cannot be undone from the UI.');">
-              <button type="submit" class="danger">Block</button>
             </form>
             {% endif %}
             <form method="post" action="/admin/users/{{ row.id }}/delete" class="inline-form" onsubmit="return confirm('Remove this user from Retriever? If they sign in through Cloudflare again, they will return as pending.');">

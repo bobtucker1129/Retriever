@@ -2127,6 +2127,7 @@ def test_admin_users_page_lists_pending_users(monkeypatch) -> None:
     assert "Proofs" in response.text
     assert "00/Scott - Working" in response.text
     assert ">Save<" in response.text
+    assert ">Block<" not in response.text
 
 
 def test_seed_admin_can_load_prepress_shell_without_db() -> None:
@@ -2373,6 +2374,7 @@ def test_active_db_user_gets_session_cookie(monkeypatch) -> None:
     assert response.status_code == 200
     assert "retriever_session=" in response.headers.get("set-cookie", "")
     assert len(db.sessions) == 1
+    assert db.user_by_id(1)["last_seen_at"] is not None
 
 
 def test_active_db_user_reuses_existing_session_cookie(monkeypatch) -> None:
@@ -2390,6 +2392,7 @@ def test_active_db_user_reuses_existing_session_cookie(monkeypatch) -> None:
     assert second.status_code == 200
     assert cookie in db.touched_sessions
     assert len(db.sessions) == 1
+    assert db.user_by_id(1)["last_seen_at"] is not None
 
 
 def test_logout_revokes_session_cookie(monkeypatch) -> None:

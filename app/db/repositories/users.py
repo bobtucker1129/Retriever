@@ -159,10 +159,17 @@ class UserRepository:
                        u.display_name, u.full_name, u.status,
                        u.inventory_level, u.proofs_level,
                        u.production_location_id, u.production_location_name,
-                       u.is_seed_admin, u.last_seen_at,
+                       u.is_seed_admin,
+                       COALESCE(u.last_seen_at, session_activity.last_seen_at) AS last_seen_at,
                        r.role_key, r.is_admin_role
                 FROM users u
                 LEFT JOIN roles r ON r.id = u.role_id
+                LEFT JOIN (
+                    SELECT user_id, MAX(COALESCE(last_seen_at, created_at)) AS last_seen_at
+                    FROM sessions
+                    WHERE revoked_at IS NULL
+                    GROUP BY user_id
+                ) session_activity ON session_activity.user_id = u.id
                 WHERE u.status IN ('pending', 'active', 'suspended', 'blocked')
                   AND NULLIF(TRIM(COALESCE(u.cloudflare_email, u.email, u.username)), '') IS NOT NULL
                 ORDER BY FIELD(u.status, 'pending', 'active', 'suspended', 'blocked'),

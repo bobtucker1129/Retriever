@@ -74,6 +74,15 @@ class SessionRepository:
                     hash_optional(source_ip),
                 ),
             )
+            cursor.execute(
+                """
+                UPDATE users
+                SET last_seen_at = NOW(),
+                    last_login = COALESCE(last_login, NOW())
+                WHERE id = %s
+                """,
+                (user_id,),
+            )
         finally:
             cursor.close()
             conn.close()
@@ -119,6 +128,15 @@ class SessionRepository:
                 """,
                 (session_id,),
             )
+            cursor.execute(
+                """
+                UPDATE users u
+                JOIN sessions s ON s.user_id = u.id
+                SET u.last_seen_at = NOW()
+                WHERE s.session_id = %s AND s.revoked_at IS NULL
+                """,
+                (session_id,),
+            )
         finally:
             cursor.close()
             conn.close()
@@ -154,4 +172,3 @@ class SessionRepository:
         finally:
             cursor.close()
             conn.close()
-

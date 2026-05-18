@@ -168,6 +168,24 @@ class FakeCursor:
             self.db.touched_sessions.append(params[0])
             return
 
+        if normalized.startswith("UPDATE users SET last_seen_at"):
+            user_id = params[0]
+            try:
+                self.db.user_by_id(user_id)["last_seen_at"] = datetime.now(timezone.utc)
+            except KeyError:
+                pass
+            return
+
+        if normalized.startswith("UPDATE users u JOIN sessions s"):
+            session_id = params[0]
+            session = self.db.sessions.get(session_id)
+            if session and not session.get("revoked"):
+                try:
+                    self.db.user_by_id(session["user_id"])["last_seen_at"] = datetime.now(timezone.utc)
+                except KeyError:
+                    pass
+            return
+
         if "INSERT INTO sessions" in normalized:
             session_id, user_id, email, _expires_at, _user_agent_hash, _source_ip_hash = params
             self.db.sessions[session_id] = {

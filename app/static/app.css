@@ -346,6 +346,10 @@ h2 {
   max-width: none;
 }
 
+.content:has(.admin-user-matrix-panel) {
+  max-width: none;
+}
+
 .content:has(.wiki-content) {
   max-width: 82rem;
 }
@@ -1818,15 +1822,16 @@ a.fetch-row-action:hover {
 }
 
 .admin-user-matrix {
-  width: 100%;
   border-collapse: collapse;
   font-size: 0.76rem;
+  min-width: 82rem;
+  width: max-content;
 }
 
 .admin-user-matrix th,
 .admin-user-matrix td {
   border: 1px solid var(--color-border);
-  padding: 0.35rem 0.45rem;
+  padding: 0.3rem 0.38rem;
   text-align: left;
   vertical-align: top;
 }
@@ -1837,10 +1842,50 @@ a.fetch-row-action:hover {
   white-space: nowrap;
 }
 
+.admin-user-matrix th:nth-child(1),
+.admin-user-matrix td:nth-child(1),
+.admin-user-matrix th:nth-child(2),
+.admin-user-matrix td:nth-child(2),
+.admin-user-matrix th:nth-child(3),
+.admin-user-matrix td:nth-child(3) {
+  background: var(--color-surface);
+  position: sticky;
+  z-index: 2;
+}
+
+.admin-user-matrix th:nth-child(1),
+.admin-user-matrix th:nth-child(2),
+.admin-user-matrix th:nth-child(3) {
+  background: var(--color-surface-2);
+  z-index: 4;
+}
+
+.admin-user-matrix th:nth-child(1),
+.admin-user-matrix td:nth-child(1) {
+  left: 0;
+  min-width: 7.25rem;
+  width: 7.25rem;
+}
+
+.admin-user-matrix th:nth-child(2),
+.admin-user-matrix td:nth-child(2) {
+  left: 7.25rem;
+  min-width: 13rem;
+  width: 13rem;
+}
+
+.admin-user-matrix th:nth-child(3),
+.admin-user-matrix td:nth-child(3) {
+  box-shadow: 1px 0 0 var(--color-border);
+  left: 20.25rem;
+  min-width: 11rem;
+  width: 11rem;
+}
+
 .admin-user-matrix input,
 .admin-user-matrix select {
   width: 100%;
-  min-width: 5.4rem;
+  min-width: 0;
   height: 1.65rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -1851,11 +1896,26 @@ a.fetch-row-action:hover {
 }
 
 .admin-user-matrix input[name="full_name"] {
-  min-width: 10rem;
+  min-width: 9.75rem;
 }
 
 .admin-user-matrix select[name="production_location_choice"] {
   min-width: 11rem;
+}
+
+.admin-user-matrix .admin-module-col {
+  min-width: 4.5rem;
+  width: 4.5rem;
+}
+
+.admin-user-matrix .admin-level-col {
+  min-width: 5.8rem;
+  width: 5.8rem;
+}
+
+.admin-user-matrix .admin-module-col select,
+.admin-user-matrix .admin-level-col select {
+  padding-inline: 0.25rem;
 }
 
 .admin-matrix-row-footer {
@@ -1868,6 +1928,12 @@ a.fetch-row-action:hover {
 
 .admin-matrix-actions {
   white-space: nowrap;
+}
+
+.admin-matrix-actions button {
+  font-size: 0.72rem;
+  min-height: 1.45rem;
+  padding: 0.15rem 0.42rem;
 }
 
 .admin-matrix-actions .inline-form {
