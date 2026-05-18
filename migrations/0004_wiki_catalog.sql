@@ -33,10 +33,7 @@ CREATE TABLE IF NOT EXISTS retriever_core.wiki_documents (
     source_checksum VARCHAR(128) NULL,
     last_indexed_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_wiki_documents_source
-      FOREIGN KEY (source_id) REFERENCES retriever_core.wiki_sources(id)
-      ON DELETE SET NULL
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_wiki_documents_category ON retriever_core.wiki_documents (category);
@@ -53,10 +50,7 @@ CREATE TABLE IF NOT EXISTS retriever_core.wiki_document_versions (
     summary_status VARCHAR(32) NOT NULL DEFAULT 'draft',
     extracted_text_hash VARCHAR(128) NULL,
     indexed_at DATETIME NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_wiki_versions_document
-      FOREIGN KEY (document_id) REFERENCES retriever_core.wiki_documents(id)
-      ON DELETE CASCADE
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_wiki_versions_document_created
@@ -72,9 +66,6 @@ CREATE TABLE IF NOT EXISTS retriever_core.wiki_sections (
     body_status VARCHAR(32) NOT NULL DEFAULT 'draft',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_wiki_sections_document
-      FOREIGN KEY (document_id) REFERENCES retriever_core.wiki_documents(id)
-      ON DELETE CASCADE,
     UNIQUE KEY uq_wiki_sections_document_slug (document_id, slug)
 );
 
@@ -90,13 +81,7 @@ CREATE TABLE IF NOT EXISTS retriever_core.wiki_links (
     link_type VARCHAR(60) NOT NULL DEFAULT 'source',
     visible_to VARCHAR(40) NOT NULL DEFAULT 'employee',
     discovered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_wiki_links_document
-      FOREIGN KEY (document_id) REFERENCES retriever_core.wiki_documents(id)
-      ON DELETE CASCADE,
-    CONSTRAINT fk_wiki_links_source
-      FOREIGN KEY (source_id) REFERENCES retriever_core.wiki_sources(id)
-      ON DELETE SET NULL
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_wiki_links_document_type ON retriever_core.wiki_links (document_id, link_type);
@@ -109,10 +94,7 @@ CREATE TABLE IF NOT EXISTS retriever_core.wiki_sync_runs (
     finished_at DATETIME NULL,
     scanned_count INT NOT NULL DEFAULT 0,
     changed_count INT NOT NULL DEFAULT 0,
-    error_message TEXT NULL,
-    CONSTRAINT fk_wiki_sync_runs_source
-      FOREIGN KEY (source_id) REFERENCES retriever_core.wiki_sources(id)
-      ON DELETE SET NULL
+    error_message TEXT NULL
 );
 
 CREATE INDEX idx_wiki_sync_runs_source_started
