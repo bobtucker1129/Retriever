@@ -99,9 +99,6 @@ def _has_exportable_prior_assistant(records: list) -> bool:
     for record in reversed(records):
         if getattr(record, "role", None) != "assistant":
             continue
-        route_key = str(getattr(record, "route_key", "") or "").strip()
-        if route_key not in {"printsmith_candidate", "docs_candidate", "general_candidate"}:
-            continue
         state = str(getattr(record, "context_state", "") or "").strip().lower()
         if state and state not in {"stub", "booneops_error", "error"}:
             return True

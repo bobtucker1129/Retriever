@@ -2186,7 +2186,7 @@ def test_fetch_export_followup_after_general_llm_table_calls_broker(monkeypatch)
         conv.conversation_id,
         role="assistant",
         content="Invoice\neCom Order\nItems\nDue\n111114\n9898\nCards\nToday",
-        route_key="general_candidate",
+        route_key="unknown",
         context_state="llm",
     )
 
