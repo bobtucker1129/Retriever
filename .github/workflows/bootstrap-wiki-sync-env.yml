@@ -1,0 +1,69 @@
+name: Bootstrap Wiki Sync Env
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: retriever-rebuild-bootstrap-wiki-sync-env
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Set Wiki sync env on RetrieverRebuild host
+    runs-on:
+      - self-hosted
+      - Windows
+      - RetrieverRebuild
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Update server env and verify local endpoint
+        env:
+          WIKI_SYNC_TOKEN_BOOTSTRAP: ${{ secrets.WIKI_SYNC_TOKEN_BOOTSTRAP }}
+        run: |
+          if (-not $env:WIKI_SYNC_TOKEN_BOOTSTRAP -or $env:WIKI_SYNC_TOKEN_BOOTSTRAP.Length -lt 32) {
+            Write-Error "WIKI_SYNC_TOKEN_BOOTSTRAP is missing or too short."
+            exit 1
+          }
+
+          $envFile = 'D:\retriever-rebuild\env\retriever.env'
+          if (-not (Test-Path -LiteralPath $envFile)) {
+            Write-Error "Missing $envFile"
+            exit 1
+          }
+
+          function Set-EnvLine {
+            param(
+              [string]$Path,
+              [string]$Name,
+              [string]$Value
+            )
+            $lines = Get-Content -LiteralPath $Path
+            $escaped = [regex]::Escape($Name)
+            $replacement = "$Name=$Value"
+            $found = $false
+            $updated = foreach ($line in $lines) {
+              if ($line -match "^$escaped=") {
+                $found = $true
+                $replacement
+              } else {
+                $line
+              }
+            }
+            if (-not $found) {
+              $updated = @($updated) + $replacement
+            }
+            Set-Content -LiteralPath $Path -Value $updated -Encoding UTF8
+          }
+
+          Set-EnvLine -Path $envFile -Name 'WIKI_SYNC_ENABLED' -Value 'true'
+          Set-EnvLine -Path $envFile -Name 'WIKI_SYNC_TOKEN' -Value $env:WIKI_SYNC_TOKEN_BOOTSTRAP
+
+          Restart-Service RetrieverRebuild -ErrorAction Stop
+          Start-Sleep -Seconds 5
+
+          $body = @{ generatedAt = (Get-Date).ToUniversalTime().ToString("o"); roots = @(); files = @() } | ConvertTo-Json -Depth 5
+          $headers = @{ Authorization = "Bearer $env:WIKI_SYNC_TOKEN_BOOTSTRAP" }
+          $response = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8810/wiki/sync/source-inventory' -Headers $headers -ContentType 'application/json' -Body $body
+          Write-Host ("Wiki sync local verification: status={0} internalScanned={1} driveScanned={2}" -f $response.status, $response.internalWiki.scanned, $response.drive.scanned)
