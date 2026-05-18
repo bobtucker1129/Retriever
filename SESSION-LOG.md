@@ -6,6 +6,174 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-18 — Codex: Wiki sync command foundation
+
+**Goal:** Continue the live Retriever Wiki by adding the first idempotent sync foundation for source metadata without scheduling automation or exposing raw ISO documents to normal readers.
+
+**What changed:**
+
+- Added `python3 -m app.wiki.sync` with `--internal-wiki` for SweetProcess links and `--drive-inventory path/to/export.json|csv` for Google Drive inventory exports.
+- Added Wiki repository write support for `wiki_sources`, `wiki_sync_runs`, `wiki_documents`, and source/document `wiki_links`.
+- Google Drive inventory rows now create draft employee-facing document cards with admin-only raw source links.
+- `/wiki/` now uses synced `boone-internal-wiki` SweetProcess links when available, falling back to the built-in procedure list until the first DB sync runs.
+- Added tests for SweetProcess parsing, Drive inventory loading, draft card classification, admin-only source links, repository upserts, and synced link reads.
+
+**Proof:**
+
+- Production unauthenticated probes reached Cloudflare Access redirects as expected: `/health/live`, `/version`, and `/wiki/` each returned `302`.
+- Focused suite: `python3 -m pytest -q tests/test_wiki_repository.py tests/test_wiki_sync.py tests/test_routes.py` -> **97 passed**.
+- Full suite: `python3 -m pytest -q` -> **321 passed, 1 PyPDF2 deprecation warning**.
+- CLI smoke: `python3 -m app.wiki.sync --help` displayed the expected sync options.
+
+**Open / next Wiki work:**
+
+- Run the command against production MySQL with a real Drive inventory export and the live internal-wiki page.
+- Add reviewed/approved summary workflow and admin visibility for sync freshness/failures before scheduling recurring automation.
+- Keep raw Google Drive/ISO source links admin-only unless Master Tate explicitly approves broader exposure.
+
+## 2026-05-18 — Codex: OpenClaw Wiki sync bridge design + disabled cron
+
+**Goal:** Figure out how recurring Wiki sync should work now that OpenClaw has Google Drive access but Retriever production owns LAN/MySQL access.
+
+**What changed:**
+
+- Added workspace operator script **`scripts/retriever-wiki-sync.js`** in the outer OpenClaw workspace.
+  - Reads Google Drive using existing OpenClaw/LordTate Google credentials.
+  - Inventories the first safe root, **`Final Boone`**, instead of crawling every broad ISO/source folder.
+  - Writes inventory artifacts under **`projects/retriever-rebuild/.wiki-sync/`**.
+  - Can either run Retriever's local Python sync directly or POST the inventory to Retriever when `RETRIEVER_WIKI_INGEST_URL` is set.
+- Confirmed direct DB sync from Whitaker/OpenClaw is **not viable**: Boone MySQL `192.168.33.243:3306` timed out from this machine. Correct boundary is:
+  - **OpenClaw** inventories Drive.
+  - **Retriever on Windows/LAN** ingests and writes `retriever_core`.
+- Added Retriever ingest config:
+  - `WIKI_SYNC_ENABLED`
+  - `WIKI_SYNC_TOKEN`
+- Added secure POST endpoint:
+  - `POST /wiki/sync/source-inventory`
+  - Requires `Authorization: Bearer <WIKI_SYNC_TOKEN>` or `X-Retriever-Wiki-Sync-Token`.
+  - Pulls SweetProcess links and ingests posted Drive inventory on the Retriever/LAN side.
+- Added disabled OpenClaw cron job:
+  - Name: **`retriever-wiki-sync`**
+  - ID: **`df821699-0a39-4b86-bb34-d6c94c8858cf`**
+  - Schedule: **5:30 AM America/New_York daily**
+  - Disabled until the Retriever code is deployed and secret env values are installed.
+
+**Proof:**
+
+- `node scripts/retriever-wiki-sync.js --dry-run` found **Final Boone** and wrote an inventory of **1,362 files from 1 root**.
+- Direct DB proof failed as expected from Whitaker: `Can't connect to MySQL server on '192.168.33.243:3306'`.
+- Focused tests after endpoint/config changes: **106 passed**.
+- Full suite: `python3 -m pytest -q` -> **324 passed, 1 PyPDF2 deprecation warning**.
+- OpenClaw cron show confirms the disabled job exists.
+
+**Enablement remaining:**
+
+1. Deploy the Retriever endpoint to production.
+2. Add `WIKI_SYNC_ENABLED=true` and a strong `WIKI_SYNC_TOKEN` to `D:\retriever-rebuild\env\retriever.env`.
+3. Add matching `RETRIEVER_WIKI_SYNC_TOKEN` or `WIKI_SYNC_TOKEN` to the environment visible to OpenClaw cron.
+4. If Cloudflare Access blocks the machine POST, add a Cloudflare Access service token to OpenClaw as `RETRIEVER_WIKI_CF_SERVICE_TOKEN` or reuse `RETRIEVER_SMOKE_CF_SERVICE_TOKEN`.
+5. Run `openclaw cron run df821699-0a39-4b86-bb34-d6c94c8858cf --expect-final --timeout 900000`.
+6. Enable after a clean run: `openclaw cron enable retriever-wiki-sync`.
+
+## 2026-05-18 — Codex: Wiki module shell, catalog, SweetProcess links live
+
+**Goal:** Add a small, low-risk Wiki module to Retriever for Boone internal knowledge without destabilizing Fetch or exposing raw ISO documents to normal readers.
+
+**What changed:**
+
+- Added **Wiki** to the Retriever left rail with a **W** sign and `/wiki/` route.
+- Built the first Wiki landing page structure around Master Tate's desired categories:
+  - **SweetProcess Procedures**
+  - **Work Instructions**
+  - **Quality & ISO**
+  - **Security Posture**
+  - **General Knowledge**
+- Pulled the existing `https://www.boonegraphics.net/internal-wiki` SweetProcess links into the top section and kept those external procedure URLs intact because they are heavily used.
+- Added Wiki catalog schema/read shape:
+  - `wiki_sources`
+  - `wiki_documents`
+  - `wiki_document_versions`
+  - `wiki_sections`
+  - `wiki_links`
+  - `wiki_sync_runs`
+- Added `/wiki/doc/{slug}` detail routes and fallback cards for representative ISO / Work Instruction documents including `M-001`, `SOP-023`, `WI-015`, `WI-018`, `WI-022`, `WI-023`, `WI-024`, and `WI-030`.
+- Inventoried the shared Google Drive ISO folder enough to identify the first source spine: `Final Boone`, `External Documents`, `Training Documents`, `Updates & In-process`, and `Archive`.
+- Confirmed architecture direction:
+  - Google Drive and the Boone internal-wiki page stay source systems.
+  - Retriever stores controlled metadata/summaries and sync state.
+  - Vector search can be added later as an index, not the canonical source.
+  - Normal Wiki readers should get cards, summaries, and drill-downs, not raw ISO document opens.
+  - Fetch should later use a tiny feature-flagged read-only Wiki lookup adapter, not a broad Fetch rewrite.
+
+**Production / deploy:**
+
+- Pushed and deployed these main commits:
+  - **`1b57414`** — Add Wiki module shell
+  - **`19f4e0d`** — Add Wiki catalog drilldown
+  - **`777886d`** — Promote Wiki procedure links
+- Production **`/version`** verified on **`777886d4d63863bfab5ccb360c5b37203dd228ed`**, host **`BGGOL-VESKO01`**.
+- Production **`/health/live`** returned **200 OK**.
+- `https://retriever.boonegraphics.net/wiki/` was verified live behind Cloudflare Access with SweetProcess links and Wiki categories visible.
+
+**Proof:** `python3 -m pytest -q` -> **315 passed, 1 PyPDF2 deprecation warning**.
+
+**Open / next Wiki work:**
+
+- Build the idempotent sync command/service for Google Drive ISO / Work Instruction metadata and `boonegraphics.net/internal-wiki` SweetProcess links.
+- Generate draft summaries and section drill-downs from synced content, with review/approved state before treating the summaries as controlled knowledge.
+- Add operator/admin visibility for last sync status, stale documents, failed syncs, and summary review state.
+- Schedule the recurring sync through OpenClaw or the chosen automation path after the sync command exists. **No OpenClaw cron has been scheduled yet.**
+- Keep Fetch changes out of this phase except for a later small feature-flagged Wiki search adapter.
+
+---
+
+## 2026-05-18 — Codex: PrePress migration, auth locations, ticket save live
+
+**Goal:** Bring old Retriever PrePress into the rebuild while keeping the old and new apps side-by-side on the same PrePress database, aligned to the new auth/location matrix, and restore the old job-ticket save workflow.
+
+**What changed:**
+
+- Wired **PrePress** into the rebuild using the existing MySQL data path: **`retriever_prepress`** for app state and **`switch_shared.prepress`** / MIS data for active operators and invoice/job-part visibility.
+- Added/verified admin location support from MIS production locations; operator locations now drive the PrePress queue mapping. Master Tate’s seed/admin row can be edited for location and was set to **`100/Scott Working`** in production.
+- Removed stale auth ideas from earlier Cursor attempts, including **BooneOps** access toggles and old Fetch-level/regular-LLM toggles that no longer match the product decision.
+- Ported the old PrePress WIP shell into the rebuild and iterated visual sizing: tighter controls, old-style cell dividers, wider PrePress work area, compact top filters, page-size control, and statistics controls.
+- Restored the **Ticket → View / Save** behavior. New Retriever borrows the old Retriever PrintSmith token authority through the proxy instead of minting its own token while old Retriever is still live.
+- Fixed the PrePress page script block not rendering from the shared layout. That restored both:
+  - the **parts expander** (`+`) for invoice job parts;
+  - the tiny top **save confirmation banner**.
+- Fixed live ticket save 500s on Windows by adding **`tzdata`** and a timezone fallback. The banner now returns the old-style message, e.g. **`Saved Y1_JobTicket_103166_20260517-175120.pdf under Remote.`**
+- Improved save error handling so non-JSON server failures show as server failures instead of always saying “network error.”
+
+**Production / deploy:**
+
+- Pushed and deployed these main commits:
+  - **`0d160ac`** — Port PrePress shell into rebuild
+  - **`ff354c2`** — Show legacy PrePress open rows in WIP
+  - **`0091f55`**, **`ee3178c`**, **`9c5c714`** — PrePress visual/layout refinements
+  - **`f0ff2cb`** — Prepare PrePress ticket save proxy support
+  - **`30ced05`** — Fix PrePress page scripts
+  - **`bf2db0e`** — Fix PrePress ticket save timezone
+- Production **`/version`** verified on **`bf2db0e5db0f4c07b4558a35ab057b0644aa16d9`**, host **`BGGOL-VESKO01`**.
+- Production **`/health/live`** returned **200 OK** after the final deploy.
+
+**Verified live:**
+
+- `https://retriever.boonegraphics.net/prepress/` loads behind Cloudflare Access.
+- WIP table loads 25 rows and shows **Ticket View + Save**.
+- The **parts expander** opens invoice `103166` and loads job parts.
+- Copy buttons in PrePress work.
+- Real ticket save succeeded and wrote:
+  - **`D:\SwitchJobs\Jobs_26\103166_TestingForScott\Remote\Y1_JobTicket_103166_20260517-175120.pdf`**
+- Local full test suite before final deploy: **`python3 -m pytest` → 308 passed, 1 PyPDF2 deprecation warning**.
+
+**Important secrets note:** The PrintSmith proxy key/token values were found in the general OpenClaw/workspace envelope and applied to the Windows new Retriever env. Do **not** paste or log those values. New Retriever env now uses old-authority proxy mode for PrePress ticket saves.
+
+**Open / next PrePress work:**
+
+- Continue comparing visual behavior against old Retriever after Scott uses it live for a round.
+- Investigate any remaining old PrePress API behavior around ticket save edge cases, selected-part PDF merge, and file-share permissions if operators hit failures.
+- Keep old Retriever PrePress running side-by-side until Scott confirms read/write behavior and user/location alignment.
+
 ## 2026-05-16 — Codex: auth admin users matrix
 
 **Goal:** Replace the pending-only admin approval card with the actual user authorization table Master Tate described after testing `weborders@boonegraphics.net` through Cloudflare Access.

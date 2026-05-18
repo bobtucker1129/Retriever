@@ -93,6 +93,9 @@ class AppSettings(BaseSettings):
     prepress_job_ticket_timezone: str = "America/Los_Angeles"
     prepress_job_ticket_file_prefix: str = "Y1"
 
+    wiki_sync_enabled: bool = False
+    wiki_sync_token: Optional[str] = None
+
     booneops_broker_enabled: bool = False
     booneops_broker_url: Optional[str] = None
     booneops_broker_bearer_token: Optional[str] = None
@@ -217,6 +220,10 @@ class AppSettings(BaseSettings):
         if self.prepress_job_ticket_save_enabled and not self.printsmith_api_base_url:
             errors.append("PrePress job ticket save requires PRINTSMITH_API_BASE_URL")
 
+        if self.wiki_sync_enabled:
+            if not self.wiki_sync_token or len(self.wiki_sync_token) < 32:
+                errors.append("WIKI_SYNC_TOKEN must be at least 32 characters when Wiki sync is enabled")
+
         if errors:
             raise ValueError("; ".join(errors))
         return self
@@ -237,6 +244,7 @@ class AppSettings(BaseSettings):
             "docsRouteEnabled": self.docs_route_enabled,
             "printsmithRouteEnabled": self.printsmith_route_enabled,
             "tokenAuthorityMode": self.printsmith_token_authority_mode,
+            "wikiSyncEnabled": self.wiki_sync_enabled,
             "booneopsBrokerEnabled": self.booneops_broker_enabled,
         }
 

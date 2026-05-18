@@ -4,7 +4,13 @@ This is the cross-session project dashboard. `SESSION-LOG.md` records what happe
 
 ## Current Phase
 
-**Live Fetch pilot — employee UX polish in flight; keep flags narrow (no broad rollout)**
+**Wiki module live; PrePress side-by-side migration live; Fetch pilot remains narrow**
+
+Plain English: **Retriever Wiki is live as a small new module** at `/wiki/`, with a **Wiki / W** sidebar entry, prominent SweetProcess procedure links, Work Instructions, Quality & ISO, Security Posture, and General Knowledge sections. The catalog schema and document drill-down route exist. The next piece is the dynamic sync/summarization workflow so Google Drive ISO / Work Instruction changes refresh controlled Wiki records without exposing raw ISO documents to normal readers. Final verified production SHA: **`777886d4d63863bfab5ccb360c5b37203dd228ed`** on **`BGGOL-VESKO01`**; `/health/live` returned **200 OK**; `/wiki/` was verified live behind Cloudflare Access; local tests passed **315**.
+
+**PrePress is also live enough for Scott-side testing** while old Retriever stays up as the reference and parallel production surface. The rebuild reads the same PrePress/MIS data, uses the new auth/location matrix, shows the WIP table, expands invoice parts, and saves PrintSmith job tickets through the old Retriever token authority. Keep old Retriever PrePress live until side-by-side read/write behavior is proven.
+
+**Fetch remains a live pilot — keep flags narrow (no broad rollout).**
 
 Plain English: **push-to-`main` deploy** on the Windows runner is routine; **post-deploy feedback** is **green** after version stamping, broker URL, runner permissions, and related fixes. **`RetrieverRebuild`** on **`8810`** has been **verified** with **`FETCH_ENABLED`**, BooneOps **`BOONEOPS_BROKER_ENABLED`**, **`FETCH_GENERAL_QUESTIONS_ENABLED=false`**, smoke aligned to pilot expectations, **legacy `Retriever` on `8000`** read-only-checked and still serving, **`/fetch` protected** until Access session, and broker path **healthy** including **Retriever broker error observability** and BooneOps **correlation** logging.
 
@@ -24,6 +30,19 @@ Architecture artifacts remain authoritative for auth, Fetch trust, and runtime b
 
 Completed:
 
+- Added the first Wiki sync command foundation: `python3 -m app.wiki.sync --internal-wiki` and `python3 -m app.wiki.sync --drive-inventory path/to/export.json|csv`.
+- Added idempotent Wiki source/document/link upserts and sync-run tracking for `wiki_sources`, `wiki_documents`, `wiki_links`, and `wiki_sync_runs`.
+- Made synced internal-wiki SweetProcess links feed `/wiki/` when present, with the built-in procedure list as fallback.
+- Added Drive inventory draft-card classification while keeping raw source links admin-only.
+- Added `POST /wiki/sync/source-inventory`, gated by `WIKI_SYNC_ENABLED` and `WIKI_SYNC_TOKEN`, so Retriever can ingest an OpenClaw-built Drive inventory from inside the LAN/MySQL boundary.
+- Added outer OpenClaw script `scripts/retriever-wiki-sync.js`; dry-run inventories the `Final Boone` Drive root into `.wiki-sync/` and found 1,362 files.
+- Registered disabled OpenClaw cron job `retriever-wiki-sync` (`df821699-0a39-4b86-bb34-d6c94c8858cf`) for 5:30 AM ET daily.
+- Added Retriever **Wiki** as a small shared-shell module with `/wiki/`, left-rail **W**, and active-user access.
+- Added Wiki catalog migration and repository support for sources, documents, versions, sections, links, and sync runs.
+- Added Wiki document drill-down routes and fallback cards for early ISO / Work Instruction examples.
+- Promoted the internal-wiki **SweetProcess procedure links** to the top of Wiki because they are daily-use operational links.
+- Shaped Wiki into the current intended sections: **SweetProcess Procedures**, **Work Instructions**, **Quality & ISO**, **Security Posture**, and **General Knowledge**.
+- Verified production deploy of Wiki commit **`777886d4d63863bfab5ccb360c5b37203dd228ed`** and local suite **`315 passed`**.
 - Created a fresh rebuild project at `projects/retriever-rebuild/`.
 - Moved the auth redesign out of `projects/Retriever/` so the old repo copy remains a reference.
 - Wrote `AUTH_REDESIGN.md`, covering Cloudflare Access, pending users, Retriever roles/capabilities, BooneOps Light/Medium, audit levels, and action classes.
@@ -208,6 +227,35 @@ Use **`deploy/WINDOWS_FETCH_RELEASE.md`** as the single place for deploy order, 
 - **Before real models/tools:** follow the enablement checklist at the bottom of **`deploy/WINDOWS_FETCH_RELEASE.md`** together with **`FETCH_TRUST_PLAN.md`**.
 
 ## Next Recommended Session
+
+**Wiki sync pipeline — make the live shell dynamic and useful.**
+
+Plain English: the Wiki shell, categories, SweetProcess links, catalog tables, drill-down routes, first sync command foundation, and disabled OpenClaw cron bridge are in place. Direct DB sync from Whitaker is not viable because Boone MySQL is LAN-only, so the intended path is OpenClaw Drive inventory -> Retriever ingest endpoint -> Retriever writes `retriever_core`. The next session should deploy/enable that bridge, then create reviewed summary workflow and freshness visibility without letting normal users click through to raw ISO documents.
+
+Immediate checklist:
+
+1. Verify production **`/version`** is still **`777886d4d63863bfab5ccb360c5b37203dd228ed`** or newer, then **`/health/live`**.
+2. Open **`https://retriever.boonegraphics.net/wiki/`** in Chrome after Cloudflare Access.
+3. Deploy the Retriever sync endpoint, then set production env:
+   - `WIKI_SYNC_ENABLED=true`
+   - `WIKI_SYNC_TOKEN=<strong secret>`
+4. Set matching OpenClaw env for cron:
+   - `RETRIEVER_WIKI_SYNC_TOKEN` or `WIKI_SYNC_TOKEN`
+   - optional `RETRIEVER_WIKI_CF_SERVICE_TOKEN` if Cloudflare Access blocks the POST
+5. Run the disabled cron once:
+   - `openclaw cron run df821699-0a39-4b86-bb34-d6c94c8858cf --expect-final --timeout 900000`
+6. Enable after a clean run:
+   - `openclaw cron enable retriever-wiki-sync`
+7. Treat Google Drive and `https://www.boonegraphics.net/internal-wiki` as source systems; store controlled summaries and metadata in Retriever.
+8. Do **not** expose raw ISO document links to normal Wiki readers. Source file links should be admin-only/hidden unless Master Tate explicitly approves otherwise.
+9. Keep Fetch untouched except for a later tiny feature-flagged read-only Wiki search adapter.
+10. Run **`python3 -m pytest`** before push; push to `main`; wait for Windows deploy; verify live behavior after deploy.
+
+**PrePress live follow-up remains active when Scott reports issues.**
+
+Scott has the new PrePress surface open and the main interactions are working: WIP rows load, parts expand, copy buttons work, Ticket View exists, and Ticket Save writes a PDF with the old naming/banner behavior. For PrePress issues, compare directly against the old Retriever on `bggol-vesko01` and fix only the behavior or visual mismatch in front of us.
+
+**Fetch parity remains the next non-PrePress arc.**
 
 **Discord–Fetch parity — “same answer class as Discord,” not just shared logs.**
 

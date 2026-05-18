@@ -65,6 +65,33 @@ class WikiLinkRecord:
     visible_to: str
 
 
+@dataclass(frozen=True)
+class WikiSourceRecord:
+    id: int
+    source_key: str
+    source_type: str
+    title: str
+    root_url: str
+    last_synced_at: Optional[datetime] = None
+
+
+@dataclass(frozen=True)
+class WikiDocumentUpsert:
+    slug: str
+    title: str
+    document_code: str
+    document_type: str
+    category: str
+    summary: str
+    summary_status: str = "draft"
+    source_document_id: str = ""
+    source_url: str = ""
+    source_modified_at: Optional[datetime] = None
+    source_checksum: str = ""
+    audience: str = "employee"
+    raw_source_visible_to: str = "admin"
+
+
 class WikiRepository:
     def __init__(self, connection_factory: ConnectionFactory):
         self._connection_factory = connection_factory
@@ -167,6 +194,251 @@ class WikiRepository:
             conn.close()
         return [self._link_from_row(row) for row in rows]
 
+    def list_source_links(
+        self,
+        source_key: str,
+        link_type: str = "legacy",
+        include_admin: bool = False,
+    ) -> list[WikiLinkRecord]:
+        visibility = ("employee", "admin") if include_admin else ("employee",)
+        placeholders = ", ".join(["%s"] * len(visibility))
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                f"""
+                SELECT l.label, l.url, l.link_type, l.visible_to
+                FROM wiki_links l
+                INNER JOIN wiki_sources s ON s.id = l.source_id
+                WHERE s.source_key = %s
+                  AND l.document_id IS NULL
+                  AND l.link_type = %s
+                  AND l.visible_to IN ({placeholders})
+                ORDER BY l.label ASC
+                """,
+                (source_key, link_type, *visibility),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+        return [self._link_from_row(row) for row in rows]
+
+    def upsert_source(
+        self,
+        *,
+        source_key: str,
+        source_type: str,
+        title: str,
+        root_url: str = "",
+    ) -> WikiSourceRecord:
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                INSERT INTO wiki_sources (source_key, source_type, title, root_url)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    source_type = VALUES(source_type),
+                    title = VALUES(title),
+                    root_url = VALUES(root_url)
+                """,
+                (source_key, source_type, title, root_url),
+            )
+            cursor.execute(
+                """
+                SELECT id, source_key, source_type, title, root_url, last_synced_at
+                FROM wiki_sources
+                WHERE source_key = %s
+                LIMIT 1
+                """,
+                (source_key,),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+        if not row:
+            raise RuntimeError(f"Wiki source was not created: {source_key}")
+        return self._source_from_row(row)
+
+    def start_sync_run(self, source_id: int) -> int:
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                INSERT INTO wiki_sync_runs (source_id, status)
+                VALUES (%s, 'running')
+                """,
+                (source_id,),
+            )
+            cursor.execute("SELECT LAST_INSERT_ID() AS id")
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+        return int((row or {}).get("id") or 0)
+
+    def finish_sync_run(
+        self,
+        *,
+        run_id: int,
+        source_id: int,
+        status: str,
+        scanned_count: int,
+        changed_count: int,
+        error_message: str = "",
+    ) -> None:
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE wiki_sync_runs
+                SET status = %s,
+                    finished_at = CURRENT_TIMESTAMP,
+                    scanned_count = %s,
+                    changed_count = %s,
+                    error_message = NULLIF(%s, '')
+                WHERE id = %s
+                """,
+                (status, scanned_count, changed_count, error_message, run_id),
+            )
+            if status == "succeeded":
+                cursor.execute(
+                    """
+                    UPDATE wiki_sources
+                    SET last_synced_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (source_id,),
+                )
+        finally:
+            cursor.close()
+            conn.close()
+
+    def upsert_document(self, source_id: int, document: WikiDocumentUpsert) -> int:
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                INSERT INTO wiki_documents (
+                    source_id, source_document_id, slug, title, document_code,
+                    document_type, category, summary_status, summary, audience,
+                    raw_source_visible_to, source_url, source_modified_at,
+                    source_checksum, last_indexed_at
+                )
+                VALUES (%s, NULLIF(%s, ''), %s, %s, NULLIF(%s, ''), %s, %s, %s, %s,
+                        %s, %s, NULLIF(%s, ''), %s, NULLIF(%s, ''), CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE
+                    source_id = VALUES(source_id),
+                    source_document_id = VALUES(source_document_id),
+                    title = VALUES(title),
+                    document_code = VALUES(document_code),
+                    document_type = VALUES(document_type),
+                    category = VALUES(category),
+                    summary_status = VALUES(summary_status),
+                    summary = VALUES(summary),
+                    audience = VALUES(audience),
+                    raw_source_visible_to = VALUES(raw_source_visible_to),
+                    source_url = VALUES(source_url),
+                    source_modified_at = VALUES(source_modified_at),
+                    source_checksum = VALUES(source_checksum),
+                    last_indexed_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    source_id,
+                    document.source_document_id,
+                    document.slug,
+                    document.title,
+                    document.document_code,
+                    document.document_type,
+                    document.category,
+                    document.summary_status,
+                    document.summary,
+                    document.audience,
+                    document.raw_source_visible_to,
+                    document.source_url,
+                    document.source_modified_at,
+                    document.source_checksum,
+                ),
+            )
+            cursor.execute(
+                "SELECT id FROM wiki_documents WHERE slug = %s LIMIT 1",
+                (document.slug,),
+            )
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
+        if not row:
+            raise RuntimeError(f"Wiki document was not created: {document.slug}")
+        return int(row["id"])
+
+    def replace_document_links(
+        self,
+        *,
+        document_id: int,
+        source_id: int,
+        links: list[WikiLinkRecord],
+    ) -> None:
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                DELETE FROM wiki_links
+                WHERE document_id = %s
+                  AND source_id = %s
+                """,
+                (document_id, source_id),
+            )
+            for link in links:
+                cursor.execute(
+                    """
+                    INSERT INTO wiki_links (document_id, source_id, label, url, link_type, visible_to)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (document_id, source_id, link.label, link.url, link.link_type, link.visible_to),
+                )
+        finally:
+            cursor.close()
+            conn.close()
+
+    def replace_source_links(
+        self,
+        *,
+        source_id: int,
+        link_type: str,
+        links: list[WikiLinkRecord],
+    ) -> None:
+        conn = self._connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                DELETE FROM wiki_links
+                WHERE source_id = %s
+                  AND document_id IS NULL
+                  AND link_type = %s
+                """,
+                (source_id, link_type),
+            )
+            for link in links:
+                cursor.execute(
+                    """
+                    INSERT INTO wiki_links (source_id, label, url, link_type, visible_to)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (source_id, link.label, link.url, link.link_type, link.visible_to),
+                )
+        finally:
+            cursor.close()
+            conn.close()
+
     @staticmethod
     def slugify(value: str) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
@@ -205,4 +477,15 @@ class WikiRepository:
             url=str(row.get("url") or ""),
             link_type=str(row.get("link_type") or "source"),
             visible_to=str(row.get("visible_to") or "employee"),
+        )
+
+    @staticmethod
+    def _source_from_row(row: dict) -> WikiSourceRecord:
+        return WikiSourceRecord(
+            id=int(row["id"]),
+            source_key=str(row.get("source_key") or ""),
+            source_type=str(row.get("source_type") or ""),
+            title=str(row.get("title") or ""),
+            root_url=str(row.get("root_url") or ""),
+            last_synced_at=row.get("last_synced_at"),
         )

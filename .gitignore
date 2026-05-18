@@ -1,8 +1,8 @@
 .env.local
 retriever.env
 .venv/
+.wiki-sync/
 __pycache__/
 .pytest_cache/
 *.pyc
 *.egg-info/
-

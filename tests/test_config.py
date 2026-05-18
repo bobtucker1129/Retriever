@@ -76,3 +76,10 @@ def test_fetch_enabled_requires_model_config() -> None:
         AppSettings(fetch_enabled=True)
 
     assert "MODEL_PROVIDER is required when Fetch is enabled" in str(exc_info.value)
+
+
+def test_wiki_sync_enabled_requires_long_token() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        AppSettings(wiki_sync_enabled=True, wiki_sync_token="short")
+
+    assert "WIKI_SYNC_TOKEN" in str(exc_info.value)

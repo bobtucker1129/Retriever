@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import secrets
+from datetime import datetime, timezone
+from typing import Any, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 
 from app.auth.cloudflare import get_identity_from_request
 from app.auth.permissions import CurrentUser
@@ -13,6 +18,13 @@ from app.config import AppSettings
 from app.db.connection import create_connection
 from app.db.repositories.wiki import WikiDocumentRecord, WikiLinkRecord, WikiRepository, WikiSectionRecord
 from app.dependencies import settings_dependency
+from app.wiki.sync import (
+    DriveInventoryItem,
+    fetch_internal_wiki_html,
+    parse_datetime,
+    sync_drive_inventory,
+    sync_internal_wiki_links,
+)
 
 router = APIRouter(prefix="/wiki", tags=["wiki"])
 templates = Jinja2Templates(directory="app/templates")
@@ -350,6 +362,25 @@ ISO_SOURCE_MAP = [
 ]
 
 
+class WikiDriveInventoryFile(BaseModel):
+    id: str = ""
+    name: str = ""
+    title: str = ""
+    url: str = ""
+    webViewLink: str = ""
+    modifiedTime: Optional[str] = None
+    modified_at: Optional[str] = None
+    mimeType: str = ""
+    mime_type: str = ""
+    path: str = ""
+
+
+class WikiDriveInventoryPayload(BaseModel):
+    generatedAt: Optional[str] = None
+    roots: list[dict[str, Any]] = Field(default_factory=list)
+    files: list[WikiDriveInventoryFile] = Field(default_factory=list)
+
+
 def _current_wiki_user(
     request: Request,
     settings: AppSettings = Depends(settings_dependency),
@@ -386,6 +417,52 @@ def _documents_from_repo(settings: AppSettings) -> list[WikiDocumentRecord]:
     return documents or FALLBACK_DOCUMENTS
 
 
+def _sweetprocess_links_from_repo(settings: AppSettings) -> list[tuple[str, str, str]]:
+    repo = _wiki_repository(settings)
+    if not repo:
+        return SWEETPROCESS_LINKS
+    try:
+        links = repo.list_source_links("boone-internal-wiki", link_type="legacy")
+    except Exception:
+        links = []
+    if not links:
+        return SWEETPROCESS_LINKS
+    return [(link.label, "", link.url) for link in links]
+
+
+def _require_wiki_sync_token(request: Request, settings: AppSettings) -> None:
+    if not settings.wiki_sync_enabled:
+        raise HTTPException(status_code=404, detail="Wiki sync is not enabled")
+    expected = settings.wiki_sync_token or ""
+    auth = request.headers.get("authorization", "")
+    token = ""
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    token = token or request.headers.get("x-retriever-wiki-sync-token", "").strip()
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="Wiki sync token required")
+
+
+def _inventory_items(payload: WikiDriveInventoryPayload) -> list[DriveInventoryItem]:
+    items: list[DriveInventoryItem] = []
+    for file in payload.files:
+        title = file.title or file.name
+        if not title:
+            continue
+        modified_raw = file.modified_at or file.modifiedTime or ""
+        items.append(
+            DriveInventoryItem(
+                source_document_id=file.id or file.webViewLink or file.url or title,
+                title=title,
+                url=file.url or file.webViewLink,
+                path=file.path,
+                modified_at=parse_datetime(modified_raw) if modified_raw else None,
+                mime_type=file.mime_type or file.mimeType,
+            )
+        )
+    return items
+
+
 @router.get("/", response_class=HTMLResponse)
 async def wiki_home(
     request: Request,
@@ -393,6 +470,7 @@ async def wiki_home(
     settings: AppSettings = Depends(settings_dependency),
 ):
     wiki_documents = _documents_from_repo(settings)
+    sweetprocess_links = _sweetprocess_links_from_repo(settings)
     return templates.TemplateResponse(
         request,
         "wiki/index.html",
@@ -404,7 +482,7 @@ async def wiki_home(
             "nav_shell": "full",
             "wiki_sections": WIKI_SECTIONS,
             "work_instruction_highlights": WORK_INSTRUCTION_HIGHLIGHTS,
-            "sweetprocess_links": SWEETPROCESS_LINKS,
+            "sweetprocess_links": sweetprocess_links,
             "wiki_documents": wiki_documents,
             "iso_source_map": ISO_SOURCE_MAP,
         },
@@ -454,3 +532,35 @@ async def wiki_document_detail(
             "links": links,
         },
     )
+
+
+@router.post("/sync/source-inventory")
+async def wiki_sync_source_inventory(
+    payload: WikiDriveInventoryPayload,
+    request: Request,
+    settings: AppSettings = Depends(settings_dependency),
+) -> dict[str, Any]:
+    _require_wiki_sync_token(request, settings)
+    repo = _wiki_repository(settings)
+    if not repo:
+        raise HTTPException(status_code=503, detail="Wiki repository is not configured")
+
+    drive_items = _inventory_items(payload)
+    internal_result = sync_internal_wiki_links(repo, fetch_internal_wiki_html())
+    drive_result = sync_drive_inventory(repo, drive_items)
+    return {
+        "status": "ok",
+        "syncedAt": datetime.now(timezone.utc).isoformat(),
+        "generatedAt": payload.generatedAt,
+        "roots": len(payload.roots),
+        "internalWiki": {
+            "sourceKey": internal_result.source_key,
+            "scanned": internal_result.scanned_count,
+            "changed": internal_result.changed_count,
+        },
+        "drive": {
+            "sourceKey": drive_result.source_key,
+            "scanned": drive_result.scanned_count,
+            "changed": drive_result.changed_count,
+        },
+    }
