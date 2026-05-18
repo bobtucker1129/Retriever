@@ -68,3 +68,23 @@ def test_report_context_extracts_markdown_table() -> None:
     assert context is not None
     assert context["exportRows"][1]["col1"] == "Tomorrow"
     assert context["tableData"][0]["label"] == "111114"
+
+
+def test_report_context_extracts_html_table() -> None:
+    context = report_context_from_prior_assistant_table(
+        [
+            _assistant(
+                "<table><thead><tr><th>Invoice</th><th>eCom Order</th><th>Items</th>"
+                "<th>Due</th></tr></thead><tbody><tr><td>INV-20421</td>"
+                "<td>WO-8801</td><td>Business Cards (500 qty)</td>"
+                "<td>2026-05-20</td></tr></tbody></table>"
+            )
+        ],
+        conversation_id="conv-1",
+        request_id="req-1",
+    )
+
+    assert context is not None
+    assert context["exportColumns"][2]["header"] == "Items"
+    assert context["exportRows"][0]["col0"] == "INV-20421"
+    assert context["exportRows"][0]["col2"] == "Business Cards (500 qty)"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 import re
 from typing import Any, Sequence
 
@@ -10,6 +11,56 @@ from app.db.repositories.fetch import FetchMessageRecord
 
 
 _TABLE_ROW_START_RE = re.compile(r"^(?:\d{4,}|[A-Z]{2,}[-\s]?\d{3,})$", re.IGNORECASE)
+
+
+class _TableTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tables: list[list[list[str]]] = []
+        self._table_depth = 0
+        self._current_rows: list[list[str]] | None = None
+        self._current_row: list[str] | None = None
+        self._current_cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        low = tag.lower()
+        if low == "table":
+            self._table_depth += 1
+            if self._table_depth == 1:
+                self._current_rows = []
+            return
+        if self._table_depth < 1:
+            return
+        if low == "tr":
+            self._current_row = []
+        elif low in {"td", "th"}:
+            self._current_cell = []
+
+    def handle_data(self, data: str) -> None:
+        if self._current_cell is not None:
+            self._current_cell.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        low = tag.lower()
+        if self._table_depth < 1:
+            return
+        if low in {"td", "th"} and self._current_cell is not None:
+            text = re.sub(r"\s+", " ", "".join(self._current_cell)).strip()
+            if self._current_row is not None:
+                self._current_row.append(text)
+            self._current_cell = None
+        elif low == "tr" and self._current_row is not None:
+            if any(cell for cell in self._current_row) and self._current_rows is not None:
+                self._current_rows.append(self._current_row)
+            self._current_row = None
+        elif low == "table":
+            if self._table_depth == 1 and self._current_rows:
+                self.tables.append(self._current_rows)
+            self._current_rows = None
+            self._current_row = None
+            self._current_cell = None
+            self._table_depth -= 1
 
 
 def _clean_lines(text: str) -> list[str]:
@@ -113,6 +164,61 @@ def _markdown_table_context(
     )
 
 
+def _html_table_context(
+    *,
+    text: str,
+    conversation_id: str,
+    request_id: str,
+) -> dict[str, Any] | None:
+    if "<table" not in (text or "").lower():
+        return None
+    parser = _TableTextParser()
+    parser.feed(text)
+    for rows in parser.tables:
+        if len(rows) < 2:
+            continue
+        headers = [_sanitize_header(cell, f"Column {i + 1}") for i, cell in enumerate(rows[0])]
+        if len(headers) < 2:
+            continue
+        data_rows = [row for row in rows[1:] if any(cell.strip() for cell in row)]
+        if not data_rows:
+            continue
+
+        export_rows: list[dict[str, str]] = []
+        table_data: list[dict[str, Any]] = []
+        for cells in data_rows:
+            padded = cells + [""] * max(0, len(headers) - len(cells))
+            export_rows.append({f"col{i}": padded[i] if i < len(padded) else "" for i in range(len(headers))})
+            label = (padded[0] if padded else "").strip()
+            if not label:
+                continue
+            raw_value = re.sub(r"[$,*]", "", (padded[-1] if padded else "")).strip()
+            try:
+                value = float(raw_value)
+            except ValueError:
+                value = 1
+            table_data.append({"label": label, "value": value})
+
+        if not export_rows:
+            continue
+        if not table_data:
+            table_data = [{"label": "Rows", "value": len(export_rows)}]
+
+        export_columns = [
+            {"key": f"col{i}", "header": header, "kind": "string"}
+            for i, header in enumerate(headers)
+        ]
+        return _base_context(
+            conversation_id=conversation_id,
+            request_id=request_id,
+            data_label=_sanitize_header(headers[-1], "Value"),
+            table_data=table_data,
+            export_columns=export_columns,
+            export_rows=export_rows,
+        )
+    return None
+
+
 def _line_table_header(lines: list[str], start: int) -> tuple[int, list[str]] | None:
     window = [line.lower() for line in lines[start : start + 6]]
     invoice_index = next((i for i, line in enumerate(window) if re.match(r"^invoice\b", line)), -1)
@@ -191,6 +297,13 @@ def report_context_from_prior_assistant_table(
             continue
         text = rec.content or ""
         context = _markdown_table_context(
+            text=text,
+            conversation_id=conversation_id,
+            request_id=request_id,
+        )
+        if context is not None:
+            return context
+        context = _html_table_context(
             text=text,
             conversation_id=conversation_id,
             request_id=request_id,
