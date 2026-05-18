@@ -213,13 +213,17 @@ def _assistant_inheritable_route(rec: FetchMessageRecord) -> Optional[str]:
     if rec.role != "assistant":
         return None
     key = (rec.route_key or "").strip()
-    if key not in ("printsmith_candidate", "docs_candidate"):
+    if key not in ("printsmith_candidate", "docs_candidate", "general_candidate"):
         return None
     state = (rec.context_state or "").strip().lower()
     if state in ("stub", "booneops_error", "error"):
         return None
     if state not in _BROKER_SUCCESS_STATES:
         return None
+    if key == "general_candidate":
+        metadata = rec.metadata if isinstance(rec.metadata, dict) else {}
+        if not any(k in metadata and metadata[k] is not None for k in _ALLOWED_PRIOR_METADATA_KEYS):
+            return None
     return key
 
 

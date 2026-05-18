@@ -99,6 +99,25 @@ def test_resolve_carries_allowlisted_prior_metadata() -> None:
     assert extra == {"reportContext": {"session": "abc"}}
 
 
+def test_resolve_inherits_general_broker_report_context_for_exports() -> None:
+    prior = [
+        _rec(
+            "assistant",
+            route_key="general_candidate",
+            context_state="booneops",
+            content="Mechanics Bank jobs.",
+            metadata={"reportContext": {"reportSpec": {"title": "Active Jobs"}}},
+        ),
+    ]
+    route, extra = resolve_fetch_ask_route(
+        "Make a one-time PDF report from the jobs you just listed.",
+        "unknown",
+        prior,
+    )
+    assert route == "general_candidate"
+    assert extra == {"reportContext": {"reportSpec": {"title": "Active Jobs"}}}
+
+
 def test_resolve_export_merges_prior_metadata_with_spreadsheet_style_hint() -> None:
     prior = [
         _rec(
