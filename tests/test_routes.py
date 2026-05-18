@@ -2151,6 +2151,7 @@ def test_fetch_export_followup_after_general_broker_answer_calls_broker(monkeypa
     def fake_broker(*_a: object, **kwargs: object) -> BooneOpsBrokerTurnResult:
         seen["route_label"] = kwargs.get("route_label")
         seen["user_message"] = kwargs.get("user_message")
+        seen["session_metadata_extra"] = kwargs.get("session_metadata_extra")
         return BooneOpsBrokerTurnResult(
             "Generated PDF.",
             "booneops",
@@ -2168,6 +2169,9 @@ def test_fetch_export_followup_after_general_broker_answer_calls_broker(monkeypa
     assert response.status_code == 303
     assert seen["route_label"] == "unknown"
     assert "one-time PDF" in str(seen["user_message"])
+    session_extra = seen["session_metadata_extra"]
+    assert isinstance(session_extra, dict)
+    assert session_extra["reportContext"]["exportRows"][0]["col0"] == "111114"
     assert db.fetch_messages[-1]["context_state"] == "booneops"
     assert json.loads(db.fetch_messages[-1]["metadata_json"])["artifacts"][0]["filename"] == "jobs.pdf"
 
@@ -2185,7 +2189,7 @@ def test_fetch_export_followup_after_general_llm_table_calls_broker(monkeypatch)
         user_id,
         conv.conversation_id,
         role="assistant",
-        content="Invoice\neCom Order\nItems\nDue\n111114\n9898\nCards\nToday",
+        content="Invoice\neCom Order\nItems\nDue\nINV-111114\n9898\nCards\nToday",
         route_key="unknown",
         context_state="llm",
     )
@@ -2198,6 +2202,7 @@ def test_fetch_export_followup_after_general_llm_table_calls_broker(monkeypatch)
 
     def fake_broker(*_a: object, **kwargs: object) -> BooneOpsBrokerTurnResult:
         seen["route_label"] = kwargs.get("route_label")
+        seen["session_metadata_extra"] = kwargs.get("session_metadata_extra")
         return BooneOpsBrokerTurnResult("Generated PDF.", "booneops")
 
     monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
@@ -2210,6 +2215,9 @@ def test_fetch_export_followup_after_general_llm_table_calls_broker(monkeypatch)
 
     assert response.status_code == 303
     assert seen["route_label"] == "unknown"
+    session_extra = seen["session_metadata_extra"]
+    assert isinstance(session_extra, dict)
+    assert session_extra["reportContext"]["exportRows"][0]["col0"] == "INV-111114"
     assert db.fetch_messages[-1]["context_state"] == "booneops"
 
 

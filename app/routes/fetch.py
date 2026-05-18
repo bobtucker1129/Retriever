@@ -48,6 +48,7 @@ from app.fetch.followup_routing import (
     pdf_export_prior_assistant,
     resolve_fetch_ask_route,
 )
+from app.fetch.report_context import report_context_from_prior_assistant_table
 from app.fetch.general_llm import (
     GeneralLlmTurnResult,
     call_email_cleanup_llm,
@@ -450,6 +451,26 @@ async def ask_in_conversation(
         )
         and not _has_exportable_prior_assistant(prior_records)
     )
+    if (
+        not export_or_refinement_without_prior_context
+        and (
+            is_export_download_followup_text(cleaned)
+            or is_export_format_request_text(cleaned)
+            or is_artifact_refinement_followup_text(cleaned)
+        )
+        and "reportContext" not in session_metadata_extra
+        and "report_context" not in session_metadata_extra
+    ):
+        prior_report_context = report_context_from_prior_assistant_table(
+            prior_records,
+            conversation_id=conversation_id,
+            request_id=request_id,
+        )
+        if prior_report_context is not None:
+            session_metadata_extra = {
+                **session_metadata_extra,
+                "reportContext": prior_report_context,
+            }
     use_broker = should_delegate_ask_to_booneops_broker(route, settings) and not (
         export_or_refinement_without_prior_context
     )
