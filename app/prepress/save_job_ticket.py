@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 if TYPE_CHECKING:
     from config import Config
@@ -77,7 +77,11 @@ async def save_job_ticket_to_remote(
         or getattr(config, "PREPRESS_JOB_TICKET_TIMEZONE", None)
         or "America/Los_Angeles"
     )
-    tz = ZoneInfo(tz_name)
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        logger.warning("Timezone %s is unavailable; using server local time for job ticket filename.", tz_name)
+        tz = None
     stamp = datetime.now(tz).strftime("%Y%m%d-%H%M%S")
     prefix = (
         getattr(config, "prepress_job_ticket_file_prefix", None)

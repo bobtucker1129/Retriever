@@ -636,6 +636,24 @@
         }
     }
 
+    async function _ppReadSaveResponse(response) {
+        var text = await response.text();
+        var parsed = null;
+        try {
+            parsed = text ? JSON.parse(text) : null;
+        } catch (e) {
+            parsed = null;
+        }
+        if (parsed && typeof parsed === "object") {
+            return parsed;
+        }
+        return {
+            ok: response.ok,
+            message: response.ok ? "Saved." : "Save failed on the server.",
+            path: null,
+        };
+    }
+
     async function prepressSaveInvoiceTicket(invoiceNumber, triggerBtn) {
         if (!window.PREPRESS_JOB_TICKET_SAVE) {
             ppToast("Job ticket saving is not enabled on this server.", "error");
@@ -649,7 +667,7 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ mode: "invoice", job_part_numbers: [] }),
             });
-            var j = await r.json();
+            var j = await _ppReadSaveResponse(r);
             ppToast(j.message || (j.ok ? "Saved." : "Save failed."), j.ok ? "success" : "error");
         } catch (e) {
             ppToast("Save failed (network error).", "error");
@@ -679,7 +697,7 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ mode: "parts", job_part_numbers: parts }),
             });
-            var j = await r.json();
+            var j = await _ppReadSaveResponse(r);
             ppToast(j.message || (j.ok ? "Saved." : "Save failed."), j.ok ? "success" : "error");
         } catch (e) {
             ppToast("Save failed (network error).", "error");

@@ -16,6 +16,7 @@ dependencies = [
   "PyPDF2",
   "PyJWT[crypto]",
   "python-multipart",
+  "tzdata",
   "uvicorn[standard]",
 ]
 
