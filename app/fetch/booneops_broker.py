@@ -568,6 +568,10 @@ _RE_WIN_USERS_EXPORT_PATH = re.compile(
     r"(?:[A-Za-z]:\\Users\\[^\s\n<'\"`]+\.(?:xlsx|xlsm|xls|csv|pdf|html))\b",
     re.IGNORECASE,
 )
+_RE_BOONEOPS_RAW_ARTIFACT_PATH = re.compile(
+    r"\s*Download it from\s+/v1/booneops/artifacts/[A-Za-z0-9._:-]+\.?",
+    re.IGNORECASE,
+)
 
 
 def scrub_gateway_host_file_paths_from_employee_fetch_text(text: str) -> str:
@@ -583,6 +587,9 @@ def scrub_gateway_host_file_paths_from_employee_fetch_text(text: str) -> str:
     out = _RE_UNIX_USERS_EXPORT_PATH.sub("", out)
     out = _RE_UNIX_HOME_EXPORT_PATH.sub("", out)
     out = _RE_WIN_USERS_EXPORT_PATH.sub("", out)
+    out = _RE_BOONEOPS_RAW_ARTIFACT_PATH.sub(
+        " Use the attachment link below.", out
+    )
     out = re.sub(r"[ \t]+\n", "\n", out)
     out = re.sub(r"\n{3,}", "\n\n", out).strip()
     return out

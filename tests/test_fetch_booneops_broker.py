@@ -1023,6 +1023,16 @@ def test_scrub_gateway_host_file_paths_removes_windows_users_exports() -> None:
     assert "done" in out.lower()
 
 
+def test_scrub_gateway_host_file_paths_replaces_raw_broker_artifact_paths() -> None:
+    raw = (
+        "Generated the report. Download it from "
+        "/v1/booneops/artifacts/d925e812-3b8f-40f6-85d3-6d5b001e35c2."
+    )
+    out = scrub_gateway_host_file_paths_from_employee_fetch_text(raw)
+    assert "/v1/booneops/artifacts" not in out
+    assert "attachment link below" in out
+
+
 def test_build_broker_message_presentation_strips_local_media_paths_non_docs() -> None:
     uid = "550e8400-e29b-41d4-a716-446655440000"
     text, metadata = build_broker_message_presentation(
