@@ -241,6 +241,32 @@ def test_unknown_wiki_document_returns_404() -> None:
     assert response.status_code == 404
 
 
+def test_wiki_sync_endpoint_requires_enabled_token() -> None:
+    client = make_client(make_settings())
+
+    response = client.post("/wiki/sync/source-inventory", json={"files": []})
+
+    assert response.status_code == 404
+
+
+def test_wiki_sync_endpoint_rejects_bad_token() -> None:
+    settings = make_settings(with_db=True).model_copy(
+        update={
+            "wiki_sync_enabled": True,
+            "wiki_sync_token": "x" * 40,
+        }
+    )
+    client = make_client(settings)
+
+    response = client.post(
+        "/wiki/sync/source-inventory",
+        headers={"authorization": "Bearer wrong"},
+        json={"files": []},
+    )
+
+    assert response.status_code == 403
+
+
 _FETCH_SHELL_REMOVED_PHRASES = (
     "Thread Reports",
     "What runs depends on how this server is configured",
@@ -775,6 +801,16 @@ def test_fetch_post_ask_allows_fetch_module_without_extra_ask_capability(monkeyp
     settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
+        return fetch_routes.GeneralLlmTurnResult(
+            "Legacy slash command reached the normal fallback lane.",
+            "llm",
+            "claude-test",
+            {"general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
     client = make_client(settings)
 
     response = client.post(
@@ -874,6 +910,16 @@ def test_fetch_post_ask_slash_docs_and_printsmith(monkeypatch) -> None:
     settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
+        return fetch_routes.GeneralLlmTurnResult(
+            "Legacy slash command reached the normal fallback lane.",
+            "llm",
+            "claude-test",
+            {"general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
     client = make_client(settings)
 
     r_docs = client.post(
@@ -2069,6 +2115,61 @@ def test_fetch_export_followup_after_general_stub_does_not_call_broker(monkeypat
 
     assert response.status_code == 303
     assert db.fetch_messages[-1]["context_state"] == "stub"
+
+
+def test_fetch_export_followup_after_general_broker_answer_calls_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="General broker")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="user",
+        content="What Mechanics Bank jobs are pending?",
+        route_key="general_candidate",
+    )
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="| Invoice | Due |\n| --- | --- |\n| 111114 | Today |",
+        route_key="general_candidate",
+        context_state="booneops",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    seen: dict[str, object] = {}
+
+    def fake_broker(*_a: object, **kwargs: object) -> BooneOpsBrokerTurnResult:
+        seen["route_label"] = kwargs.get("route_label")
+        seen["user_message"] = kwargs.get("user_message")
+        return BooneOpsBrokerTurnResult(
+            "Generated PDF.",
+            "booneops",
+            {"artifacts": [{"filename": "jobs.pdf", "downloadPath": "/fetch/artifacts/broker/art-1"}]},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "make a one-time PDF report from the jobs you just listed"},
+    )
+
+    assert response.status_code == 303
+    assert seen["route_label"] == "unknown"
+    assert "one-time PDF" in str(seen["user_message"])
+    assert db.fetch_messages[-1]["context_state"] == "booneops"
+    assert json.loads(db.fetch_messages[-1]["metadata_json"])["artifacts"][0]["filename"] == "jobs.pdf"
 
 
 def test_fetch_export_followup_new_thread_does_not_call_broker(monkeypatch) -> None:

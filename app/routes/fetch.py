@@ -94,6 +94,20 @@ def _last_user_message_id(messages: list) -> Optional[str]:
             return str(getattr(record, "message_id", "") or "") or None
     return None
 
+
+def _has_successful_broker_assistant(records: list) -> bool:
+    for record in reversed(records):
+        if getattr(record, "role", None) != "assistant":
+            continue
+        route_key = str(getattr(record, "route_key", "") or "").strip()
+        if route_key not in {"printsmith_candidate", "docs_candidate", "general_candidate"}:
+            continue
+        state = str(getattr(record, "context_state", "") or "").strip().lower()
+        if state in {"booneops", "ready"}:
+            return True
+    return False
+
+
 _FETCH_ACCESS_MSG = "Fetch access is required"
 _NO_DB_MSG = "Conversation storage requires a configured database"
 _FETCH_ASK_DISABLED_MSG = "Fetch ask is not permitted for this account"
@@ -437,6 +451,7 @@ async def ask_in_conversation(
             or is_export_format_request_text(cleaned)
             or is_artifact_refinement_followup_text(cleaned)
         )
+        and not _has_successful_broker_assistant(prior_records)
     )
     use_broker = should_delegate_ask_to_booneops_broker(route, settings) and not (
         export_or_refinement_without_prior_context
