@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Wiki{% endblock %}
+{% block title %}{% if document.document_code %}{{ document.document_code }} — {% endif %}{{ document.title }}{% endblock %}
+
+{% block content %}
+<section class="wiki-content">
+  <div class="page-intro wiki-intro">
+    <p>{{ document.summary }}</p>
+  </div>
+
+  <section class="panel wiki-panel" aria-labelledby="wiki-detail-meta-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-detail-meta-title" class="section-title">Document card</h2>
+        <p class="muted">Controlled Wiki view. Raw source documents stay behind the sync/review workflow.</p>
+      </div>
+    </div>
+    <div class="wiki-source-list" role="list">
+      <div class="wiki-source-row" role="listitem">
+        <strong>Code</strong>
+        <span>{{ document.document_code or "Not assigned" }}</span>
+      </div>
+      <div class="wiki-source-row" role="listitem">
+        <strong>Category</strong>
+        <span>{{ document.category }}</span>
+      </div>
+      <div class="wiki-source-row" role="listitem">
+        <strong>Summary status</strong>
+        <span>{{ document.summary_status }}</span>
+      </div>
+      <div class="wiki-source-row" role="listitem">
+        <strong>Last indexed</strong>
+        <span>{{ document.last_indexed_at or "Not indexed yet" }}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel wiki-panel" aria-labelledby="wiki-detail-sections-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-detail-sections-title" class="section-title">Summary sections</h2>
+        <p class="muted">These sections are the employee-facing drill-down layer generated from reviewed source material.</p>
+      </div>
+    </div>
+    {% if sections %}
+    <div class="wiki-card-grid">
+      {% for section in sections %}
+      <article class="wiki-card">
+        <div class="wiki-kicker">{{ section.body_status }}</div>
+        <h3>{{ section.heading }}</h3>
+        <p>{{ section.summary }}</p>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No reviewed sections are available yet. This card is ready for the sync and summary pipeline.</p>
+    {% endif %}
+  </section>
+
+  {% if links %}
+  <section class="panel wiki-panel" aria-labelledby="wiki-detail-links-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-detail-links-title" class="section-title">Related links</h2>
+        <p class="muted">Retained links from the internal wiki or other approved source maps.</p>
+      </div>
+    </div>
+    <div class="wiki-source-list" role="list">
+      {% for link in links %}
+      <div class="wiki-source-row" role="listitem">
+        <strong>{{ link.label }}</strong>
+        <span><a href="{{ link.url }}" rel="noreferrer noopener">{{ link.link_type }}</a></span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</section>
+{% endblock %}

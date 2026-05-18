@@ -17,11 +17,11 @@
       <div class="wiki-feature-source">Source: Google Drive Level 3 Work Instructions + boonegraphics.net/internal-wiki</div>
     </div>
     <div class="wiki-instruction-list" role="list" aria-label="Example work instructions">
-      {% for code, title in work_instruction_highlights %}
-      <div class="wiki-instruction-chip" role="listitem">
+      {% for code, title, slug in work_instruction_highlights %}
+      <a class="wiki-instruction-chip" role="listitem" href="/wiki/doc/{{ slug }}">
         <strong>{{ code }}</strong>
         <span>{{ title }}</span>
-      </div>
+      </a>
       {% endfor %}
     </div>
   </section>
@@ -41,6 +41,25 @@
         <p>{{ section.description }}</p>
         <div class="wiki-source">{{ section.source }}</div>
       </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel wiki-panel" aria-labelledby="wiki-documents-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-documents-title" class="section-title">Document cards</h2>
+        <p class="muted">Cards will be refreshed from Drive and the internal wiki link collection. Opening a card stays inside Retriever.</p>
+      </div>
+    </div>
+    <div class="wiki-card-grid">
+      {% for document in wiki_documents %}
+      <a class="wiki-card wiki-document-card" href="/wiki/doc/{{ document.slug }}">
+        <div class="wiki-kicker">{{ document.category }}</div>
+        <h3>{% if document.document_code %}{{ document.document_code }} — {% endif %}{{ document.title }}</h3>
+        <p>{{ document.summary }}</p>
+        <div class="wiki-source">Summary status: {{ document.summary_status }}</div>
+      </a>
       {% endfor %}
     </div>
   </section>

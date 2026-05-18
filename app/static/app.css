@@ -487,11 +487,13 @@ button.secondary {
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--brand-red);
   border-radius: var(--radius-sm);
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   min-height: 4.5rem;
   padding: var(--space-sm);
+  text-decoration: none;
 }
 
 .wiki-instruction-chip strong {
@@ -514,11 +516,13 @@ button.secondary {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
   min-height: 13rem;
   padding: var(--space-md);
+  text-decoration: none;
 }
 
 .wiki-card h3 {
@@ -531,6 +535,11 @@ button.secondary {
   font-size: var(--font-size-sm);
   line-height: 1.5;
   margin: 0;
+}
+
+.wiki-document-card:hover,
+.wiki-instruction-chip:hover {
+  border-color: color-mix(in srgb, var(--brand-red) 40%, var(--color-border));
 }
 
 .wiki-kicker,

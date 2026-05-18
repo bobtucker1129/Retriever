@@ -198,6 +198,8 @@ def test_wiki_renders_for_active_seed_admin() -> None:
     assert "Boone Wiki" in response.text
     assert "Work Instructions" in response.text
     assert "WI-022" in response.text
+    assert "/wiki/doc/wi-022-secure-mailing" in response.text
+    assert "Document cards" in response.text
     assert "Quality &amp; ISO" in response.text
     assert "Level 1 Quality Manual" in response.text
     assert 'href="/wiki/" title="Wiki"' in response.text
@@ -210,6 +212,27 @@ def test_wiki_requires_active_user() -> None:
     response = client.get("/wiki/")
 
     assert response.status_code == 403
+
+
+def test_wiki_document_detail_stays_inside_retriever() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/wiki/doc/wi-022-secure-mailing")
+
+    assert response.status_code == 200
+    assert "WI-022" in response.text
+    assert "Secure Mailing" in response.text
+    assert "Controlled Wiki view" in response.text
+    assert "Raw source documents stay behind" in response.text
+    assert "Current internal wiki collection" in response.text
+
+
+def test_unknown_wiki_document_returns_404() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/wiki/doc/not-a-real-doc")
+
+    assert response.status_code == 404
 
 
 _FETCH_SHELL_REMOVED_PHRASES = (

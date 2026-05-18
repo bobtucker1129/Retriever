@@ -54,10 +54,26 @@ def test_cleanup_migration_removes_fetch_level_and_general_toggle() -> None:
     assert "booneops_level" in sql
 
 
+def test_wiki_migration_adds_catalog_without_fetch_coupling() -> None:
+    sql = Path("migrations/0004_wiki_catalog.sql").read_text()
+
+    for table in [
+        "wiki_sources",
+        "wiki_documents",
+        "wiki_document_versions",
+        "wiki_sections",
+        "wiki_links",
+        "wiki_sync_runs",
+    ]:
+        assert f"retriever_core.{table}" in sql
+    assert "fetch_" not in sql
+
+
 def test_migration_helpers_find_migration_and_seed_files() -> None:
     assert any(path.name == "0001_retriever_core_auth.sql" for path in list_sql_migrations())
     assert any(path.name == "0002_fetch_conversations.sql" for path in list_sql_migrations())
     assert any(path.name == "0003_remove_fetch_level_and_general_toggle.sql" for path in list_sql_migrations())
+    assert any(path.name == "0004_wiki_catalog.sql" for path in list_sql_migrations())
     assert any(path.name == "0001_seed_auth_shell.sql" for path in list_seed_files())
 
 
