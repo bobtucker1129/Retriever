@@ -9,6 +9,23 @@
     <p>Internal Boone reference for quality, security, production, services, training, and company knowledge. The first source set is the ISO Drive library plus the public Boone website, rewritten for employee use.</p>
   </div>
 
+  <section class="panel wiki-panel" aria-labelledby="wiki-procedures-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-procedures-title" class="section-title">SweetProcess Procedures</h2>
+        <p class="muted">Daily-use procedure links retained from the current internal wiki. These stay prominent while Retriever summaries and synced cards come online.</p>
+      </div>
+    </div>
+    <div class="wiki-procedure-grid" role="list">
+      {% for title, owner, url in sweetprocess_links %}
+      <a class="wiki-procedure-link" role="listitem" href="{{ url }}" rel="noreferrer noopener">
+        <span>{{ title }}</span>
+        {% if owner %}<strong>{{ owner }}</strong>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
   <section class="panel wiki-work-instructions" aria-labelledby="wiki-work-instructions-title">
     <div class="wiki-feature-copy">
       <div class="wiki-kicker">Shop floor reference</div>
@@ -29,8 +46,8 @@
   <section class="panel wiki-panel" aria-labelledby="wiki-start-title">
     <div class="section-header">
       <div>
-        <h2 id="wiki-start-title" class="section-title">Starting map</h2>
-        <p class="muted">Draft categories for the first wiki import. ISO source documents stay in Drive until a controlled import path exists.</p>
+        <h2 id="wiki-start-title" class="section-title">Wiki categories</h2>
+        <p class="muted">The Wiki is organized around a few stable lanes: procedures, work instructions, ISO, security posture, and general Boone knowledge.</p>
       </div>
     </div>
     <div class="wiki-card-grid">
@@ -49,7 +66,7 @@
     <div class="section-header">
       <div>
         <h2 id="wiki-documents-title" class="section-title">Document cards</h2>
-        <p class="muted">Cards will be refreshed from Drive and the internal wiki link collection. Opening a card stays inside Retriever.</p>
+        <p class="muted">Cards will be refreshed from Drive and the internal wiki link collection. Opening a card stays inside Retriever. Draft cards show placeholder summaries until the sync and review workflow fills them.</p>
       </div>
     </div>
     <div class="wiki-card-grid">

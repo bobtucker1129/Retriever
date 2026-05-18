@@ -20,34 +20,34 @@ templates = Jinja2Templates(directory="app/templates")
 
 WIKI_SECTIONS = [
     {
-        "title": "Boone Basics",
-        "kicker": "Company reference",
-        "description": "Internal version of who Boone is, what we do, office locations, teams, and how our public story translates into employee context.",
-        "source": "boonegraphics.net About Boone and service pages",
+        "title": "SweetProcess Procedures",
+        "kicker": "Daily-use links",
+        "description": "Fast links to the procedure collection employees already use every day. These stay visible while Retriever builds richer wiki cards around the same workflows.",
+        "source": "boonegraphics.net/internal-wiki SweetProcess links",
+    },
+    {
+        "title": "Work Instructions",
+        "kicker": "Shop floor reference",
+        "description": "Prominent access to WI documents such as secure mailing, mail, file prep, PrintSmith templates, outsource receiving, and supplier review.",
+        "source": "Google Drive Level 3 Work Instructions",
     },
     {
         "title": "Quality & ISO",
         "kicker": "Certified system",
-        "description": "Quality manual, Level 2 procedures, Level 3 documents, forms, work instructions, training evidence, audit planning, and external ISO references.",
+        "description": "Quality manual, Level 2 procedures, Level 3 documents, forms, training evidence, audit planning, and external ISO references in controlled summary form.",
         "source": "Google Drive ISO folder: Final Boone and External Documents",
     },
     {
         "title": "Security Posture",
-        "kicker": "Internal practices",
-        "description": "Security commitments, controlled access, customer data handling, production safeguards, compliance posture, and Boone DataLock context.",
-        "source": "Boone public site plus internal ISO/security documentation",
+        "kicker": "Audit readiness",
+        "description": "Security commitments, controlled access, customer data handling, production safeguards, Boone DataLock context, and known audit questions from recent audit documents.",
+        "source": "Internal security/audit documents plus public Boone security pages",
     },
     {
-        "title": "Production Knowledge",
-        "kicker": "Shop floor",
-        "description": "Print production, mailing, fulfillment, signage, variable data, training documents, and practical work instructions employees need to find quickly.",
-        "source": "Training Documents and ISO work instructions",
-    },
-    {
-        "title": "Customer & Vendor Context",
-        "kicker": "External relationships",
-        "description": "Client-facing standards, vendor references, ISO marks usage, common customer programs, and internal notes that should not live on the public website.",
-        "source": "External Documents: Clients, Vendors, ISO Marks Usage",
+        "title": "General Knowledge",
+        "kicker": "Company reference",
+        "description": "Internal version of Boone's public website: services, departments, customers, products, company info, and practical reference material rewritten for employees.",
+        "source": "boonegraphics.net and selected internal notes",
     },
 ]
 
@@ -59,6 +59,150 @@ WORK_INSTRUCTION_HIGHLIGHTS = [
     ("WI-023", "Outsource Receiving", "wi-023-outsource-receiving"),
     ("WI-024", "PrintSmith Template Usage", "wi-024-printsmith-template-usage"),
     ("WI-030", "Supplier Review", "wi-030-supplier-review"),
+]
+
+
+SWEETPROCESS_LINKS = [
+    (
+        "Processing Cal Poly DSF",
+        "AM",
+        "https://www.sweetprocess.com/procedures/132kYCJ9J0/processing-cal-poly-dsf-am/",
+    ),
+    (
+        "UPS Label Purchasing",
+        "",
+        "https://www.sweetprocess.com/procedures/46mqMSPDP1/ups-label-purchasing/",
+    ),
+    (
+        "Cleaning Up House Account Contacts",
+        "AM",
+        "https://www.sweetprocess.com/procedures/5jR9Vf9Y9x/cleaning-up-house-account-contacts-am/",
+    ),
+    (
+        "SBCERS Statement Procedures",
+        "ST",
+        "https://www.sweetprocess.com/procedures/5jV1Rf9Y9x/sbcers-statement-procedures-st/",
+    ),
+    (
+        "XMPie Database and Job Clean-up",
+        "ST",
+        "https://www.sweetprocess.com/procedures/70BaVIm4m1/xmpie-database-and-job-clean-up-st/",
+    ),
+    (
+        "Marking Pending Estimates for Archival",
+        "",
+        "https://www.sweetprocess.com/procedures/70ja7um4m1/marking-pending-estimates-for-archival/",
+    ),
+    (
+        "UPS Batch Shipping",
+        "ST",
+        "https://www.sweetprocess.com/procedures/85bNpID1D7/ups-batch-shipping-st/",
+    ),
+    (
+        "DSF Store Management",
+        "TO",
+        "https://www.sweetprocess.com/procedures/AK5yJT1B1o/dsf-store-management-to/",
+    ),
+    (
+        "How to Remove Prospects",
+        "TO",
+        "https://www.sweetprocess.com/procedures/BVEvOUMLMZ/how-to-remove-prospects-to/",
+    ),
+    (
+        "Accessing the ISO Folder",
+        "",
+        "https://www.sweetprocess.com/procedures/EV3K9i7q7V/accessing-the-iso-folder/",
+    ),
+    (
+        "Manual Quote Required DSF ABI",
+        "",
+        "https://www.sweetprocess.com/procedures/EVOY2s7q7V/manual-quote-required-dsf-abi/",
+    ),
+    (
+        "Using Walk-in in PrintSmith",
+        "ST",
+        "https://www.sweetprocess.com/procedures/J7ooJCBOB0/using-walk-in-in-printsmith-st/",
+    ),
+    (
+        "Adding Your Signature in PlanProphet",
+        "",
+        "https://www.sweetprocess.com/procedures/MO7YkHZDZm/adding-your-signature-in-planprophet/",
+    ),
+    (
+        "Labeling Prospects/Accounts with the Correct Business Type",
+        "TO",
+        "https://www.sweetprocess.com/procedures/NYeJ4F0D0z/labeling-prospectsaccounts-with-the-correct-business-type-industry-to/",
+    ),
+    (
+        "Adding DSF Imposition Templates to Switch",
+        "ST",
+        "https://www.sweetprocess.com/procedures/OWLeGFxYxG/adding-dsf-imposition-templates-to-switch-st/",
+    ),
+    (
+        "Entering Prospects in PlanProphet",
+        "TO",
+        "https://www.sweetprocess.com/procedures/Op46VSxYxG/entering-prospects-in-planprophet-to/",
+    ),
+    (
+        "Approving Quotes Using the Customer Portal",
+        "",
+        "https://www.sweetprocess.com/procedures/QDaO6smDmR/approving-quotes-using-the-customer-portal/",
+    ),
+    (
+        "Resubmitting Jobs to Esko or Switch",
+        "ST",
+        "https://www.sweetprocess.com/procedures/VpqeMTw2w0/resubmitting-jobs-to-esko-or-switch-st/",
+    ),
+    (
+        "Purchasing an Item / PO Process",
+        "SS / CO",
+        "https://www.sweetprocess.com/procedures/YW8KYTqEq4/purchasing-an-item-po-process-ss-co/",
+    ),
+    (
+        "Mechanics Bank: Remove Users from DSF",
+        "TO",
+        "https://www.sweetprocess.com/procedures/Zjr4vSqAqO/mechanics-bank-instructions-for-removing-users-from-dsf-to/",
+    ),
+    (
+        "Mechanics Bank: Add Users to DSF",
+        "TO",
+        "https://www.sweetprocess.com/procedures/aDAODIGJGd/mechanics-bank-instructions-for-adding-new-users-to-dsf-to/",
+    ),
+    (
+        "How to Add Prospects",
+        "TO",
+        "https://www.sweetprocess.com/procedures/bDB4PIB5BL/how-to-add-prospects-to/",
+    ),
+    (
+        "Create UMT Jobs / Boone Mail",
+        "TO",
+        "https://www.sweetprocess.com/procedures/ev74KUojoR/create-umt-jobs-boone-mail-to/",
+    ),
+    (
+        "Paper Ordering",
+        "NG",
+        "https://www.sweetprocess.com/procedures/j5EKDTG9Go/paper-ordering-ng/",
+    ),
+    (
+        "Lifetime of a Prospect",
+        "TO",
+        "https://www.sweetprocess.com/procedures/jDaWOcG9Go/lifetime-of-a-prospect-to/",
+    ),
+    (
+        "Send a Customer Portal Link",
+        "",
+        "https://www.sweetprocess.com/procedures/mzZwWhoyo6/how-to-send-a-customer-portal-link/",
+    ),
+    (
+        "Archive Jobs in Esko",
+        "ST",
+        "https://www.sweetprocess.com/procedures/mzo66ioyo6/archive-jobs-in-esko-st/",
+    ),
+    (
+        "Custom Shipping Labels in PlanProphet",
+        "",
+        "https://www.sweetprocess.com/procedures/v21V7swdw6/custom-shipping-labels-in-planprophet/",
+    ),
 ]
 
 
@@ -260,6 +404,7 @@ async def wiki_home(
             "nav_shell": "full",
             "wiki_sections": WIKI_SECTIONS,
             "work_instruction_highlights": WORK_INSTRUCTION_HIGHLIGHTS,
+            "sweetprocess_links": SWEETPROCESS_LINKS,
             "wiki_documents": wiki_documents,
             "iso_source_map": ISO_SOURCE_MAP,
         },

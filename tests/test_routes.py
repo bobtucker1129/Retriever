@@ -196,11 +196,17 @@ def test_wiki_renders_for_active_seed_admin() -> None:
 
     assert response.status_code == 200
     assert "Boone Wiki" in response.text
+    assert "SweetProcess Procedures" in response.text
+    assert "Processing Cal Poly DSF" in response.text
+    assert "https://www.sweetprocess.com/procedures/132kYCJ9J0/processing-cal-poly-dsf-am/" in response.text
     assert "Work Instructions" in response.text
     assert "WI-022" in response.text
     assert "/wiki/doc/wi-022-secure-mailing" in response.text
     assert "Document cards" in response.text
     assert "Quality &amp; ISO" in response.text
+    assert "Security Posture" in response.text
+    assert "General Knowledge" in response.text
+    assert "known audit questions" in response.text
     assert "Level 1 Quality Manual" in response.text
     assert 'href="/wiki/" title="Wiki"' in response.text
     assert 'nav-abbrev">W<' in response.text
@@ -224,6 +230,7 @@ def test_wiki_document_detail_stays_inside_retriever() -> None:
     assert "Secure Mailing" in response.text
     assert "Controlled Wiki view" in response.text
     assert "Raw source documents stay behind" in response.text
+    assert "Detailed summaries will be populated" in response.text
     assert "Current internal wiki collection" in response.text
 
 

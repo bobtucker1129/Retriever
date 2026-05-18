@@ -43,6 +43,11 @@
         <p class="muted">These sections are the employee-facing drill-down layer generated from reviewed source material.</p>
       </div>
     </div>
+    {% if document.summary_status == "draft" %}
+    <div class="notice-panel wiki-sync-note">
+      <p>This page is a draft card. Detailed summaries will be populated by the Wiki sync and review workflow; raw ISO sources stay behind that controlled process.</p>
+    </div>
+    {% endif %}
     {% if sections %}
     <div class="wiki-card-grid">
       {% for section in sections %}

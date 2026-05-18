@@ -482,6 +482,41 @@ button.secondary {
   width: 100%;
 }
 
+.wiki-procedure-grid {
+  display: grid;
+  gap: var(--space-xs);
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.wiki-procedure-link {
+  align-items: center;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: space-between;
+  min-height: 3.25rem;
+  padding: var(--space-sm);
+  text-decoration: none;
+}
+
+.wiki-procedure-link:hover {
+  border-color: color-mix(in srgb, var(--brand-red) 40%, var(--color-border));
+}
+
+.wiki-procedure-link span {
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+
+.wiki-procedure-link strong {
+  color: var(--color-muted);
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}
+
 .wiki-instruction-chip {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
@@ -579,6 +614,10 @@ button.secondary {
 
 .wiki-source-row span {
   color: var(--color-muted);
+}
+
+.wiki-sync-note {
+  max-width: none;
 }
 
 .user-list {
