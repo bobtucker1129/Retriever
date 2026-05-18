@@ -93,7 +93,10 @@ def test_all_routes_have_stub_copy() -> None:
     for route in FETCH_ROUTE_LABELS:
         text = build_fetch_stub_reply(route)
         assert len(text) > 40
-        assert "stub" in text.lower() or "offline" in text.lower() or "not connected" in text.lower()
+        if route == "blocked_write":
+            assert "outside this lane" in text.lower()
+        else:
+            assert "stub" in text.lower() or "offline" in text.lower() or "not connected" in text.lower()
 
 
 def test_stub_copy_always_warns_offline_for_route_like_prompts() -> None:

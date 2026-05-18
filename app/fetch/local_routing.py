@@ -372,11 +372,10 @@ def build_fetch_stub_reply(route: str) -> str:
 
     if route == "blocked_write":
         return (
-            "That request looks like a write or outbound action (email send, destructive "
-            "data change, etc.). In stub mode nothing was executed.\n\n"
-            f"{_STATUS_OFFLINE}\n\n"
-            "Future routing will keep high-risk writes off automatic tool paths until "
-            "explicit approval and capability gates exist."
+            "I can't run that from Fetch.\n\n"
+            "QuickBooks, Paychex, outbound email sends, destructive data changes, and other "
+            "write-style actions are outside this lane. No automated action ran.\n\n"
+            "Use the approved operator path if this needs a separate authorization workflow."
         )
 
     if route == "email_cleanup":
