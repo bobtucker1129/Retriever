@@ -1033,6 +1033,54 @@ def test_scrub_gateway_host_file_paths_replaces_raw_broker_artifact_paths() -> N
     assert "attachment link below" in out
 
 
+def test_scrub_gateway_host_file_paths_replaces_markdown_raw_broker_artifact_paths() -> None:
+    raw = (
+        "Generated the report: "
+        "[download](/v1/booneops/artifacts/d925e812-3b8f-40f6-85d3-6d5b001e35c2)"
+    )
+    out = scrub_gateway_host_file_paths_from_employee_fetch_text(raw)
+    assert "/v1/booneops/artifacts" not in out
+    assert "attachment link below" in out
+
+
+def test_build_broker_message_presentation_drops_raw_broker_artifact_download_fallback() -> None:
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    _text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": "Report ready.",
+            "artifacts": [
+                {
+                    "filename": "report.pdf",
+                    "artifactId": "bad id",
+                    "downloadPath": f"/v1/booneops/artifacts/{uid}",
+                }
+            ],
+        },
+        "printsmith_candidate",
+    )
+    assert metadata["artifacts"][0].get("downloadPath") is None
+
+
+def test_build_broker_message_presentation_drops_raw_broker_artifact_source_url() -> None:
+    uid = "550e8400-e29b-41d4-a716-446655440000"
+    _text, metadata = build_broker_message_presentation(
+        {
+            "ok": True,
+            "message": "Docs answer.",
+            "sourceCards": [
+                {
+                    "title": "Generated artifact",
+                    "downloadPath": f"/v1/booneops/artifacts/{uid}",
+                }
+            ],
+        },
+        "docs_candidate",
+    )
+    assert metadata["source_cards"][0]["title"] == "Generated artifact"
+    assert "url" not in metadata["source_cards"][0]
+
+
 def test_build_broker_message_presentation_strips_local_media_paths_non_docs() -> None:
     uid = "550e8400-e29b-41d4-a716-446655440000"
     text, metadata = build_broker_message_presentation(

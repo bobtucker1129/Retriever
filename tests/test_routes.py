@@ -91,6 +91,37 @@ def make_client(settings: AppSettings) -> TestClient:
     return TestClient(app, follow_redirects=False)
 
 
+def grant_fetch_broker_artifact(
+    db: FakeDb,
+    *,
+    email: str,
+    artifact_id: str,
+    download_path: str | None = None,
+) -> None:
+    db.add_user(email, "Fetch User", "active")
+    user_id = db.users[email]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Artifacts")
+    FetchRepository(db.connection).append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Artifact ready.",
+        route_key="printsmith_candidate",
+        context_state="booneops",
+        metadata={
+            "artifacts": [
+                {
+                    "filename": "Quarterly.pdf",
+                    "artifactId": artifact_id,
+                    "downloadPath": download_path or f"/fetch/artifacts/broker/{artifact_id}",
+                }
+            ]
+        },
+    )
+
+
 def test_pending_user_page_for_non_admin_local_identity() -> None:
     client = make_client(make_settings(email="new@boonegraphics.net"))
 
@@ -1229,9 +1260,13 @@ def test_fetch_post_ask_rewrites_broker_artifact_id_to_canonical_proxy_path(monk
 
 
 def test_fetch_broker_artifact_proxy_streams_pdf(monkeypatch) -> None:
-    settings = make_fetch_broker_proxy_test_settings()
-    client = make_client(settings)
+    db = FakeDb()
     aid = "550e8400-e29b-41d4-a716-446655440000"
+    grant_fetch_broker_artifact(db, email="fetcher@boonegraphics.net", artifact_id=aid)
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
 
     def fake_get(url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
         assert str(aid) in url
@@ -1278,10 +1313,62 @@ def test_fetch_broker_artifact_proxy_forbidden_without_fetch_shell_access(monkey
     assert resp.status_code == 403
 
 
-def test_fetch_broker_artifact_compat_route_streams(monkeypatch) -> None:
-    settings = make_fetch_broker_proxy_test_settings()
+def test_fetch_broker_artifact_proxy_404_without_user_artifact_reference(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetch User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def boom_get(*_a: object, **_k: object) -> None:
+        raise AssertionError("broker artifact upstream must not be called without ownership")
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", boom_get)
+
     client = make_client(settings)
     aid = "550e8400-e29b-41d4-a716-446655440000"
+    resp = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert resp.status_code == 404
+
+
+def test_fetch_broker_artifact_proxy_404_for_other_users_artifact(monkeypatch) -> None:
+    db = FakeDb()
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+    grant_fetch_broker_artifact(db, email="owner@boonegraphics.net", artifact_id=aid)
+    db.add_user("fetcher@boonegraphics.net", "Fetch User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def boom_get(*_a: object, **_k: object) -> None:
+        raise AssertionError("broker artifact upstream must not be called for another user")
+
+    monkeypatch.setattr("app.fetch.booneops_broker.default_broker_artifact_http_get", boom_get)
+
+    client = make_client(settings)
+    resp = client.get(f"/fetch/artifacts/broker/{aid}")
+    assert resp.status_code == 404
+
+
+def test_fetch_broker_artifact_compat_route_streams(monkeypatch) -> None:
+    db = FakeDb()
+    aid = "550e8400-e29b-41d4-a716-446655440000"
+    grant_fetch_broker_artifact(
+        db,
+        email="fetcher@boonegraphics.net",
+        artifact_id=aid,
+        download_path=f"/v1/booneops/artifacts/{aid}",
+    )
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
 
     def fake_get(url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
         assert bearer_token == settings.booneops_broker_bearer_token
@@ -1316,9 +1403,13 @@ def test_fetch_broker_artifact_proxy_rejects_bad_artifact_tokens() -> None:
 
 
 def test_fetch_broker_artifact_proxy_json_body_returns_error_not_download(monkeypatch) -> None:
-    settings = make_fetch_broker_proxy_test_settings()
-    client = make_client(settings)
+    db = FakeDb()
     aid = "550e8400-e29b-41d4-a716-446655440000"
+    grant_fetch_broker_artifact(db, email="fetcher@boonegraphics.net", artifact_id=aid)
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
 
     def fake_get(_url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
         return httpx.Response(
@@ -1337,9 +1428,13 @@ def test_fetch_broker_artifact_proxy_json_body_returns_error_not_download(monkey
 
 
 def test_fetch_broker_artifact_proxy_octet_sniff_detects_small_json(monkeypatch) -> None:
-    settings = make_fetch_broker_proxy_test_settings()
-    client = make_client(settings)
+    db = FakeDb()
     aid = "550e8400-e29b-41d4-a716-446655440000"
+    grant_fetch_broker_artifact(db, email="fetcher@boonegraphics.net", artifact_id=aid)
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net", with_db=True)
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+    client = make_client(settings)
 
     def fake_get(_url: str, *, bearer_token: str, timeout: float) -> httpx.Response:
         return httpx.Response(
@@ -1932,6 +2027,7 @@ def test_fetch_pdf_export_route_returns_404_when_file_missing(monkeypatch, tmp_p
         update={"retriever_report_dir": tmp_path}
     )
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
     client = make_client(settings)
     ghost = uuid.uuid4().hex
     assert client.get(f"/fetch/artifacts/pdf/{ghost}.pdf").status_code == 404

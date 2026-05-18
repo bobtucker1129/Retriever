@@ -334,6 +334,8 @@ def _extract_broker_source_cards(data: dict[str, Any]) -> list[dict[str, str]]:
             "title": title,
         }
         url = _safe_text(item.get("url") or item.get("href") or item.get("downloadPath"))
+        if url.lower().startswith("/v1/booneops/artifacts/"):
+            url = ""
         if url and _is_probably_url(url):
             card["url"] = url
         cards.append(card)
@@ -572,6 +574,10 @@ _RE_BOONEOPS_RAW_ARTIFACT_PATH = re.compile(
     r"\s*Download it from\s+/v1/booneops/artifacts/[A-Za-z0-9._:-]+\.?",
     re.IGNORECASE,
 )
+_RE_ANY_BOONEOPS_RAW_ARTIFACT_PATH = re.compile(
+    r"/v1/booneops/artifacts/[A-Za-z0-9._:-]+",
+    re.IGNORECASE,
+)
 
 
 def scrub_gateway_host_file_paths_from_employee_fetch_text(text: str) -> str:
@@ -590,6 +596,7 @@ def scrub_gateway_host_file_paths_from_employee_fetch_text(text: str) -> str:
     out = _RE_BOONEOPS_RAW_ARTIFACT_PATH.sub(
         " Use the attachment link below.", out
     )
+    out = _RE_ANY_BOONEOPS_RAW_ARTIFACT_PATH.sub("the attachment link below", out)
     out = re.sub(r"[ \t]+\n", "\n", out)
     out = re.sub(r"\n{3,}", "\n\n", out).strip()
     return out
@@ -650,7 +657,11 @@ def _extract_broker_artifact_cards(data: dict[str, Any]) -> list[dict[str, str]]
             card["description"] = description
         if "downloadPath" not in card:
             download_path = _safe_text(art.get("downloadPath"))
-            if download_path and _is_probably_url(download_path):
+            if (
+                download_path
+                and _is_probably_url(download_path)
+                and not download_path.lower().startswith("/v1/booneops/artifacts/")
+            ):
                 card["downloadPath"] = download_path
         cards.append(card)
     return cards

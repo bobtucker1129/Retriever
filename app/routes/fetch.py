@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -119,6 +119,57 @@ def _repository(settings: AppSettings) -> Optional[FetchRepository]:
     if not _has_db(settings):
         return None
     return FetchRepository(lambda: create_connection(settings))
+
+
+def _metadata_contains_artifact_reference(
+    value: Any,
+    *,
+    artifact_id: Optional[str],
+    download_paths: tuple[str, ...],
+) -> bool:
+    if isinstance(value, dict):
+        if artifact_id and str(value.get("artifactId") or "").strip() == artifact_id:
+            return True
+        raw_download = str(value.get("downloadPath") or "").strip()
+        if raw_download and raw_download in download_paths:
+            return True
+        return any(
+            _metadata_contains_artifact_reference(
+                item, artifact_id=artifact_id, download_paths=download_paths
+            )
+            for item in value.values()
+        )
+    if isinstance(value, list):
+        return any(
+            _metadata_contains_artifact_reference(
+                item, artifact_id=artifact_id, download_paths=download_paths
+            )
+            for item in value
+        )
+    if isinstance(value, str):
+        raw = value.strip()
+        return raw in download_paths
+    return False
+
+
+def _user_has_fetch_artifact_reference(
+    repo: FetchRepository,
+    user_id: int,
+    *,
+    artifact_id: Optional[str] = None,
+    download_paths: tuple[str, ...] = (),
+) -> bool:
+    """Return true when a user's saved Fetch metadata references an artifact download."""
+    for conversation in repo.list_conversations(user_id):
+        for message in repo.list_messages(user_id, conversation.conversation_id):
+            metadata = message.metadata
+            if isinstance(metadata, dict) and _metadata_contains_artifact_reference(
+                metadata,
+                artifact_id=artifact_id,
+                download_paths=download_paths,
+            ):
+                return True
+    return False
 
 
 def _require_fetch_shell_user(user: CurrentUser) -> None:
@@ -332,6 +383,24 @@ def _serve_booneops_broker_artifact_download(
     identity = get_identity_from_request(request, settings)
     user = current_user_from_identity(identity, settings)
     _require_fetch_shell_user(user)
+    if not (settings.booneops_broker_url or "").strip() or not (
+        settings.booneops_broker_bearer_token or ""
+    ).strip():
+        try:
+            return proxy_booneops_artifact_download_response(settings, validated)
+        except BrokerArtifactProxyFailure as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    repo = _repository(settings)
+    if repo is None or not _user_has_fetch_artifact_reference(
+        repo,
+        user.id,
+        artifact_id=validated,
+        download_paths=(
+            f"/fetch/artifacts/broker/{validated}",
+            f"/v1/booneops/artifacts/{validated}",
+        ),
+    ):
+        raise HTTPException(status_code=404, detail="Artifact not found")
     try:
         return proxy_booneops_artifact_download_response(settings, validated)
     except BrokerArtifactProxyFailure as exc:
@@ -368,6 +437,12 @@ async def download_fetch_html_export(
     identity = get_identity_from_request(request, settings)
     user = current_user_from_identity(identity, settings)
     _require_fetch_shell_user(user)
+    repo = _repository(settings)
+    download_path = f"/fetch/artifacts/html/{stem}.html"
+    if repo is None or not _user_has_fetch_artifact_reference(
+        repo, user.id, download_paths=(download_path,)
+    ):
+        raise HTTPException(status_code=404, detail="Export not found")
 
     path_obj = resolve_export_disk_path(settings, stem)
     if path_obj is None or not path_obj.is_file():
@@ -389,6 +464,12 @@ async def download_fetch_pdf_export(
     identity = get_identity_from_request(request, settings)
     user = current_user_from_identity(identity, settings)
     _require_fetch_shell_user(user)
+    repo = _repository(settings)
+    download_path = f"/fetch/artifacts/pdf/{stem}.pdf"
+    if repo is None or not _user_has_fetch_artifact_reference(
+        repo, user.id, download_paths=(download_path,)
+    ):
+        raise HTTPException(status_code=404, detail="Export not found")
 
     path_obj = resolve_pdf_export_disk_path(settings, stem)
     if path_obj is None or not path_obj.is_file():
