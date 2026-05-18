@@ -2172,6 +2172,47 @@ def test_fetch_export_followup_after_general_broker_answer_calls_broker(monkeypa
     assert json.loads(db.fetch_messages[-1]["metadata_json"])["artifacts"][0]["filename"] == "jobs.pdf"
 
 
+def test_fetch_export_followup_after_general_llm_table_calls_broker(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="General LLM table")
+    repo = FetchRepository(db.connection)
+
+    repo.append_message(
+        user_id,
+        conv.conversation_id,
+        role="assistant",
+        content="Invoice\neCom Order\nItems\nDue\n111114\n9898\nCards\nToday",
+        route_key="general_candidate",
+        context_state="llm",
+    )
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    seen: dict[str, object] = {}
+
+    def fake_broker(*_a: object, **kwargs: object) -> BooneOpsBrokerTurnResult:
+        seen["route_label"] = kwargs.get("route_label")
+        return BooneOpsBrokerTurnResult("Generated PDF.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "make a one-time PDF report from the table you just listed"},
+    )
+
+    assert response.status_code == 303
+    assert seen["route_label"] == "unknown"
+    assert db.fetch_messages[-1]["context_state"] == "booneops"
+
+
 def test_fetch_export_followup_new_thread_does_not_call_broker(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")

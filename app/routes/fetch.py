@@ -95,7 +95,7 @@ def _last_user_message_id(messages: list) -> Optional[str]:
     return None
 
 
-def _has_successful_broker_assistant(records: list) -> bool:
+def _has_exportable_prior_assistant(records: list) -> bool:
     for record in reversed(records):
         if getattr(record, "role", None) != "assistant":
             continue
@@ -103,7 +103,7 @@ def _has_successful_broker_assistant(records: list) -> bool:
         if route_key not in {"printsmith_candidate", "docs_candidate", "general_candidate"}:
             continue
         state = str(getattr(record, "context_state", "") or "").strip().lower()
-        if state in {"booneops", "ready"}:
+        if state and state not in {"stub", "booneops_error", "error"}:
             return True
     return False
 
@@ -451,7 +451,7 @@ async def ask_in_conversation(
             or is_export_format_request_text(cleaned)
             or is_artifact_refinement_followup_text(cleaned)
         )
-        and not _has_successful_broker_assistant(prior_records)
+        and not _has_exportable_prior_assistant(prior_records)
     )
     use_broker = should_delegate_ask_to_booneops_broker(route, settings) and not (
         export_or_refinement_without_prior_context
