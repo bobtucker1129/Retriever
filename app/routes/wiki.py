@@ -16,7 +16,13 @@ from app.auth.permissions import CurrentUser
 from app.auth.sessions import current_user_from_identity, require_active_user
 from app.config import AppSettings
 from app.db.connection import create_connection
-from app.db.repositories.wiki import WikiDocumentRecord, WikiLinkRecord, WikiRepository, WikiSectionRecord
+from app.db.repositories.wiki import (
+    WikiDocumentRecord,
+    WikiLinkRecord,
+    WikiRepository,
+    WikiSectionRecord,
+    WikiSourceStatusRecord,
+)
 from app.dependencies import settings_dependency
 from app.wiki.sync import (
     DriveInventoryItem,
@@ -430,6 +436,16 @@ def _sweetprocess_links_from_repo(settings: AppSettings) -> list[tuple[str, str,
     return [(link.label, "", link.url) for link in links]
 
 
+def _source_statuses_from_repo(settings: AppSettings) -> list[WikiSourceStatusRecord]:
+    repo = _wiki_repository(settings)
+    if not repo:
+        return []
+    try:
+        return repo.list_source_statuses()
+    except Exception:
+        return []
+
+
 def _require_wiki_sync_token(request: Request, settings: AppSettings) -> None:
     if not settings.wiki_sync_enabled:
         raise HTTPException(status_code=404, detail="Wiki sync is not enabled")
@@ -471,6 +487,7 @@ async def wiki_home(
 ):
     wiki_documents = _documents_from_repo(settings)
     sweetprocess_links = _sweetprocess_links_from_repo(settings)
+    wiki_source_statuses = _source_statuses_from_repo(settings)
     return templates.TemplateResponse(
         request,
         "wiki/index.html",
@@ -484,6 +501,7 @@ async def wiki_home(
             "work_instruction_highlights": WORK_INSTRUCTION_HIGHLIGHTS,
             "sweetprocess_links": sweetprocess_links,
             "wiki_documents": wiki_documents,
+            "wiki_source_statuses": wiki_source_statuses,
             "iso_source_map": ISO_SOURCE_MAP,
         },
     )

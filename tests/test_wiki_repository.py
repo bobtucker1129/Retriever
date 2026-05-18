@@ -174,3 +174,56 @@ def test_wiki_repository_lists_source_links_by_key() -> None:
     assert len(links) == 1
     assert links[0].label == "Processing Cal Poly DSF"
     assert conn.cursor_obj.params == ("boone-internal-wiki", "legacy", "employee")
+
+
+def test_wiki_repository_lists_source_statuses() -> None:
+    class Cursor:
+        def __init__(self):
+            self.statement = ""
+
+        def execute(self, statement, params=()):
+            self.statement = statement
+
+        def fetchall(self):
+            return [
+                {
+                    "source_key": "google-drive-final-boone",
+                    "source_type": "google_drive",
+                    "title": "Google Drive: Final Boone",
+                    "last_synced_at": None,
+                    "latest_status": "succeeded",
+                    "latest_started_at": None,
+                    "latest_finished_at": None,
+                    "latest_scanned_count": 1362,
+                    "latest_changed_count": 1362,
+                    "document_count": 1362,
+                }
+            ]
+
+        def fetchone(self):
+            return None
+
+        def close(self):
+            pass
+
+    class Connection:
+        def __init__(self):
+            self.cursor_obj = Cursor()
+
+        def cursor(self, dictionary=False):
+            return self.cursor_obj
+
+        def close(self):
+            pass
+
+    conn = Connection()
+    repo = WikiRepository(lambda: conn)
+
+    statuses = repo.list_source_statuses()
+
+    assert len(statuses) == 1
+    assert statuses[0].source_key == "google-drive-final-boone"
+    assert statuses[0].latest_status == "succeeded"
+    assert statuses[0].latest_scanned_count == 1362
+    assert statuses[0].document_count == 1362
+    assert "wiki_sync_runs" in conn.cursor_obj.statement

@@ -81,6 +81,35 @@
     </div>
   </section>
 
+  <section class="panel wiki-panel" aria-labelledby="wiki-sync-status-title">
+    <div class="section-header">
+      <div>
+        <h2 id="wiki-sync-status-title" class="section-title">Sync status</h2>
+        <p class="muted">Source freshness for the Wiki intake layer. This shows whether Retriever has received source inventory and how many draft cards are waiting for review.</p>
+      </div>
+    </div>
+    {% if wiki_source_statuses %}
+    <div class="wiki-source-list" role="list">
+      {% for source in wiki_source_statuses %}
+      <div class="wiki-source-row wiki-sync-row" role="listitem">
+        <strong>{{ source.title }}</strong>
+        <span>
+          <span class="wiki-status-pill wiki-status-{{ source.latest_status }}">{{ source.latest_status }}</span>
+          {{ source.document_count }} cards
+          {% if source.latest_scanned_count %} · {{ source.latest_scanned_count }} scanned{% endif %}
+          {% if source.latest_changed_count %} · {{ source.latest_changed_count }} changed{% endif %}
+          {% if source.last_synced_at %} · last synced {{ source.last_synced_at }}{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="notice-panel wiki-sync-note">
+      <p>No source inventory has landed yet. After the OpenClaw cron is enabled, this section will show the latest Drive and internal-wiki sync runs.</p>
+    </div>
+    {% endif %}
+  </section>
+
   <section class="panel wiki-panel" aria-labelledby="wiki-iso-title">
     <div class="section-header">
       <div>

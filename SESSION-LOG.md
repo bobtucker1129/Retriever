@@ -6,6 +6,23 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-18 — Codex: Wiki sync freshness visibility
+
+**Goal:** Add the next Wiki-ready surface while the OpenClaw sync waits on production/shared secrets.
+
+**What changed:**
+
+- Confirmed the latest Windows self-hosted deploy completed successfully after the Wiki sync bridge landed.
+- Verified `RetrieverRebuild` on `BGGOL-VESKO01` reported green `/version`, `/health/live`, and `/health/ready` feedback; BooneOps broker stayed green and legacy `Retriever` on port `8000` stayed running.
+- Verified the public sync endpoint is still protected by Cloudflare Access and no local `WIKI_SYNC_*` / `RETRIEVER_WIKI_*` secrets are available in this workspace.
+- Added Wiki homepage sync/freshness visibility from `wiki_sources`, latest `wiki_sync_runs`, and indexed document counts.
+- `/wiki/` now shows source status, card counts, scanned/changed counts, and last synced time once inventory has landed; before that, it explains that OpenClaw cron enablement will populate the panel.
+
+**Proof:**
+
+- Focused suite: `python3 -m pytest -q tests/test_wiki_repository.py tests/test_wiki_sync.py tests/test_routes.py tests/test_config.py` -> **109 passed**.
+- Full suite: `python3 -m pytest -q` -> **333 passed, 1 PyPDF2 deprecation warning**.
+
 ## 2026-05-18 — Codex: Wiki sync command foundation
 
 **Goal:** Continue the live Retriever Wiki by adding the first idempotent sync foundation for source metadata without scheduling automation or exposing raw ISO documents to normal readers.

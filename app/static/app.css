@@ -620,6 +620,40 @@ button.secondary {
   color: var(--color-muted);
 }
 
+.wiki-sync-row span {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.wiki-status-pill {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  display: inline-flex;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.28rem 0.5rem;
+  text-transform: uppercase;
+}
+
+.wiki-status-succeeded {
+  background: color-mix(in srgb, var(--brand-blue) 16%, transparent);
+  border-color: color-mix(in srgb, var(--brand-blue) 42%, var(--color-border));
+}
+
+.wiki-status-failed {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, var(--color-border));
+}
+
+.wiki-status-running {
+  background: color-mix(in srgb, var(--brand-red) 12%, transparent);
+  border-color: color-mix(in srgb, var(--brand-red) 34%, var(--color-border));
+}
+
 .wiki-sync-note {
   max-width: none;
 }

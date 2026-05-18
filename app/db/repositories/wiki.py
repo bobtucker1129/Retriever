@@ -76,6 +76,20 @@ class WikiSourceRecord:
 
 
 @dataclass(frozen=True)
+class WikiSourceStatusRecord:
+    source_key: str
+    source_type: str
+    title: str
+    last_synced_at: Optional[datetime]
+    latest_status: str
+    latest_started_at: Optional[datetime]
+    latest_finished_at: Optional[datetime]
+    latest_scanned_count: int
+    latest_changed_count: int
+    document_count: int
+
+
+@dataclass(frozen=True)
 class WikiDocumentUpsert:
     slug: str
     title: str
@@ -223,6 +237,66 @@ class WikiRepository:
             cursor.close()
             conn.close()
         return [self._link_from_row(row) for row in rows]
+
+    def list_source_statuses(self) -> list[WikiSourceStatusRecord]:
+        conn = self._connection_factory()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT s.source_key,
+                       s.source_type,
+                       s.title,
+                       s.last_synced_at,
+                       (
+                         SELECT r.status
+                         FROM wiki_sync_runs r
+                         WHERE r.source_id = s.id
+                         ORDER BY r.started_at DESC, r.id DESC
+                         LIMIT 1
+                       ) AS latest_status,
+                       (
+                         SELECT r.started_at
+                         FROM wiki_sync_runs r
+                         WHERE r.source_id = s.id
+                         ORDER BY r.started_at DESC, r.id DESC
+                         LIMIT 1
+                       ) AS latest_started_at,
+                       (
+                         SELECT r.finished_at
+                         FROM wiki_sync_runs r
+                         WHERE r.source_id = s.id
+                         ORDER BY r.started_at DESC, r.id DESC
+                         LIMIT 1
+                       ) AS latest_finished_at,
+                       (
+                         SELECT r.scanned_count
+                         FROM wiki_sync_runs r
+                         WHERE r.source_id = s.id
+                         ORDER BY r.started_at DESC, r.id DESC
+                         LIMIT 1
+                       ) AS latest_scanned_count,
+                       (
+                         SELECT r.changed_count
+                         FROM wiki_sync_runs r
+                         WHERE r.source_id = s.id
+                         ORDER BY r.started_at DESC, r.id DESC
+                         LIMIT 1
+                       ) AS latest_changed_count,
+                       (
+                         SELECT COUNT(*)
+                         FROM wiki_documents d
+                         WHERE d.source_id = s.id
+                       ) AS document_count
+                FROM wiki_sources s
+                ORDER BY s.title ASC
+                """
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+            conn.close()
+        return [self._source_status_from_row(row) for row in rows]
 
     def upsert_source(
         self,
@@ -488,4 +562,19 @@ class WikiRepository:
             title=str(row.get("title") or ""),
             root_url=str(row.get("root_url") or ""),
             last_synced_at=row.get("last_synced_at"),
+        )
+
+    @staticmethod
+    def _source_status_from_row(row: dict) -> WikiSourceStatusRecord:
+        return WikiSourceStatusRecord(
+            source_key=str(row.get("source_key") or ""),
+            source_type=str(row.get("source_type") or ""),
+            title=str(row.get("title") or ""),
+            last_synced_at=row.get("last_synced_at"),
+            latest_status=str(row.get("latest_status") or "pending"),
+            latest_started_at=row.get("latest_started_at"),
+            latest_finished_at=row.get("latest_finished_at"),
+            latest_scanned_count=int(row.get("latest_scanned_count") or 0),
+            latest_changed_count=int(row.get("latest_changed_count") or 0),
+            document_count=int(row.get("document_count") or 0),
         )
