@@ -74,7 +74,15 @@ def test_migration_helpers_find_migration_and_seed_files() -> None:
     assert any(path.name == "0002_fetch_conversations.sql" for path in list_sql_migrations())
     assert any(path.name == "0003_remove_fetch_level_and_general_toggle.sql" for path in list_sql_migrations())
     assert any(path.name == "0004_wiki_catalog.sql" for path in list_sql_migrations())
+    assert any(path.name == "0005_expand_fetch_message_content.sql" for path in list_sql_migrations())
     assert any(path.name == "0001_seed_auth_shell.sql" for path in list_seed_files())
+
+
+def test_fetch_message_content_expansion_migration_uses_mediumtext() -> None:
+    sql = Path("migrations/0005_expand_fetch_message_content.sql").read_text()
+
+    assert "retriever_core.fetch_messages" in sql
+    assert "content MEDIUMTEXT NOT NULL" in sql
 
 
 def test_migration_dir_prefers_current_release_working_directory(monkeypatch, tmp_path) -> None:

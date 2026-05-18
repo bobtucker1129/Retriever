@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -88,6 +90,8 @@ templates.env.filters["fetch_assistant_status"] = build_assistant_status_line
 templates.env.filters["fetch_assistant_body_display"] = fetch_assistant_body_display
 templates.env.filters["fetch_safe_artifact_href"] = safe_fetch_download_href
 
+logger = logging.getLogger(__name__)
+
 
 def _last_user_message_id(messages: list) -> Optional[str]:
     for record in reversed(messages):
@@ -109,6 +113,112 @@ def _has_exportable_prior_assistant(records: list) -> bool:
 _FETCH_ACCESS_MSG = "Fetch access is required"
 _NO_DB_MSG = "Conversation storage requires a configured database"
 _FETCH_ASK_DISABLED_MSG = "Fetch ask is not permitted for this account"
+_MAX_SAVED_FETCH_ASSISTANT_CHARS = 60_000
+_MAX_SAVED_FETCH_METADATA_JSON_BYTES = 250_000
+_FETCH_ASSISTANT_TRIM_NOTICE = (
+    "\n\n[Fetch trimmed this answer before saving because it was too large for the chat log. "
+    "Ask for a narrower range or request an Excel, CSV, or PDF export for the full detail.]"
+)
+_FETCH_ASSISTANT_SAVE_FAILURE_MSG = (
+    "BooneOps returned an answer, but Retriever could not save the full reply in this chat. "
+    "Try a narrower date range or request the result as an Excel, CSV, or PDF report."
+)
+
+
+def _trim_fetch_assistant_text_for_storage(text: str) -> str:
+    if len(text) <= _MAX_SAVED_FETCH_ASSISTANT_CHARS:
+        return text
+    keep = max(0, _MAX_SAVED_FETCH_ASSISTANT_CHARS - len(_FETCH_ASSISTANT_TRIM_NOTICE))
+    return text[:keep].rstrip() + _FETCH_ASSISTANT_TRIM_NOTICE
+
+
+def _metadata_json_size(metadata: dict[str, Any]) -> int:
+    return len(json.dumps(metadata, separators=(",", ":"), default=str).encode("utf-8"))
+
+
+def _bounded_fetch_assistant_metadata(metadata: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not metadata:
+        return None
+    bounded = dict(metadata)
+    try:
+        if _metadata_json_size(bounded) <= _MAX_SAVED_FETCH_METADATA_JSON_BYTES:
+            return bounded
+    except (TypeError, ValueError):
+        logger.warning("Fetch assistant metadata is not JSON-serializable; saving minimal metadata.")
+        return {"fetch_metadata_truncated": True}
+
+    removed: list[str] = []
+    for key in ("reportContext", "report_context", "sessionContext", "session_context"):
+        if key in bounded:
+            bounded.pop(key, None)
+            removed.append(key)
+    if removed:
+        bounded["fetch_metadata_truncated"] = True
+        bounded["fetch_metadata_truncated_keys"] = removed
+    try:
+        if _metadata_json_size(bounded) <= _MAX_SAVED_FETCH_METADATA_JSON_BYTES:
+            return bounded
+    except (TypeError, ValueError):
+        pass
+
+    slim: dict[str, Any] = {"fetch_metadata_truncated": True}
+    for key in (
+        "artifacts",
+        "source_cards",
+        "booneops_actions",
+        "gateway_model_id",
+        "fetch_thread_load_bucket",
+        "fetch_thread_load_chars",
+    ):
+        if key in bounded:
+            slim[key] = bounded[key]
+    try:
+        if _metadata_json_size(slim) <= _MAX_SAVED_FETCH_METADATA_JSON_BYTES:
+            return slim
+    except (TypeError, ValueError):
+        pass
+    return {"fetch_metadata_truncated": True}
+
+
+def _append_fetch_assistant_message_safely(
+    repo: FetchRepository,
+    user_id: int,
+    conversation_id: str,
+    *,
+    content: str,
+    route_key: str,
+    model_label: Optional[str],
+    context_state: str,
+    metadata: Optional[dict[str, Any]],
+) -> None:
+    safe_content = _trim_fetch_assistant_text_for_storage(content)
+    safe_metadata = _bounded_fetch_assistant_metadata(metadata)
+    try:
+        repo.append_message(
+            user_id,
+            conversation_id,
+            role="assistant",
+            content=safe_content,
+            route_key=route_key,
+            model_label=model_label,
+            context_percent=0,
+            context_state=context_state,
+            metadata=safe_metadata,
+        )
+        return
+    except Exception:
+        logger.exception("Fetch assistant message save failed; saving compact fallback.")
+    repo.append_message(
+        user_id,
+        conversation_id,
+        role="assistant",
+        content=_FETCH_ASSISTANT_SAVE_FAILURE_MSG,
+        route_key=route_key,
+        model_label=model_label,
+        context_percent=0,
+        context_state="booneops_error" if context_state == "booneops" else context_state,
+        metadata={"fetch_save_failed": True},
+    )
 
 
 def _has_db(settings: AppSettings) -> bool:
@@ -661,14 +771,13 @@ async def ask_in_conversation(
         model_label = settings.model_default
         assistant_metadata = None
 
-    repo.append_message(
+    _append_fetch_assistant_message_safely(
+        repo,
         user.id,
         conversation_id,
-        role="assistant",
         content=assistant_text,
         route_key=route,
         model_label=model_label,
-        context_percent=0,
         context_state=context_state,
         metadata=assistant_metadata,
     )

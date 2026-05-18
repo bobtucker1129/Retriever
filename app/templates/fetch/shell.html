@@ -544,7 +544,11 @@
           })
           .catch(function () {
             unlockFromError();
-            askForm.submit();
+            if (askError) {
+              askError.textContent =
+                "Fetch may still be working on that request. Refresh this chat in a moment before trying again.";
+              askError.hidden = false;
+            }
           });
       });
     }

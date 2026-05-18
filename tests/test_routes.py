@@ -1541,6 +1541,53 @@ def test_fetch_general_question_uses_booneops_broker_when_enabled(monkeypatch) -
     assert "fetch-source-card-list" not in page.text
 
 
+def test_fetch_post_ask_trims_large_broker_reply_before_saving(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Large reply")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net")
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        return BooneOpsBrokerTurnResult(
+            "A" * 80_000,
+            "booneops",
+            {
+                "reportContext": {"rows": [{"description": "x" * 300_000}]},
+                "artifacts": [
+                    {
+                        "filename": "jobs.xlsx",
+                        "artifactId": "11111111-1111-4111-8111-111111111111",
+                        "downloadPath": "/fetch/artifacts/broker/11111111-1111-4111-8111-111111111111",
+                    }
+                ],
+            },
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "Show me a large PrintSmith report"},
+    )
+
+    assert response.status_code == 303
+    assistant = db.fetch_messages[1]
+    assert assistant["role"] == "assistant"
+    assert len(assistant["content"]) <= fetch_routes._MAX_SAVED_FETCH_ASSISTANT_CHARS
+    assert "Fetch trimmed this answer" in assistant["content"]
+    metadata = json.loads(assistant["metadata_json"])
+    assert metadata["fetch_metadata_truncated"] is True
+    assert metadata["artifacts"][0]["filename"] == "jobs.xlsx"
+    assert "reportContext" not in metadata
+
+
 def test_fetch_cleanup_email_uses_dedicated_llm_and_copy_button(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
