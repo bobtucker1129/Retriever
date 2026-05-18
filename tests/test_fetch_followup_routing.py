@@ -8,6 +8,7 @@ from app.fetch.followup_routing import (
     is_answer_snapshot_pdf_followup_text,
     is_artifact_refinement_followup_text,
     is_export_download_followup_text,
+    is_export_format_request_text,
     is_html_export_followup_text,
     pdf_export_prior_assistant,
     resolve_fetch_ask_route,
@@ -177,6 +178,13 @@ def test_is_export_followup_requires_action_format_and_referent() -> None:
     assert is_export_download_followup_text("export as pdf") is False
     assert is_export_download_followup_text("the pdf format") is False
     assert is_export_download_followup_text("export something") is False
+
+
+def test_is_export_format_request_matches_bare_format_requests() -> None:
+    assert is_export_format_request_text("export as pdf") is True
+    assert is_export_format_request_text("save as excel") is True
+    assert is_export_format_request_text("download that as csv") is True
+    assert is_export_format_request_text("the pdf format") is False
 
 
 def test_is_html_export_followup_requires_action_html_and_referent() -> None:

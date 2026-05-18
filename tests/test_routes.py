@@ -185,8 +185,7 @@ def test_fetch_shell_renders_for_seed_admin_without_db() -> None:
     assert "Connect MySQL to save conversations" in response.text
     assert "+ New Chat" in response.text
     assert "Preview trust states" not in response.text
-    assert 'data-fetch-suggestion="/docs"' in response.text
-    assert 'data-fetch-suggestion="/printsmith"' in response.text
+    assert "data-fetch-suggestion" not in response.text
 
 
 def test_wiki_renders_for_active_seed_admin() -> None:
@@ -439,8 +438,8 @@ def test_fetch_shell_template_script_and_scroll_hooks() -> None:
     assert "scrollHeight" in template_text
     assert "URLSearchParams" in template_text
     assert "scrollRestoration" in template_text
-    assert "data-fetch-suggestion" in template_text
-    assert 'querySelectorAll("[data-fetch-suggestion]")' in template_text
+    assert "data-fetch-suggestion" not in template_text
+    assert 'querySelectorAll("[data-fetch-suggestion]")' not in template_text
 
 
 def test_fetch_get_after_ask_sets_focus_latest_attributes(monkeypatch) -> None:
@@ -831,7 +830,7 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     assert "Context: 0% stub" in page.text
 
 
-def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
+def test_fetch_post_ask_legacy_slash_help_is_no_longer_local_guidance(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -842,6 +841,16 @@ def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
     settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
+        return fetch_routes.GeneralLlmTurnResult(
+            "Legacy slash command reached the normal fallback lane.",
+            "llm",
+            "claude-test",
+            {"general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
     client = make_client(settings)
 
     response = client.post(
@@ -850,10 +859,8 @@ def test_fetch_post_ask_slash_help_returns_static_guidance(monkeypatch) -> None:
     )
 
     assert response.status_code == 303
-    assert db.fetch_messages[1]["route_key"] == "help"
-    assert "/help" in db.fetch_messages[1]["content"]
-    assert "offline stub" in db.fetch_messages[1]["content"].lower()
-    assert "slash" in db.fetch_messages[1]["content"].lower()
+    assert db.fetch_messages[1]["route_key"] == "unknown"
+    assert "normal fallback lane" in db.fetch_messages[1]["content"].lower()
 
 
 def test_fetch_post_ask_slash_docs_and_printsmith(monkeypatch) -> None:
@@ -886,7 +893,7 @@ def test_fetch_post_ask_slash_docs_and_printsmith(monkeypatch) -> None:
     assert "stub" in db.fetch_messages[-1]["content"].lower()
 
 
-def test_fetch_post_ask_slash_sources_and_health(monkeypatch) -> None:
+def test_fetch_post_ask_legacy_sources_and_health_are_no_longer_local_guidance(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -897,6 +904,16 @@ def test_fetch_post_ask_slash_sources_and_health(monkeypatch) -> None:
     settings = make_fetch_enabled_settings(email="fetcher@boonegraphics.net")
     monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
+        return fetch_routes.GeneralLlmTurnResult(
+            "Legacy slash command reached the normal fallback lane.",
+            "llm",
+            "claude-test",
+            {"general_llm_provider": "anthropic"},
+        )
+
+    monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
     client = make_client(settings)
 
     r1 = client.post(
@@ -904,16 +921,16 @@ def test_fetch_post_ask_slash_sources_and_health(monkeypatch) -> None:
         data={"question": "/sources"},
     )
     assert r1.status_code == 303
-    assert db.fetch_messages[-1]["route_key"] == "sources"
-    assert "printsmith" in db.fetch_messages[-1]["content"].lower()
+    assert db.fetch_messages[-1]["route_key"] == "unknown"
+    assert "normal fallback lane" in db.fetch_messages[-1]["content"].lower()
 
     r2 = client.post(
         f"/fetch/conversations/{conv.conversation_id}/ask",
         data={"question": "/health"},
     )
     assert r2.status_code == 303
-    assert db.fetch_messages[-1]["route_key"] == "health"
-    assert "integration" in db.fetch_messages[-1]["content"].lower()
+    assert db.fetch_messages[-1]["route_key"] == "unknown"
+    assert "normal fallback lane" in db.fetch_messages[-1]["content"].lower()
 
 
 def test_fetch_post_ask_route_like_prompt_no_http(monkeypatch) -> None:
@@ -1339,7 +1356,7 @@ def test_fetch_post_ask_skips_external_artifact_href(monkeypatch) -> None:
     assert 'class="fetch-artifact-name"' in page.text
 
 
-def test_fetch_general_question_uses_anthropic_llm_without_broker(monkeypatch) -> None:
+def test_fetch_general_question_uses_booneops_broker_when_enabled(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
     user_id = db.users["fetcher@boonegraphics.net"]["id"]
@@ -1352,17 +1369,18 @@ def test_fetch_general_question_uses_anthropic_llm_without_broker(monkeypatch) -
     monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
 
     def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
-        raise AssertionError("general questions should not call the BooneOps broker")
+        assert _kw["route_label"] == "general_candidate"
+        assert _kw["user_message"] == "How are the LA Kings doing?"
+        return BooneOpsBrokerTurnResult(
+            "Broker answered through the Discord-equivalent lane.",
+            "booneops",
+            {"gateway_model_id": "claude-sonnet-test"},
+        )
 
     monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
 
     def fake_llm(*_a: object, **_kw: object) -> fetch_routes.GeneralLlmTurnResult:
-        return fetch_routes.GeneralLlmTurnResult(
-            "The Kings are worth checking on, but I do not have live scores here.",
-            "llm",
-            "claude-opus-4-7",
-            {"general_llm_provider": "anthropic"},
-        )
+        raise AssertionError("general questions should use BooneOps first when broker is enabled")
 
     monkeypatch.setattr(fetch_routes, "call_general_conversation_llm", fake_llm)
 
@@ -1374,9 +1392,9 @@ def test_fetch_general_question_uses_anthropic_llm_without_broker(monkeypatch) -
 
     assert response.status_code == 303
     assert db.fetch_messages[0]["route_key"] == "general_candidate"
-    assert db.fetch_messages[1]["context_state"] == "llm"
-    assert db.fetch_messages[1]["content"].startswith("The Kings")
-    assert db.fetch_messages[1]["model_label"] == "claude-opus-4-7"
+    assert db.fetch_messages[1]["context_state"] == "booneops"
+    assert db.fetch_messages[1]["content"].startswith("Broker answered")
+    assert db.fetch_messages[1]["model_label"] == "claude-sonnet-test"
     page = client.get(response.headers["location"])
     assert page.status_code == 200
     assert "fetch-source-card-list" not in page.text

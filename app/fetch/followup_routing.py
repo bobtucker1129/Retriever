@@ -142,6 +142,16 @@ def is_export_download_followup_text(text: str) -> bool:
     return _has_prior_referent_cue(low)
 
 
+def is_export_format_request_text(text: str) -> bool:
+    """Whether ``text`` asks for an export/download format, even without prior context."""
+    low = text.strip().lower()
+    if not low:
+        return False
+    if not _mentions_export_format(low):
+        return False
+    return _has_export_action(low)
+
+
 def _mentions_html_export_format(low: str) -> bool:
     return _HTML_EXPORT_RE.search(low) is not None
 

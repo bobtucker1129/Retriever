@@ -43,6 +43,7 @@ from app.fetch.followup_routing import (
     is_artifact_refinement_followup_text,
     is_answer_snapshot_pdf_followup_text,
     is_export_download_followup_text,
+    is_export_format_request_text,
     is_html_export_followup_text,
     pdf_export_prior_assistant,
     resolve_fetch_ask_route,
@@ -429,8 +430,20 @@ async def ask_in_conversation(
     )
 
     request_id = str(uuid.uuid4())
-    use_broker = should_delegate_ask_to_booneops_broker(route, settings)
+    export_or_refinement_without_prior_context = (
+        route in ("general_candidate", "unknown", "local")
+        and (
+            is_export_download_followup_text(cleaned)
+            or is_export_format_request_text(cleaned)
+            or is_artifact_refinement_followup_text(cleaned)
+        )
+    )
+    use_broker = should_delegate_ask_to_booneops_broker(route, settings) and not (
+        export_or_refinement_without_prior_context
+    )
     use_general_llm = should_use_general_llm(route, settings) and not (
+        use_broker
+        or
         is_export_download_followup_text(cleaned)
         or is_artifact_refinement_followup_text(cleaned)
     )

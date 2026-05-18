@@ -215,14 +215,6 @@
       </div>
     </form>
 
-    <div class="fetch-suggestions" aria-label="Slash commands (insert into composer)">
-      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/docs" {% if not fetch_can_use_composer %}disabled{% endif %}>/docs</button>
-      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/printsmith" {% if not fetch_can_use_composer %}disabled{% endif %}>/printsmith</button>
-      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/help" {% if not fetch_can_use_composer %}disabled{% endif %}>/help</button>
-      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/sources" {% if not fetch_can_use_composer %}disabled{% endif %}>/sources</button>
-      <button type="button" class="fetch-suggestion-chip" data-fetch-suggestion="/health" {% if not fetch_can_use_composer %}disabled{% endif %}>/health</button>
-    </div>
-
     <p class="fetch-retention-note muted" role="note">
       Deleting a chat removes its saved HTML/PDF snapshots from this server.
       Snapshots older than {{ settings.fetch_local_artifact_retention_days }} days may be removed automatically.
@@ -259,18 +251,6 @@
       });
     }
     syncToggle();
-
-    shell.querySelectorAll("[data-fetch-suggestion]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var ta = document.getElementById("fetch-question");
-        if (!ta || ta.disabled) return;
-        var insert = (btn.getAttribute("data-fetch-suggestion") || "").trim();
-        if (!insert) return;
-        var cur = (ta.value || "").trim();
-        ta.value = cur ? cur + " " + insert : insert;
-        ta.focus();
-      });
-    });
 
     shell.querySelectorAll("[data-fetch-copy-target]").forEach(function (btn) {
       btn.addEventListener("click", function () {

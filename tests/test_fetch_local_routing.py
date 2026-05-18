@@ -16,11 +16,11 @@ from app.fetch.local_routing import (
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("/help", "help"),
-        ("/HELP", "help"),
-        ("  /sources  ", "sources"),
-        ("/health", "health"),
-        ("/help more", "help"),
+        ("/help", "unknown"),
+        ("/HELP", "unknown"),
+        ("  /sources  ", "unknown"),
+        ("/health", "unknown"),
+        ("/help more", "unknown"),
         ("/docs Are there Switch elements for email approval?", "docs_candidate"),
         ("/printsmith open invoices last week", "printsmith_candidate"),
         (

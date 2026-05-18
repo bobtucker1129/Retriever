@@ -26,7 +26,7 @@ FETCH_ROUTE_LABELS: Final[tuple[str, ...]] = (
     "unknown",
 )
 
-_SLASH_COMMANDS: Final[frozenset[str]] = frozenset({"/help", "/sources", "/health"})
+_SLASH_COMMANDS: Final[frozenset[str]] = frozenset()
 
 _PRINTSMITH_HINTS: Final[tuple[str, ...]] = (
     "printsmith",
@@ -311,10 +311,14 @@ def classify_fetch_intent(text: str) -> str:
 
 
 def should_delegate_ask_to_booneops_broker(route: str, settings: AppSettings) -> bool:
-    """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``)."""
+    """Whether this route may call the BooneOps broker (still gated by ``BOONEOPS_BROKER_ENABLED``).
+
+    Fetch should behave like Discord when BooneOps is available: Retriever keeps only
+    local safety/export/email gates and lets the broker decide PrintSmith/docs/general intent.
+    """
     if not settings.booneops_broker_enabled:
         return False
-    if route in ("printsmith_candidate", "docs_candidate"):
+    if route in ("printsmith_candidate", "docs_candidate", "general_candidate", "unknown", "local"):
         return True
     return False
 
