@@ -56,7 +56,8 @@
     {% if needs_override %}
     <form hx-post="/inventory/scan/confirm"
           hx-target="#action-panel"
-          hx-swap="innerHTML">
+          hx-swap="innerHTML"
+          hx-on::before-request="this.querySelector('button[type=submit]').disabled = true">
         <input type="hidden" name="product_id" value="{{ product.id }}">
         <input type="hidden" name="action" value="{{ action }}">
         <input type="hidden" name="quantity" value="{{ quantity }}">
@@ -78,7 +79,8 @@
     {% else %}
     <form hx-post="/inventory/{{ action }}"
           hx-target="#action-panel"
-          hx-swap="innerHTML">
+          hx-swap="innerHTML"
+          hx-on::before-request="this.querySelector('button[type=submit]').disabled = true">
         <input type="hidden" name="product_id" value="{{ product.id }}">
         <input type="hidden" name="quantity" value="{{ quantity }}">
         <input type="hidden" name="order_reference" value="{{ order_reference }}">

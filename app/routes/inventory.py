@@ -55,6 +55,36 @@ def _pull_warning_pct() -> int:
     return get_settings().inventory_pull_warning_pct
 
 
+def _is_htmx(request: Request) -> bool:
+    return request.headers.get("HX-Request", "").lower() == "true"
+
+
+def _stock_warnings(product: Dict[str, Any], action: str, quantity: int) -> tuple[list[str], int]:
+    if action == "pull":
+        new_qty = product["quantity"] - quantity
+        warnings = []
+        pct = _pull_warning_pct()
+        if product["quantity"] > 0 and quantity > (product["quantity"] * pct / 100):
+            warnings.append(
+                f"This pull removes more than {pct}% of current stock "
+                f"({quantity} of {product['quantity']})."
+            )
+        if new_qty < 0:
+            warnings.append(
+                f"This pull will take quantity below zero "
+                f"({product['quantity']} - {quantity} = {new_qty})."
+            )
+        return warnings, new_qty
+    return [], product["quantity"] + quantity
+
+
+def _count_status_message(message: str, colspan: int = 8) -> HTMLResponse:
+    return HTMLResponse(
+        f'<td colspan="{colspan}"><div class="inventory-alert inventory-alert-warning">'
+        f"{message}</div></td>"
+    )
+
+
 # =========================================================================
 # Dashboard
 # =========================================================================
@@ -568,22 +598,14 @@ async def scan_confirm(
         context["form_error"] = "Quantity must be greater than zero."
         return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
 
-    warnings = []
-    if action == "pull":
-        new_qty = product["quantity"] - quantity
-        pct = _pull_warning_pct()
-        if product["quantity"] > 0 and quantity > (product["quantity"] * pct / 100):
-            warnings.append(
-                f"This pull removes more than {pct}% of current stock "
-                f"({quantity} of {product['quantity']})."
-            )
-        if new_qty < 0:
-            warnings.append(
-                f"This pull will take quantity below zero "
-                f"({product['quantity']} - {quantity} = {new_qty})."
-            )
-    else:
-        new_qty = product["quantity"] + quantity
+    if product.get("status") == "retired" and (action == "add" or not inv_queries.is_manager(user)):
+        context["product"] = product
+        context["pull_warning_pct"] = _pull_warning_pct()
+        context["mode"] = action
+        context["form_error"] = "Retired products require manager handling."
+        return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
+
+    warnings, new_qty = _stock_warnings(product, action, quantity)
 
     needs_override = bool(warnings) and not (override_reason or "").strip()
 
@@ -623,6 +645,37 @@ async def execute_pull(
         context["form_error"] = "Quantity must be greater than zero."
         return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
 
+    warnings, new_qty = _stock_warnings(product, "pull", quantity)
+    if new_qty < 0:
+        context["product"] = product
+        context["pull_warning_pct"] = _pull_warning_pct()
+        context["mode"] = "pull"
+        context["form_error"] = "Pull would take quantity below zero. Adjust the quantity or ask a manager."
+        return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
+    if product.get("status") == "retired" and not inv_queries.is_manager(user):
+        context["product"] = product
+        context["pull_warning_pct"] = _pull_warning_pct()
+        context["mode"] = "pull"
+        context["form_error"] = "Retired products require manager handling."
+        return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
+    if warnings and not inv_queries.is_manager(user):
+        context["product"] = product
+        context["pull_warning_pct"] = _pull_warning_pct()
+        context["mode"] = "pull"
+        context["form_error"] = "This pull needs manager approval because it exceeds the stock safeguard."
+        return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
+    if warnings and not (override_reason or "").strip():
+        context["product"] = product
+        context["action"] = "pull"
+        context["quantity"] = quantity
+        context["new_qty"] = new_qty
+        context["order_reference"] = (order_reference or "").strip()
+        context["override_reason"] = ""
+        context["warnings"] = warnings
+        context["needs_override"] = True
+        context["pull_warning_pct"] = _pull_warning_pct()
+        return templates.TemplateResponse(request, "inventory/partials/confirmation.html", context)
+
     try:
         result = inv_queries.pull_stock(
             product_id=product_id,
@@ -659,6 +712,8 @@ async def execute_pull(
     ):
         background_tasks.add_task(email_service.send_low_stock_alert, product)
 
+    if not _is_htmx(request):
+        return RedirectResponse(f"/inventory/products/{product_id}", status_code=303)
     return templates.TemplateResponse(request, "inventory/partials/scan_success.html", context)
 
 
@@ -684,6 +739,13 @@ async def execute_add(
         context["pull_warning_pct"] = _pull_warning_pct()
         context["mode"] = "add"
         context["form_error"] = "Quantity must be greater than zero."
+        return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
+
+    if product.get("status") == "retired":
+        context["product"] = product
+        context["pull_warning_pct"] = _pull_warning_pct()
+        context["mode"] = "add"
+        context["form_error"] = "Retired products require manager handling before stock can be added."
         return templates.TemplateResponse(request, "inventory/partials/product_action.html", context)
 
     try:
@@ -723,6 +785,8 @@ async def execute_add(
     ):
         background_tasks.add_task(email_service.send_restock_confirmation, product)
 
+    if not _is_htmx(request):
+        return RedirectResponse(f"/inventory/products/{product_id}", status_code=303)
     return templates.TemplateResponse(request, "inventory/partials/scan_success.html", context)
 
 
@@ -778,6 +842,12 @@ _CSV_TEMPLATE_INSTRUCTIONS = [
 async def import_page(request: Request, user: CurrentUser = Depends(_current_inventory_user)):
     _require_manager(user)
     context = get_template_context(request, user)
+    if request.query_params.get("import_success") == "1":
+        context["import_success"] = True
+        try:
+            context["created_count"] = int(request.query_params.get("created_count", "0"))
+        except ValueError:
+            context["created_count"] = 0
     return templates.TemplateResponse(request, "inventory/import.html", context)
 
 
@@ -882,9 +952,10 @@ async def import_commit(
         context["upload_error"] = "Import failed due to a system error. Please try again."
         return templates.TemplateResponse(request, "inventory/import.html", context)
 
-    context["import_success"] = True
-    context["created_count"] = created
-    return templates.TemplateResponse(request, "inventory/import.html", context)
+    return RedirectResponse(
+        f"/inventory/import?import_success=1&created_count={created}",
+        status_code=303,
+    )
 
 
 # =========================================================================
@@ -937,10 +1008,18 @@ async def tags_generate(
         filename = "tags_all_products.pdf"
 
     else:
-        raise HTTPException(400, "Invalid scope or missing selection")
+        context = get_template_context(request, user)
+        context["customers_list"] = inv_queries.get_customers(active_only=True)
+        context["products_list"] = inv_queries.get_products()
+        context["form_error"] = "Select a product or customer before generating tags."
+        return templates.TemplateResponse(request, "inventory/tags.html", context)
 
     if not products:
-        raise HTTPException(404, "No products found for the selected scope")
+        context = get_template_context(request, user)
+        context["customers_list"] = inv_queries.get_customers(active_only=True)
+        context["products_list"] = inv_queries.get_products()
+        context["form_error"] = "No products found for the selected scope."
+        return templates.TemplateResponse(request, "inventory/tags.html", context)
 
     pdf_bytes = generate_tags_pdf(products)
     return StreamingResponse(
@@ -1037,10 +1116,12 @@ async def count_item_save(
 ):
     """Save counted quantity for one item (HTMX partial swap)."""
     if counted_quantity < 0:
-        raise HTTPException(400, "Counted quantity cannot be negative")
+        return _count_status_message("Counted quantity cannot be negative.")
     count = inv_queries.get_count(count_id)
     if not count or count["status"] != "in_progress":
-        raise HTTPException(400, "Count is not in progress")
+        if _is_htmx(request):
+            return _count_status_message("Count is no longer in progress. Refresh the count page.")
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
     inv_queries.update_count_item(
         item_id=item_id,
@@ -1062,7 +1143,7 @@ async def count_move_review(
     _require_manager(user)
     count = inv_queries.get_count(count_id)
     if not count or count["status"] != "in_progress":
-        raise HTTPException(400, "Count is not in progress")
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
     inv_queries.move_count_to_review(count_id)
     return RedirectResponse(f"/inventory/counts/{count_id}/review", status_code=303)
 
@@ -1091,13 +1172,24 @@ async def count_approve_item(
     approved: str = Form("true"),
 ):
     _require_manager(user)
+    count = inv_queries.get_count(count_id)
+    item = inv_queries.get_count_item(item_id)
+    if (
+        not count
+        or count["status"] not in ("in_progress", "review")
+        or not item
+        or item.get("count_id") != count_id
+    ):
+        if _is_htmx(request):
+            return _count_status_message("Count review is stale. Refresh the page before approving.", colspan=7)
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
     inv_queries.approve_count_item(
         item_id=item_id,
         approved=approved == "true",
         approved_by=_username(user),
     )
     context = get_template_context(request, user)
-    context["count"] = inv_queries.get_count(count_id)
+    context["count"] = count
     context["item"] = inv_queries.get_count_item(item_id)
     return templates.TemplateResponse(request, "inventory/partials/count_review_item.html", context)
 
@@ -1109,11 +1201,11 @@ async def count_complete(
     _require_manager(user)
     count = inv_queries.get_count(count_id)
     if not count or count["status"] not in ("in_progress", "review"):
-        raise HTTPException(400, "Count cannot be completed")
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
     try:
         inv_queries.complete_count(count_id, _username(user))
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        return RedirectResponse(f"/inventory/counts/{count_id}/review", status_code=303)
     return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
 
 
@@ -1124,7 +1216,7 @@ async def count_cancel(
     _require_manager(user)
     count = inv_queries.get_count(count_id)
     if not count or count["status"] not in ("in_progress", "review"):
-        raise HTTPException(400, "Count cannot be canceled")
+        return RedirectResponse(f"/inventory/counts/{count_id}", status_code=303)
     inv_queries.cancel_count(count_id, _username(user))
     return RedirectResponse("/inventory/counts", status_code=303)
 

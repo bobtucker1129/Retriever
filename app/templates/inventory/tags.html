@@ -9,6 +9,10 @@
         <h2 class="section-title">Generate Shelf Tags</h2>
         <p class="field-hint">Select a scope below to generate a printable PDF of shelf tags (Avery 8371, 10 per page).</p>
 
+        {% if form_error %}
+        <div class="inventory-alert inventory-alert-error">{{ form_error }}</div>
+        {% endif %}
+
         <form method="post" action="/inventory/tags/generate" id="tagsForm">
             <div class="form-field">
                 <label class="field-label">Scope</label>

@@ -82,7 +82,8 @@
         {% endif %}
 
         {% if valid_count > 0 %}
-        <form method="post" action="/inventory/import/commit">
+        <form method="post" action="/inventory/import/commit"
+              onsubmit="this.querySelector('button[type=submit]').disabled = true">
             <input type="hidden" name="rows_json" value="{{ rows_json | e }}">
             <div class="inventory-action-buttons">
                 <button type="submit" class="btn btn-confirm"

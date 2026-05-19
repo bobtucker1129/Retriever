@@ -73,6 +73,7 @@ class FakeInventoryRepository:
         }
         self.count_item = {
             "id": 9,
+            "count_id": 5,
             "product_id": 42,
             "sku": "INV-0042",
             "product_name": "Business Cards",
@@ -273,8 +274,9 @@ def test_viewer_can_scan_pull_and_add_stock(monkeypatch) -> None:
     client = make_inventory_client(monkeypatch, db, "viewer@boonegraphics.net")
 
     lookup = client.post("/inventory/scan/lookup", data={"scan_value": "INV-0042"})
-    pull = client.post("/inventory/pull", data={"product_id": 42, "quantity": 3})
-    add = client.post("/inventory/add", data={"product_id": 42, "quantity": 8})
+    headers = {"HX-Request": "true"}
+    pull = client.post("/inventory/pull", data={"product_id": 42, "quantity": 3}, headers=headers)
+    add = client.post("/inventory/add", data={"product_id": 42, "quantity": 8}, headers=headers)
 
     assert lookup.status_code == 200
     assert "Business Cards" in lookup.text
@@ -282,6 +284,61 @@ def test_viewer_can_scan_pull_and_add_stock(monkeypatch) -> None:
     assert add.status_code == 200
     assert ("pull_stock", {"product_id": 42, "quantity": 3, "order_reference": None, "override_reason": None, "username": "viewer@boonegraphics.net"}) in fake.calls
     assert ("add_stock", {"product_id": 42, "quantity": 8, "order_reference": None, "override_reason": None, "username": "viewer@boonegraphics.net"}) in fake.calls
+
+
+def test_viewer_cannot_bypass_pull_safeguard_with_direct_post(monkeypatch) -> None:
+    fake = install_fake_inventory(monkeypatch)
+    db = FakeDb()
+    seed_user(db, "viewer@boonegraphics.net", "viewer")
+    client = make_inventory_client(monkeypatch, db, "viewer@boonegraphics.net")
+
+    response = client.post("/inventory/pull", data={"product_id": 42, "quantity": 60})
+
+    assert response.status_code == 200
+    assert "manager approval" in response.text
+    assert not any(call[0] == "pull_stock" for call in fake.calls)
+
+
+def test_direct_pull_cannot_take_stock_negative(monkeypatch) -> None:
+    fake = install_fake_inventory(monkeypatch)
+    db = FakeDb()
+    seed_user(db, "manager@boonegraphics.net", "manager")
+    client = make_inventory_client(monkeypatch, db, "manager@boonegraphics.net")
+
+    response = client.post(
+        "/inventory/pull",
+        data={"product_id": 42, "quantity": 101, "override_reason": "test"},
+    )
+
+    assert response.status_code == 200
+    assert "below zero" in response.text
+    assert not any(call[0] == "pull_stock" for call in fake.calls)
+
+
+def test_tag_generate_invalid_selection_renders_inventory_page(monkeypatch) -> None:
+    install_fake_inventory(monkeypatch)
+    db = FakeDb()
+    seed_user(db, "manager@boonegraphics.net", "manager")
+    client = make_inventory_client(monkeypatch, db, "manager@boonegraphics.net")
+
+    response = client.post("/inventory/tags/generate", data={"scope": "product"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Select a product" in response.text
+
+
+def test_stale_count_transition_redirects_instead_of_json(monkeypatch) -> None:
+    fake = install_fake_inventory(monkeypatch)
+    fake.count["status"] = "completed"
+    db = FakeDb()
+    seed_user(db, "manager@boonegraphics.net", "manager")
+    client = make_inventory_client(monkeypatch, db, "manager@boonegraphics.net")
+
+    response = client.post("/inventory/counts/5/review")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/inventory/counts/5"
 
 
 def test_core_inventory_pages_render_without_json_dead_ends(monkeypatch) -> None:

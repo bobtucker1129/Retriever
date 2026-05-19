@@ -668,24 +668,37 @@ def pull_stock(
 
     Returns dict with keys: product_id, quantity_before, quantity_after, transaction_id.
     """
-    if is_product_locked(product_id):
-        raise ValueError("Product is locked for physical count")
-
     conn = _get_inventory_connection()
     conn.autocommit = False
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT id, quantity FROM products WHERE id = %s FOR UPDATE",
+            "SELECT id, quantity, status FROM products WHERE id = %s FOR UPDATE",
             (product_id,),
         )
         product = cursor.fetchone()
         if not product:
             conn.rollback()
             raise ValueError("Product not found")
+        if product["status"] != "active":
+            conn.rollback()
+            raise ValueError("Product is retired")
+        cursor.execute(
+            "SELECT 1 FROM count_items ci "
+            "JOIN inventory_counts ic ON ic.id = ci.count_id "
+            "WHERE ci.product_id = %s AND ic.status IN ('in_progress', 'review') "
+            "LIMIT 1",
+            (product_id,),
+        )
+        if cursor.fetchone():
+            conn.rollback()
+            raise ValueError("Product is locked for physical count")
 
         qty_before = product["quantity"]
         qty_after = qty_before - quantity
+        if qty_after < 0:
+            conn.rollback()
+            raise ValueError("Pull would take quantity below zero")
 
         cursor.execute(
             "UPDATE products SET quantity = %s WHERE id = %s",
@@ -726,21 +739,31 @@ def add_stock(
 
     Same locking strategy as pull_stock.
     """
-    if is_product_locked(product_id):
-        raise ValueError("Product is locked for physical count")
-
     conn = _get_inventory_connection()
     conn.autocommit = False
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT id, quantity FROM products WHERE id = %s FOR UPDATE",
+            "SELECT id, quantity, status FROM products WHERE id = %s FOR UPDATE",
             (product_id,),
         )
         product = cursor.fetchone()
         if not product:
             conn.rollback()
             raise ValueError("Product not found")
+        if product["status"] != "active":
+            conn.rollback()
+            raise ValueError("Product is retired")
+        cursor.execute(
+            "SELECT 1 FROM count_items ci "
+            "JOIN inventory_counts ic ON ic.id = ci.count_id "
+            "WHERE ci.product_id = %s AND ic.status IN ('in_progress', 'review') "
+            "LIMIT 1",
+            (product_id,),
+        )
+        if cursor.fetchone():
+            conn.rollback()
+            raise ValueError("Product is locked for physical count")
 
         qty_before = product["quantity"]
         qty_after = qty_before + quantity
@@ -943,17 +966,7 @@ def is_product_locked(product_id: int) -> bool:
     return row is not None
 
 
-def get_products_in_scope(
-    scopes: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    """Resolve scope selections to active products.
-
-    Each scope dict has keys: scope_type ('site', 'zone', 'customer'), scope_id (int).
-    Returns product rows (id, quantity, customer_id) matching any scope entry.
-    """
-    if not scopes:
-        return []
-
+def _scope_where(scopes: List[Dict[str, Any]]) -> Tuple[str, Tuple[Any, ...]]:
     conditions = []
     params: list = []
     for s in scopes:
@@ -968,11 +981,24 @@ def get_products_in_scope(
         elif st == "customer":
             conditions.append("p.customer_id = %s")
             params.append(sid)
+    return " OR ".join(conditions), tuple(params)
 
-    if not conditions:
+
+def get_products_in_scope(
+    scopes: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Resolve scope selections to active products.
+
+    Each scope dict has keys: scope_type ('site', 'zone', 'customer'), scope_id (int).
+    Returns product rows (id, quantity, customer_id) matching any scope entry.
+    """
+    if not scopes:
         return []
 
-    where = " OR ".join(conditions)
+    where, params = _scope_where(scopes)
+    if not where:
+        return []
+
     return _fetch_all(
         "SELECT p.id, p.quantity, p.customer_id, p.sku, p.name, "
         "c.name AS customer_name "
@@ -981,7 +1007,7 @@ def get_products_in_scope(
         "JOIN zones z ON z.id = p.zone_id "
         f"WHERE p.status = 'active' AND ({where}) "
         "ORDER BY c.name, p.name",
-        tuple(params),
+        params,
     )
 
 
@@ -996,14 +1022,28 @@ def create_count(
     scopes: list of {scope_type, scope_id} dicts.
     Returns count ID.
     """
-    products = get_products_in_scope(scopes)
-    if not products:
-        raise ValueError("No active products found in the selected scope")
-
     conn = _get_inventory_connection()
     conn.autocommit = False
     try:
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+        where, params = _scope_where(scopes)
+        if not where:
+            raise ValueError("No active products found in the selected scope")
+        cursor.execute(
+            "SELECT p.id, p.quantity, p.customer_id, p.sku, p.name, "
+            "c.name AS customer_name "
+            "FROM products p "
+            "JOIN customers c ON c.id = p.customer_id "
+            "JOIN zones z ON z.id = p.zone_id "
+            f"WHERE p.status = 'active' AND ({where}) "
+            "ORDER BY c.name, p.name "
+            "FOR UPDATE",
+            params,
+        )
+        products = cursor.fetchall() or []
+        if not products:
+            raise ValueError("No active products found in the selected scope")
+
         cursor.execute(
             "INSERT INTO inventory_counts "
             "(initiated_by, scope_description, discrepancy_threshold_pct) "
