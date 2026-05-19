@@ -23,6 +23,25 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 - Focused suite: `python3 -m pytest -q tests/test_wiki_repository.py tests/test_wiki_sync.py tests/test_routes.py tests/test_config.py` -> **109 passed**.
 - Full suite: `python3 -m pytest -q` -> **333 passed, 1 PyPDF2 deprecation warning**.
 
+## 2026-05-18 — Codex: Wiki sync activation attempt
+
+**Goal:** Activate the Wiki sync path as far as possible without leaking secrets or taking over unrelated dirty work.
+
+**What changed / verified:**
+
+- Generated and installed a strong `WIKI_SYNC_TOKEN` into local `retriever.env` for OpenClaw-side use.
+- Used a temporary GitHub Actions workflow with a masked repo secret to add `WIKI_SYNC_ENABLED=true` and the matching `WIKI_SYNC_TOKEN` to `D:\retriever-rebuild\env\retriever.env`; then deleted the temporary workflow and removed the GitHub secret.
+- Dispatched a migration-enabled deploy after updating `migrations/0004_wiki_catalog.sql` to avoid database-level foreign-key constraints because production `retriever_app` lacks MySQL `REFERENCES` privilege.
+- Verified the Windows localhost sync endpoint succeeded: `status=ok internalScanned=28 driveScanned=0`.
+- Confirmed the OpenClaw public POST is still blocked:
+  - `https://retriever.boonegraphics.net/wiki/sync/source-inventory` returns Cloudflare Access `302` without a service token.
+  - A proposed `retriever-sync.boonegraphics.net` DNS route was created for the Retriever tunnel, but the Windows runner cannot edit `C:\cloudflared\config.yml` (`Access denied`), so that hostname currently returns `404` and is not usable for sync.
+- Cron `retriever-wiki-sync` remains disabled.
+
+**Next blocker:**
+
+- Either add a Cloudflare Access service token for OpenClaw (`RETRIEVER_WIKI_CF_SERVICE_TOKEN=<client-id>:<client-secret>`) or have an admin add a path-only `retriever-sync.boonegraphics.net` ingress rule for `/wiki/sync/*` on `bggol-vesko01`'s `cloudflared` config and restart the service.
+
 ## 2026-05-18 — Codex: Wiki sync command foundation
 
 **Goal:** Continue the live Retriever Wiki by adding the first idempotent sync foundation for source metadata without scheduling automation or exposing raw ISO documents to normal readers.
