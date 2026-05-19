@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.routes import admin, auth_shell, fetch, health, prepress, wiki
+from app.routes import admin, auth_shell, fetch, health, inventory, prepress, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_shell.router)
     app.include_router(admin.router)
     app.include_router(prepress.router)
+    app.include_router(inventory.router)
     app.include_router(wiki.router)
     app.include_router(fetch.router)
     app.include_router(fetch.booneops_artifact_compat_router)

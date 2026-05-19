@@ -96,6 +96,15 @@ class AppSettings(BaseSettings):
     wiki_sync_enabled: bool = False
     wiki_sync_token: Optional[str] = None
 
+    inventory_pull_warning_pct: int = 25
+
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_from_email: Optional[str] = None
+    smtp_use_tls: bool = True
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+
     booneops_broker_enabled: bool = False
     booneops_broker_url: Optional[str] = None
     booneops_broker_bearer_token: Optional[str] = None

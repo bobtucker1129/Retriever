@@ -1,0 +1,94 @@
+<section class="card inventory-action-card">
+    {% if form_error %}
+    <div class="inventory-alert inventory-alert-error">{{ form_error }}</div>
+    {% endif %}
+
+    {% if product.status == 'retired' %}
+    <div class="inventory-retired-banner">RETIRED PRODUCT &mdash; leftover stock may still be pulled</div>
+    {% endif %}
+
+    <div class="inventory-action-header">
+        <h2 class="section-title">{{ product.name }}</h2>
+        <a href="/inventory/products/{{ product.id }}" class="btn btn-sm btn-secondary">View Detail</a>
+    </div>
+
+    <div class="inventory-detail-grid inventory-action-details">
+        <div class="inventory-detail-item">
+            <span class="field-label">SKU</span>
+            <span class="field-value">{{ product.sku }}</span>
+        </div>
+        <div class="inventory-detail-item">
+            <span class="field-label">Customer</span>
+            <span class="field-value">{{ product.customer_name }}</span>
+        </div>
+        <div class="inventory-detail-item">
+            <span class="field-label">Site / Zone</span>
+            <span class="field-value">{{ product.site_name }} / {{ product.zone_name }}</span>
+        </div>
+        <div class="inventory-detail-item">
+            <span class="field-label">Current Quantity</span>
+            <span class="field-value inventory-qty-large
+                {% if product.quantity == 0 %} inventory-stock-red-text
+                {% elif product.low_threshold and product.quantity <= product.low_threshold %} inventory-stock-amber-text
+                {% endif %}">{{ product.quantity }}</span>
+        </div>
+        {% if product.unit_type == 'pack' and product.pack_size %}
+        <div class="inventory-detail-item">
+            <span class="field-label">Unit Type</span>
+            <span class="field-value">Pack of {{ product.pack_size }}</span>
+        </div>
+        {% endif %}
+        {% if product.low_threshold %}
+        <div class="inventory-detail-item">
+            <span class="field-label">Low Threshold</span>
+            <span class="field-value">{{ product.low_threshold }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="inventory-action-toggle">
+        <button type="button" class="btn btn-sm {% if mode == 'pull' %}btn-confirm{% else %}btn-secondary{% endif %}"
+                id="btn-mode-pull" onclick="window.invSetMode('pull')">Pull</button>
+        <button type="button" class="btn btn-sm {% if mode == 'add' %}btn-confirm{% else %}btn-secondary{% endif %}"
+                id="btn-mode-add" onclick="window.invSetMode('add')">Add</button>
+    </div>
+
+    <form id="action-form"
+          hx-post="/inventory/scan/confirm"
+          hx-target="#action-panel"
+          hx-swap="innerHTML">
+        <input type="hidden" name="product_id" value="{{ product.id }}">
+        <input type="hidden" name="action" id="action-mode" value="{{ mode }}">
+
+        <div class="inventory-action-fields">
+            <div class="form-field">
+                <label class="field-label" for="quantity">Quantity</label>
+                <input type="number" id="quantity" name="quantity"
+                       class="text-input" min="1" required
+                       placeholder="Enter quantity" autofocus>
+            </div>
+            <div class="form-field">
+                <label class="field-label" for="order_reference">Order Reference</label>
+                <input type="text" id="order_reference" name="order_reference"
+                       class="text-input" placeholder="Customer PO or reference (optional)">
+            </div>
+        </div>
+
+        <div id="override-section" class="inventory-override-section" style="display:none;">
+            <div class="form-field">
+                <label class="field-label" for="override_reason">Override Reason</label>
+                <textarea id="override_reason" name="override_reason"
+                          class="text-input" rows="2"
+                          placeholder="Required when safeguard warnings apply"></textarea>
+            </div>
+        </div>
+
+        <div class="inventory-action-buttons">
+            <button type="submit" class="btn btn-confirm" id="btn-review">
+                Review <span id="action-label-text">Pull</span>
+            </button>
+            <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('scan-input').focus()">Cancel</button>
+        </div>
+    </form>
+</section>

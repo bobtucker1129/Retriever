@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - New Count{% endblock %}
+{% block header_title %}Inventory &mdash; New Physical Count{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-form-card">
+        <h2 class="section-title">Initiate Physical Count</h2>
+        <p class="field-hint">Select the scope for this count. All active products matching the selected sites, zones, and/or customers will be included and locked for pull/add until the count is completed or canceled.</p>
+
+        {% if form_error %}
+        <div class="inventory-alert-error">{{ form_error }}</div>
+        {% endif %}
+
+        <form method="post" action="/inventory/counts">
+            <div class="form-field">
+                <label class="field-label">Scope Description</label>
+                <input type="text" name="scope_description" class="text-input"
+                       placeholder="e.g. Goleta Warehouse - Mechanics Bank" maxlength="500">
+            </div>
+
+            <div class="form-field">
+                <label class="field-label">Discrepancy Threshold (%)</label>
+                <input type="number" name="discrepancy_threshold_pct" class="text-input"
+                       value="20" min="1" max="100" style="max-width:120px">
+                <span class="field-hint">Items with discrepancy above this % are flagged for review.</span>
+            </div>
+
+            <fieldset class="inventory-count-scope-fieldset">
+                <legend class="field-label">Sites</legend>
+                {% for site in sites %}
+                <label class="inventory-check-label">
+                    <input type="checkbox" name="site_id" value="{{ site.id }}"> {{ site.name }}
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <fieldset class="inventory-count-scope-fieldset">
+                <legend class="field-label">Zones</legend>
+                {% for zone in zones %}
+                <label class="inventory-check-label">
+                    <input type="checkbox" name="zone_id" value="{{ zone.id }}"> {{ zone.site_name }} &mdash; {{ zone.name }}
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <fieldset class="inventory-count-scope-fieldset">
+                <legend class="field-label">Customers</legend>
+                {% for cust in customers_list %}
+                <label class="inventory-check-label">
+                    <input type="checkbox" name="customer_id" value="{{ cust.id }}"> {{ cust.name }}
+                </label>
+                {% endfor %}
+            </fieldset>
+
+            <button type="submit" class="btn btn-confirm">Start Count</button>
+        </form>
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/counts">&larr; Back to Counts</a>
+    </div>
+</main>
+{% endblock %}

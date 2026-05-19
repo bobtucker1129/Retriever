@@ -1,0 +1,30 @@
+{% for p in products %}
+<tr class="{{ 'inventory-retired-row' if p.status == 'retired' else '' }}">
+    <td class="inventory-status-col">
+        {% if p.status == 'retired' %}
+        <span class="inventory-retired-badge">RETIRED</span>
+        {% elif p.quantity == 0 %}
+        <span class="inventory-stock-red" title="Out of stock"></span>
+        {% elif p.low_threshold and p.quantity <= p.low_threshold %}
+        <span class="inventory-stock-amber" title="Low stock"></span>
+        {% else %}
+        <span class="inventory-stock-green" title="OK"></span>
+        {% endif %}
+    </td>
+    <td><a href="/inventory/products/{{ p.id }}">{{ p.sku }}</a></td>
+    <td>{{ p.name }}</td>
+    <td>{{ p.customer_name }}</td>
+    <td>{{ p.site_name }}</td>
+    <td>{{ p.zone_name }}</td>
+    <td>{{ p.quantity }}</td>
+    <td>{{ p.low_threshold if p.low_threshold else '' }}</td>
+    {% if is_manager %}
+    <td>
+        <a href="/inventory/products/{{ p.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+    </td>
+    {% endif %}
+</tr>
+{% endfor %}
+{% if not products %}
+<tr><td colspan="9" class="inventory-empty-cell">No products found.</td></tr>
+{% endif %}

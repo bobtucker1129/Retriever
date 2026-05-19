@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Scan{% endblock %}
+{% block header_title %}Inventory &mdash; Scan{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-scan-card">
+        <h2 class="section-title">Scan / Search</h2>
+        <form id="scan-form"
+              hx-post="/inventory/scan/lookup"
+              hx-target="#action-panel"
+              hx-swap="innerHTML"
+              hx-indicator="#scan-spinner">
+            <div class="inventory-scan-row">
+                <input type="text"
+                       id="scan-input"
+                       name="scan_value"
+                       class="text-input inventory-scan-input"
+                       placeholder="Scan barcode or type SKU / product name"
+                       autocomplete="off"
+                       autofocus>
+                <button type="submit" class="btn btn-confirm">
+                    <span id="scan-spinner" class="htmx-indicator spinner"></span>
+                    Look Up
+                </button>
+            </div>
+        </form>
+        <p class="field-hint inventory-scan-hint">
+            Bluetooth scanner input is detected automatically.
+            You can also type a product name, SKU, or database ID.
+        </p>
+    </section>
+
+    <div id="action-panel"
+         {% if preload_product_id %}
+         hx-get="/inventory/scan/{{ preload_product_id }}"
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML"
+         {% endif %}>
+        {% if not preload_product_id %}
+        <section class="card">
+            <div class="empty-state">
+                <p>Scan a barcode or search to begin.</p>
+            </div>
+        </section>
+        {% else %}
+        <div class="muted">Loading...</div>
+        {% endif %}
+    </div>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Dashboard</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/products">Browse Products</a>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/inventory.js"></script>
+{% endblock %}

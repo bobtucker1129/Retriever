@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Import Products{% endblock %}
+{% block header_title %}Inventory &mdash; Import Products{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    {% if import_success %}
+    <section class="card inventory-import-card">
+        <div class="inventory-success-icon">&#10003;</div>
+        <h2 class="section-title">Import Complete</h2>
+        <p>{{ created_count }} product{{ "s" if created_count != 1 else "" }} imported successfully.</p>
+        <div class="inventory-action-buttons">
+            <a href="/inventory/products" class="btn btn-confirm">View Products</a>
+            <a href="/inventory/import" class="btn btn-secondary">Import More</a>
+        </div>
+    </section>
+    {% else %}
+    <section class="card inventory-import-card">
+        <h2 class="section-title">Bulk Product Import</h2>
+
+        {% if upload_error %}
+        <div class="inventory-alert inventory-alert-error">{{ upload_error }}</div>
+        {% endif %}
+
+        <div class="inventory-import-steps">
+            <div class="inventory-import-step">
+                <span class="inventory-step-number">1</span>
+                <div>
+                    <strong>Download template</strong>
+                    <p class="field-hint">CSV template with column headers and an example row.</p>
+                    <a href="/inventory/import/template" class="btn btn-sm btn-secondary">Download Template</a>
+                </div>
+            </div>
+            <div class="inventory-import-step">
+                <span class="inventory-step-number">2</span>
+                <div>
+                    <strong>Fill in your products</strong>
+                    <p class="field-hint">One product per row. Required: customer_name, product_name, site, zone.
+                        Values like "n/a", "TBD", and "-" are auto-cleaned. Comma-formatted numbers (1,000) are normalized.</p>
+                </div>
+            </div>
+            <div class="inventory-import-step">
+                <span class="inventory-step-number">3</span>
+                <div>
+                    <strong>Upload CSV</strong>
+                    <p class="field-hint">Review the preview, then confirm to create products.</p>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" action="/inventory/import/upload" enctype="multipart/form-data">
+            <div class="form-field">
+                <label class="field-label" for="file">Select CSV File</label>
+                <input type="file" id="file" name="file" accept=".csv" required
+                       class="text-input inventory-file-input">
+            </div>
+            <div class="inventory-action-buttons">
+                <button type="submit" class="btn btn-confirm">Upload &amp; Preview</button>
+            </div>
+        </form>
+    </section>
+    {% endif %}
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Dashboard</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/products">Products</a>
+    </div>
+</main>
+{% endblock %}

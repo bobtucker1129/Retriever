@@ -6,6 +6,7 @@ requires-python = ">=3.9"
 dependencies = [
   "cryptography",
   "fastapi",
+  "fpdf2",
   "httpx",
   "jinja2",
   "markdown",
@@ -15,6 +16,7 @@ dependencies = [
   "pydantic-settings",
   "PyPDF2",
   "PyJWT[crypto]",
+  "python-barcode",
   "python-multipart",
   "tzdata",
   "uvicorn[standard]",

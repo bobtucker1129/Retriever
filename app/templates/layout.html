@@ -58,6 +58,12 @@
             <span class="nav-label">PrePress</span>
           </a>
           {% endif %}
+          {% if user and user.status == 'active' and user.can_open_inventory() %}
+          <a class="nav-item{% if active_nav == 'inventory' %} active{% endif %}" href="/inventory/" title="Inventory">
+            <span class="nav-abbrev">I</span>
+            <span class="nav-label">Inventory</span>
+          </a>
+          {% endif %}
           {% if user and user.status == 'active' and user.can_open_wiki() %}
           <a class="nav-item{% if active_nav == 'wiki' %} active{% endif %}" href="/wiki/" title="Wiki">
             <span class="nav-abbrev">W</span>
@@ -109,6 +115,9 @@
         </main>
       </div>
     </div>
+    {% if active_nav == 'inventory' %}
+    <script src="/static/js/htmx.min.js?v={{ settings.git_sha }}"></script>
+    {% endif %}
     {% block scripts %}{% endblock %}
     <script>
       (function () {

@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Import Preview{% endblock %}
+{% block header_title %}Inventory &mdash; Import Preview{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-import-card">
+        <h2 class="section-title">Import Preview</h2>
+
+        <div class="inventory-import-summary">
+            <span class="inventory-import-stat">
+                <strong>{{ valid_count }}</strong> valid row{{ "s" if valid_count != 1 else "" }}
+            </span>
+            {% if error_count %}
+            <span class="inventory-import-stat inventory-import-stat-error">
+                <strong>{{ error_count }}</strong> row{{ "s" if error_count != 1 else "" }} with errors
+            </span>
+            {% endif %}
+            {% if parse_warnings %}
+            <span class="inventory-import-stat inventory-import-stat-warning">
+                {% for w in parse_warnings %}{{ w }} {% endfor %}
+            </span>
+            {% endif %}
+        </div>
+
+        {% if parse_errors %}
+        <div class="inventory-alert inventory-alert-error">
+            <strong>File-level errors:</strong>
+            <ul class="inventory-warning-list">
+                {% for e in parse_errors %}
+                <li>{{ e }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if parsed_rows %}
+        <div class="inventory-import-table-wrap">
+            <table class="data-table inventory-import-table">
+                <thead>
+                    <tr>
+                        <th>Row</th>
+                        <th>Customer</th>
+                        <th>Product</th>
+                        <th>Site</th>
+                        <th>Zone</th>
+                        <th>SKU</th>
+                        <th>Qty</th>
+                        <th>Unit</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in parsed_rows %}
+                    <tr class="{% if r._errors %}inventory-import-row-error{% else %}inventory-import-row-ok{% endif %}">
+                        <td>{{ r._row }}</td>
+                        <td>{{ r.customer_name or '' }}</td>
+                        <td>{{ r.product_name or '' }}</td>
+                        <td>{{ r.site_name or '' }}</td>
+                        <td>{{ r.zone_name or '' }}</td>
+                        <td>{{ r.sku or '(auto)' }}</td>
+                        <td>{{ r.quantity }}</td>
+                        <td>{{ r.unit_type }}{% if r.pack_size %} ({{ r.pack_size }}){% endif %}</td>
+                        <td>
+                            {% if r._errors %}
+                            <span class="inventory-import-badge-error">Error</span>
+                            <ul class="inventory-import-error-list">
+                                {% for e in r._errors %}
+                                <li>{{ e }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <span class="inventory-import-badge-ok">OK</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if valid_count > 0 %}
+        <form method="post" action="/inventory/import/commit">
+            <input type="hidden" name="rows_json" value="{{ rows_json | e }}">
+            <div class="inventory-action-buttons">
+                <button type="submit" class="btn btn-confirm"
+                        onclick="return confirm('Import {{ valid_count }} product{{ 's' if valid_count != 1 else '' }}? Rows with errors will be skipped.')">
+                    Import {{ valid_count }} Product{{ "s" if valid_count != 1 else "" }}
+                </button>
+                <a href="/inventory/import" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="inventory-action-buttons">
+            <a href="/inventory/import" class="btn btn-secondary">Back to Upload</a>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Dashboard</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/products">Products</a>
+    </div>
+</main>
+{% endblock %}

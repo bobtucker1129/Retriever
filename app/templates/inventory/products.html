@@ -1,0 +1,74 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Products{% endblock %}
+{% block header_title %}Inventory &mdash; Products{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">Products</h2>
+            {% if is_manager %}
+            <a href="/inventory/products/new" class="btn btn-confirm">Add Product</a>
+            {% endif %}
+        </div>
+
+        <div class="inventory-filters" id="product-filters">
+            <input type="text" id="pf-search" name="search" placeholder="Search name or SKU..."
+                   value="{{ search or '' }}" class="text-input text-input-compact">
+            <select id="pf-customer" name="customer_id" class="select-input">
+                <option value="">All Customers</option>
+                {% for c in customers_list %}
+                <option value="{{ c.id }}" {{ 'selected' if customer_id and customer_id == c.id else '' }}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+            <select id="pf-site" name="site_id" class="select-input">
+                <option value="">All Sites</option>
+                {% for s in sites_list %}
+                <option value="{{ s.id }}" {{ 'selected' if site_id and site_id == s.id else '' }}>{{ s.name }}</option>
+                {% endfor %}
+            </select>
+            <select id="pf-zone" name="zone_id" class="select-input">
+                <option value="">All Zones</option>
+                {% for z in zones_list %}
+                <option value="{{ z.id }}" {{ 'selected' if zone_id and zone_id == z.id else '' }}>{{ z.name }} ({{ z.site_name }})</option>
+                {% endfor %}
+            </select>
+            <label class="checkbox-label">
+                <input type="checkbox" id="pf-retired" name="show_retired" value="1"
+                       {{ 'checked' if show_retired else '' }}>
+                Show Retired
+            </label>
+            <button type="button" class="btn btn-sm btn-secondary"
+                    hx-get="/inventory/partials/product-list"
+                    hx-target="#product-table-body"
+                    hx-include="#product-filters">Filter</button>
+        </div>
+
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th class="inventory-status-col">Status</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Customer</th>
+                        <th>Site</th>
+                        <th>Zone</th>
+                        <th>Qty</th>
+                        <th>Threshold</th>
+                        {% if is_manager %}<th>Actions</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody id="product-table-body">
+                    {% include "inventory/partials/product_list.html" %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Back to Dashboard</a>
+    </div>
+</main>
+{% endblock %}

@@ -42,6 +42,7 @@ def _current_user_from_record(record: UserRecord) -> CurrentUser:
         status=record.status,
         capabilities=record.capabilities,
         modules=record.modules,
+        inventory_level=record.inventory_level,
         is_admin=record.is_admin,
     )
 
@@ -56,6 +57,7 @@ def _local_scaffold_user(identity: CloudflareIdentity, settings: AppSettings) ->
             status="active",
             capabilities=frozenset({"admin.manage_users", "admin.manage_settings"}),
             modules=frozenset({"admin", "help"}),
+            inventory_level="manager",
             is_admin=True,
         )
 

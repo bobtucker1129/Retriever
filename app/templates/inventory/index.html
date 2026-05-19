@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory{% endblock %}
+{% block header_title %}Inventory{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+
+    <div class="inventory-dash-stats">
+        <div class="inventory-dash-stat{% if low_stock|length > 0 %} inventory-dash-stat-alert{% endif %}">
+            <span class="inventory-dash-stat-value">{{ low_stock|length }}</span>
+            <span class="inventory-dash-stat-label">Low Stock</span>
+        </div>
+        {% if is_manager %}
+        <div class="inventory-dash-stat{% if due_for_count|length > 0 %} inventory-dash-stat-warn{% endif %}">
+            <span class="inventory-dash-stat-value">{{ due_for_count|length }}</span>
+            <span class="inventory-dash-stat-label">Due for Count</span>
+        </div>
+        {% endif %}
+        <div class="inventory-dash-stat{% if approaching_depletion > 0 %} inventory-dash-stat-warn{% endif %}">
+            <span class="inventory-dash-stat-value">{{ approaching_depletion }}</span>
+            <span class="inventory-dash-stat-label">Depleting &le;14d</span>
+        </div>
+        <div class="inventory-dash-stat">
+            <span class="inventory-dash-stat-value">{{ txn_count }}</span>
+            <span class="inventory-dash-stat-label">Transactions Today</span>
+        </div>
+    </div>
+
+    {% if low_stock %}
+    <section class="card">
+        <h2 class="section-title">Low Stock Products</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th>Customer</th>
+                    <th>Qty</th>
+                    <th>Threshold</th>
+                    <th>Location</th>
+                    <th>Est. Depletion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in low_stock %}
+                <tr>
+                    <td><a href="/inventory/products/{{ p.id }}">{{ p.name }}</a></td>
+                    <td>{{ p.sku }}</td>
+                    <td>{{ p.customer_name }}</td>
+                    <td>
+                        {% if p.quantity == 0 %}
+                        <span class="inventory-stock-red"></span> {{ p.quantity }}
+                        {% else %}
+                        <span class="inventory-stock-amber"></span> {{ p.quantity }}
+                        {% endif %}
+                    </td>
+                    <td>{{ p.low_threshold }}</td>
+                    <td>{{ p.site_name }} / {{ p.zone_name }}</td>
+                    <td>
+                        {% set dep = depletion_map.get(p.id, {}) %}
+                        {% if dep.get('status') == 'projected' %}
+                        {{ dep.estimated_date }} <span class="field-hint">(~{{ dep.days_remaining }}d)</span>
+                        {% else %}
+                        <span class="field-hint">No recent activity</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    {% if is_manager and due_for_count %}
+    <section class="card">
+        <h2 class="section-title">Due for Count</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Frequency</th>
+                    <th>Last Count</th>
+                    <th>Next Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in due_for_count %}
+                <tr>
+                    <td><a href="/inventory/customers/{{ c.id }}">{{ c.name }}</a></td>
+                    <td>{{ c.count_frequency | replace('_', ' ') | title }}</td>
+                    <td>{{ c.last_count_date or 'Never' }}</td>
+                    <td>{{ c.next_count_due or 'Overdue' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        {% if is_manager %}
+        <div class="inventory-quick-links">
+            <span class="inventory-link-label">Manager:</span>
+            <a href="/inventory/products" class="inventory-link-item inventory-link-active">Products</a>
+            <a href="/inventory/customers" class="inventory-link-item inventory-link-active">Customers</a>
+            <a href="/inventory/sites" class="inventory-link-item inventory-link-active">Locations</a>
+            <a href="/inventory/import" class="inventory-link-item inventory-link-active">Import CSV</a>
+            <a href="/inventory/tags" class="inventory-link-item inventory-link-active">Tags</a>
+            <a href="/inventory/counts" class="inventory-link-item inventory-link-active">Counts</a>
+        </div>
+        {% endif %}
+        <div class="inventory-quick-links">
+            <span class="inventory-link-label">Warehouse:</span>
+            <a href="/inventory/scan" class="inventory-link-item inventory-link-active">Scan</a>
+            <a href="/inventory/products" class="inventory-link-item inventory-link-active">Browse Products</a>
+        </div>
+    </section>
+
+</main>
+{% endblock %}

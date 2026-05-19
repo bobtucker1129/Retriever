@@ -1,0 +1,47 @@
+<section class="card inventory-success-card">
+    <div class="inventory-success-icon">&#10003;</div>
+    <h2 class="section-title">
+        {{ "Pull" if action == "pull" else "Add" }} Complete
+    </h2>
+
+    <div class="inventory-confirm-grid">
+        <div class="inventory-confirm-row">
+            <span class="field-label">Product</span>
+            <span class="field-value">{{ product.sku }} &mdash; {{ product.name }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Quantity {{ "Removed" if action == "pull" else "Added" }}</span>
+            <span class="field-value">{{ quantity }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Previous Quantity</span>
+            <span class="field-value">{{ result.quantity_before }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">New Quantity</span>
+            <span class="field-value
+                {% if result.quantity_after < 0 %} inventory-stock-red-text
+                {% elif product.low_threshold and result.quantity_after <= product.low_threshold %} inventory-stock-amber-text
+                {% endif %}">{{ result.quantity_after }}</span>
+        </div>
+    </div>
+
+    {% if product.low_threshold and result.quantity_after <= product.low_threshold and result.quantity_after >= 0 %}
+    <div class="inventory-alert inventory-alert-warning">
+        Low stock: quantity is at or below threshold ({{ product.low_threshold }}).
+    </div>
+    {% elif result.quantity_after < 0 %}
+    <div class="inventory-alert inventory-alert-error">
+        Negative stock: quantity is below zero.
+    </div>
+    {% endif %}
+
+    <div class="inventory-action-buttons">
+        <button class="btn btn-confirm"
+                onclick="document.getElementById('scan-input').value=''; document.getElementById('scan-input').focus();">
+            Scan Next
+        </button>
+        <a href="/inventory/products/{{ product.id }}" class="btn btn-secondary">View Product</a>
+        <a href="/inventory/products/{{ product.id }}/transactions" class="btn btn-secondary">Transactions</a>
+    </div>
+</section>

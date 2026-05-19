@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - {{ 'Edit' if site else 'New' }} Site{% endblock %}
+{% block header_title %}Inventory &mdash; {{ 'Edit' if site else 'New' }} Site{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-form-card">
+        <h2 class="section-title">{{ 'Edit Site' if site else 'Add Site' }}</h2>
+
+        <form method="post" action="{{ '/inventory/sites/' ~ site.id if site else '/inventory/sites' }}">
+            <div class="form-field">
+                <label class="field-label" for="name">Name *</label>
+                <input type="text" id="name" name="name" required maxlength="100"
+                       value="{{ site.name if site else '' }}" class="text-input">
+            </div>
+            <div class="form-field">
+                <label class="field-label" for="address">Address</label>
+                <textarea id="address" name="address" rows="2" class="text-input">{{ site.address if site and site.address else '' }}</textarea>
+            </div>
+            <div class="inventory-form-actions">
+                <button type="submit" class="btn btn-confirm">{{ 'Save Changes' if site else 'Create Site' }}</button>
+                <a href="/inventory/sites" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</main>
+{% endblock %}

@@ -13,6 +13,7 @@ class CurrentUser:
     status: str = "pending"
     capabilities: frozenset[str] = field(default_factory=frozenset)
     modules: frozenset[str] = field(default_factory=frozenset)
+    inventory_level: str = "no"
     is_admin: bool = False
 
     def has_capability(self, capability: str) -> bool:
@@ -39,3 +40,13 @@ class CurrentUser:
     def can_open_wiki(self) -> bool:
         """Internal Boone knowledge base; active employees can read by default."""
         return self.status == "active"
+
+    def can_open_inventory(self) -> bool:
+        if self.status != "active":
+            return False
+        return self.is_admin or self.inventory_level in {"viewer", "manager"}
+
+    def can_manage_inventory(self) -> bool:
+        if self.status != "active":
+            return False
+        return self.is_admin or self.inventory_level == "manager"

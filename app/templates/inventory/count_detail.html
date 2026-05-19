@@ -1,0 +1,103 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Count #{{ count.id }}{% endblock %}
+{% block header_title %}Inventory &mdash; Count #{{ count.id }}{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">
+                {{ count.scope_description or 'Physical Count' }}
+                <span class="inventory-count-badge inventory-count-badge-{{ count.status }}">
+                    {{ count.status | replace('_', ' ') | title }}
+                </span>
+            </h2>
+            <div class="inventory-header-actions">
+                {% if is_manager and count.status == 'in_progress' %}
+                <form method="post" action="/inventory/counts/{{ count.id }}/review" class="inventory-inline-form">
+                    <button type="submit" class="btn btn-sm btn-confirm"
+                            onclick="return confirm('Move to review? Staff can no longer enter counts.')">Move to Review</button>
+                </form>
+                {% endif %}
+                {% if is_manager and count.status == 'review' %}
+                <a href="/inventory/counts/{{ count.id }}/review" class="btn btn-sm btn-confirm">Review Flagged Items</a>
+                {% endif %}
+                {% if is_manager and count.status in ('in_progress', 'review') %}
+                <form method="post" action="/inventory/counts/{{ count.id }}/cancel" class="inventory-inline-form">
+                    <button type="submit" class="btn btn-sm btn-reject"
+                            onclick="return confirm('Cancel this count? No adjustments will be applied.')">Cancel Count</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="inventory-detail-grid">
+            <div class="inventory-detail-item">
+                <span class="field-label">Progress</span>
+                <span class="field-value">{{ count.counted_items or 0 }} / {{ count.total_items or 0 }} items counted</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Flagged</span>
+                <span class="field-value">{{ count.flagged_items or 0 }}</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Threshold</span>
+                <span class="field-value">{{ count.discrepancy_threshold_pct }}%</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Started</span>
+                <span class="field-value">{{ count.started_at }}</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Initiated By</span>
+                <span class="field-value">{{ count.initiated_by }}</span>
+            </div>
+            {% if count.completed_at %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Completed</span>
+                <span class="field-value">{{ count.completed_at }} by {{ count.completed_by }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 class="section-title">Count Items ({{ items | length }})</h2>
+        {% if items %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Recorded Qty</th>
+                        <th>Counted Qty</th>
+                        <th>Discrepancy</th>
+                        <th>Status</th>
+                        {% if count.status == 'in_progress' %}
+                        <th>Enter Count</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr id="count-item-{{ item.id }}"
+                        class="{{ 'inventory-count-row-flagged' if item.flagged else '' }}">
+                        {% include "inventory/partials/count_item_row.html" %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="inventory-empty-text">No items in this count.</p>
+        {% endif %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/counts">&larr; Back to Counts</a>
+    </div>
+</main>
+{% endblock %}

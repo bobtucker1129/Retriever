@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Locations{% endblock %}
+{% block header_title %}Inventory &mdash; Locations{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">Sites &amp; Zones</h2>
+            {% if is_manager %}
+            <a href="/inventory/sites/new" class="btn btn-confirm">Add Site</a>
+            {% endif %}
+        </div>
+
+        {% if not sites %}
+        <p class="inventory-empty-text">No sites configured yet.</p>
+        {% endif %}
+
+        {% for site in sites %}
+        <div class="inventory-site-block">
+            <div class="inventory-site-header">
+                <div>
+                    <span class="inventory-site-name">{{ site.name }}</span>
+                    {% if site.address %}
+                    <span class="inventory-site-address">&mdash; {{ site.address }}</span>
+                    {% endif %}
+                    {% if not site.active %}
+                    <span class="inventory-retired-badge">INACTIVE</span>
+                    {% endif %}
+                </div>
+                <div class="inventory-site-actions">
+                    {% if is_manager %}
+                    <a href="/inventory/sites/{{ site.id }}/edit" class="btn btn-sm btn-secondary">Edit Site</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <table class="data-table inventory-zone-table">
+                <thead>
+                    <tr>
+                        <th>Zone</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="zone-list-{{ site.id }}">
+                    {% for zone in site.zones %}
+                    <tr>
+                        <td>{{ zone.name }}</td>
+                        <td>{{ zone.description or '' }}</td>
+                        <td><a href="/inventory/zones/{{ zone.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+                    </tr>
+                    {% endfor %}
+                    {% if not site.zones %}
+                    <tr><td colspan="3" class="inventory-empty-cell">No zones for this site.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+
+            <form method="post" action="/inventory/zones" class="inventory-inline-add">
+                <input type="hidden" name="site_id" value="{{ site.id }}">
+                <input type="text" name="name" placeholder="New zone name" required class="text-input text-input-compact">
+                <input type="text" name="description" placeholder="Description (optional)" class="text-input text-input-compact">
+                <button type="submit" class="btn btn-sm btn-confirm">Add Zone</button>
+            </form>
+        </div>
+        {% endfor %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Back to Dashboard</a>
+    </div>
+</main>
+{% endblock %}

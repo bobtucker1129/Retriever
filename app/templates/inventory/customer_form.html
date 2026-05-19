@@ -1,0 +1,83 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - {{ 'Edit' if customer else 'New' }} Customer{% endblock %}
+{% block header_title %}Inventory &mdash; {{ 'Edit' if customer else 'New' }} Customer{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-form-card">
+        <h2 class="section-title">{{ 'Edit Customer' if customer else 'Add Customer' }}</h2>
+
+        <form method="post" action="{{ '/inventory/customers/' ~ customer.id if customer else '/inventory/customers' }}">
+            <div class="form-row">
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="name">Customer Name *</label>
+                    <input type="text" id="name" name="name" required maxlength="200"
+                           value="{{ customer.name if customer else '' }}" class="text-input">
+                </div>
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="parent_id">Parent Customer</label>
+                    <select id="parent_id" name="parent_id" class="select-input">
+                        <option value="">-- None (top-level) --</option>
+                        {% for p in parents %}
+                        {% if not customer or p.id != customer.id %}
+                        <option value="{{ p.id }}" {{ 'selected' if customer and customer.parent_id == p.id else '' }}>{{ p.name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="primary_contact_username">Primary Contact (Boone Staff)</label>
+                    <input type="text" id="primary_contact_username" name="primary_contact_username" maxlength="50"
+                           value="{{ customer.primary_contact_username if customer and customer.primary_contact_username else '' }}"
+                           class="text-input" placeholder="Username of responsible staff member">
+                </div>
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="mis_account_id">MIS Account ID</label>
+                    <input type="number" id="mis_account_id" name="mis_account_id"
+                           value="{{ customer.mis_account_id if customer and customer.mis_account_id else '' }}"
+                           class="text-input" placeholder="Optional MIS account reference">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="contact_name">Contact Name</label>
+                    <input type="text" id="contact_name" name="contact_name" maxlength="200"
+                           value="{{ customer.contact_name if customer and customer.contact_name else '' }}" class="text-input">
+                </div>
+                <div class="form-field form-field-half">
+                    <label class="field-label" for="contact_email">Contact Email</label>
+                    <input type="email" id="contact_email" name="contact_email" maxlength="200"
+                           value="{{ customer.contact_email if customer and customer.contact_email else '' }}" class="text-input">
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label class="field-label" for="count_frequency">Count Frequency</label>
+                <select id="count_frequency" name="count_frequency" class="select-input">
+                    {% set freq = customer.count_frequency if customer else 'as_needed' %}
+                    <option value="as_needed" {{ 'selected' if freq == 'as_needed' else '' }}>As Needed</option>
+                    <option value="monthly" {{ 'selected' if freq == 'monthly' else '' }}>Monthly</option>
+                    <option value="quarterly" {{ 'selected' if freq == 'quarterly' else '' }}>Quarterly</option>
+                    <option value="semi_annual" {{ 'selected' if freq == 'semi_annual' else '' }}>Semi-Annual</option>
+                    <option value="annual" {{ 'selected' if freq == 'annual' else '' }}>Annual</option>
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label class="field-label" for="notes">Notes</label>
+                <textarea id="notes" name="notes" rows="3" class="text-input">{{ customer.notes if customer and customer.notes else '' }}</textarea>
+            </div>
+
+            <div class="inventory-form-actions">
+                <button type="submit" class="btn btn-confirm">{{ 'Save Changes' if customer else 'Create Customer' }}</button>
+                <a href="/inventory/customers" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</main>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% for cust in customers %}
+<tr class="{{ 'inventory-child-row' if cust.parent_id else '' }}">
+    <td>
+        {% if cust.parent_id %}
+        <span class="inventory-hierarchy-indent"></span>
+        {% endif %}
+        <a href="/inventory/customers/{{ cust.id }}">{{ cust.name }}</a>
+    </td>
+    <td>{{ cust.parent_name or '' }}</td>
+    <td>{{ cust.primary_contact_username or '' }}</td>
+    <td>{{ cust.count_frequency | replace('_', ' ') | title }}</td>
+    <td>{{ cust.mis_account_id or '' }}</td>
+    <td>
+        {% if is_manager %}
+        <a href="/inventory/customers/{{ cust.id }}/edit" class="btn btn-sm btn-secondary">Edit</a>
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+{% if not customers %}
+<tr><td colspan="6" class="inventory-empty-cell">No customers found.</td></tr>
+{% endif %}

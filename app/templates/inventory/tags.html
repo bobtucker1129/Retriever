@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Shelf Tags{% endblock %}
+{% block header_title %}Inventory &mdash; Shelf Tags{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-form-card">
+        <h2 class="section-title">Generate Shelf Tags</h2>
+        <p class="field-hint">Select a scope below to generate a printable PDF of shelf tags (Avery 8371, 10 per page).</p>
+
+        <form method="post" action="/inventory/tags/generate" id="tagsForm">
+            <div class="form-field">
+                <label class="field-label">Scope</label>
+                <div class="inventory-tag-scope-options">
+                    <label class="inventory-radio-label">
+                        <input type="radio" name="scope" value="product" checked onchange="invTagScope(this.value)"> Single Product
+                    </label>
+                    <label class="inventory-radio-label">
+                        <input type="radio" name="scope" value="customer" onchange="invTagScope(this.value)"> All for Customer
+                    </label>
+                    <label class="inventory-radio-label">
+                        <input type="radio" name="scope" value="all" onchange="invTagScope(this.value)"> All Active Products
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-field" id="tagProductField">
+                <label class="field-label" for="product_id">Product</label>
+                <select id="product_id" name="product_id" class="select-input">
+                    <option value="">-- Select product --</option>
+                    {% for p in products_list %}
+                    <option value="{{ p.id }}">{{ p.sku }} &mdash; {{ p.name }} ({{ p.customer_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-field" id="tagCustomerField" style="display:none">
+                <label class="field-label" for="customer_id">Customer</label>
+                <select id="customer_id" name="customer_id" class="select-input">
+                    <option value="">-- Select customer --</option>
+                    {% for c in customers_list %}
+                    <option value="{{ c.id }}">{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-confirm">Generate PDF</button>
+        </form>
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Back to Dashboard</a>
+    </div>
+</main>
+
+<script>
+function invTagScope(scope) {
+    document.getElementById('tagProductField').style.display = scope === 'product' ? '' : 'none';
+    document.getElementById('tagCustomerField').style.display = scope === 'customer' ? '' : 'none';
+}
+</script>
+{% endblock %}

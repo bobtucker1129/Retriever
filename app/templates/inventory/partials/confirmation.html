@@ -1,0 +1,97 @@
+<section class="card inventory-confirm-card">
+    <h2 class="section-title">
+        Confirm {{ "Pull" if action == "pull" else "Add" }}
+    </h2>
+
+    {% if warnings %}
+    <div class="inventory-alert inventory-alert-warning">
+        <strong>Safeguard Warning{% if warnings|length > 1 %}s{% endif %}:</strong>
+        <ul class="inventory-warning-list">
+            {% for w in warnings %}
+            <li>{{ w }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="inventory-confirm-grid">
+        <div class="inventory-confirm-row">
+            <span class="field-label">Product</span>
+            <span class="field-value">{{ product.sku }} &mdash; {{ product.name }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Customer</span>
+            <span class="field-value">{{ product.customer_name }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Action</span>
+            <span class="field-value">{{ "Pull" if action == "pull" else "Add" }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Quantity</span>
+            <span class="field-value">{{ quantity }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">Current Stock</span>
+            <span class="field-value">{{ product.quantity }}</span>
+        </div>
+        <div class="inventory-confirm-row">
+            <span class="field-label">After {{ "Pull" if action == "pull" else "Add" }}</span>
+            <span class="field-value {% if new_qty < 0 %}inventory-stock-red-text{% endif %}">{{ new_qty }}</span>
+        </div>
+        {% if order_reference %}
+        <div class="inventory-confirm-row">
+            <span class="field-label">Order Reference</span>
+            <span class="field-value">{{ order_reference }}</span>
+        </div>
+        {% endif %}
+        {% if override_reason %}
+        <div class="inventory-confirm-row">
+            <span class="field-label">Override Reason</span>
+            <span class="field-value">{{ override_reason }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if needs_override %}
+    <form hx-post="/inventory/scan/confirm"
+          hx-target="#action-panel"
+          hx-swap="innerHTML">
+        <input type="hidden" name="product_id" value="{{ product.id }}">
+        <input type="hidden" name="action" value="{{ action }}">
+        <input type="hidden" name="quantity" value="{{ quantity }}">
+        <input type="hidden" name="order_reference" value="{{ order_reference }}">
+        <div class="form-field">
+            <label class="field-label" for="override_reason">Override Reason (required)</label>
+            <textarea id="override_reason" name="override_reason"
+                      class="text-input" rows="2" required
+                      placeholder="Explain why this override is needed"></textarea>
+        </div>
+        <div class="inventory-action-buttons">
+            <button type="submit" class="btn btn-confirm">Submit with Override</button>
+            <button type="button" class="btn btn-secondary"
+                    hx-get="/inventory/scan/{{ product.id }}"
+                    hx-target="#action-panel"
+                    hx-swap="innerHTML">Back</button>
+        </div>
+    </form>
+    {% else %}
+    <form hx-post="/inventory/{{ action }}"
+          hx-target="#action-panel"
+          hx-swap="innerHTML">
+        <input type="hidden" name="product_id" value="{{ product.id }}">
+        <input type="hidden" name="quantity" value="{{ quantity }}">
+        <input type="hidden" name="order_reference" value="{{ order_reference }}">
+        <input type="hidden" name="override_reason" value="{{ override_reason }}">
+        <div class="inventory-action-buttons">
+            <button type="submit" class="btn btn-confirm">
+                Confirm {{ "Pull" if action == "pull" else "Add" }}
+            </button>
+            <button type="button" class="btn btn-secondary"
+                    hx-get="/inventory/scan/{{ product.id }}"
+                    hx-target="#action-panel"
+                    hx-swap="innerHTML">Back</button>
+        </div>
+    </form>
+    {% endif %}
+</section>

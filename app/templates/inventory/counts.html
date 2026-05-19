@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Physical Counts{% endblock %}
+{% block header_title %}Inventory &mdash; Physical Counts{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">Physical Counts</h2>
+            {% if is_manager %}
+            <a href="/inventory/counts/new" class="btn btn-sm btn-confirm">New Count</a>
+            {% endif %}
+        </div>
+
+        {% if counts %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Status</th>
+                        <th>Scope</th>
+                        <th>Progress</th>
+                        <th>Flagged</th>
+                        <th>Started</th>
+                        <th>Initiated By</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in counts %}
+                    <tr>
+                        <td>#{{ c.id }}</td>
+                        <td>
+                            <span class="inventory-count-badge inventory-count-badge-{{ c.status }}">
+                                {{ c.status | replace('_', ' ') | title }}
+                            </span>
+                        </td>
+                        <td>{{ c.scope_description or '' }}</td>
+                        <td>{{ c.counted_items or 0 }} / {{ c.total_items or 0 }}</td>
+                        <td>{{ c.flagged_items or 0 }}</td>
+                        <td>{{ c.started_at.strftime('%Y-%m-%d %H:%M') if c.started_at else '' }}</td>
+                        <td>{{ c.initiated_by }}</td>
+                        <td>
+                            {% if c.status == 'in_progress' %}
+                            <a href="/inventory/counts/{{ c.id }}" class="btn btn-sm btn-confirm">Count</a>
+                            {% elif c.status == 'review' %}
+                            <a href="/inventory/counts/{{ c.id }}/review" class="btn btn-sm btn-confirm">Review</a>
+                            {% else %}
+                            <a href="/inventory/counts/{{ c.id }}" class="btn btn-sm btn-secondary">View</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="inventory-empty-text">No counts yet.</p>
+        {% endif %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Back to Dashboard</a>
+    </div>
+</main>
+{% endblock %}

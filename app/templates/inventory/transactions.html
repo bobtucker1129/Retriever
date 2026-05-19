@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Transactions - {{ product.sku }}{% endblock %}
+{% block header_title %}Inventory &mdash; {{ product.sku }} Transactions{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">{{ product.name }} &mdash; Transaction History</h2>
+        </div>
+
+        {% if transactions %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Qty</th>
+                    <th>Before</th>
+                    <th>After</th>
+                    <th>Order Ref</th>
+                    <th>Override</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr>
+                    <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') if t.created_at else '' }}</td>
+                    <td>
+                        {% if t.action == 'pull' %}
+                        <span class="inventory-action-badge inventory-action-pull">Pull</span>
+                        {% elif t.action == 'add' %}
+                        <span class="inventory-action-badge inventory-action-add">Add</span>
+                        {% else %}
+                        <span class="inventory-action-badge">{{ t.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.quantity }}</td>
+                    <td>{{ t.quantity_before }}</td>
+                    <td>{{ t.quantity_after }}</td>
+                    <td>{{ t.order_reference or '' }}</td>
+                    <td>{{ t.override_reason or '' }}</td>
+                    <td>{{ t.performed_by }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <p>No transactions recorded for this product.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/products/{{ product.id }}">&larr; {{ product.sku }}</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/scan">Scan</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/products">Products</a>
+    </div>
+</main>
+{% endblock %}

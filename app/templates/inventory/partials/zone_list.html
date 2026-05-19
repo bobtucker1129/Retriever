@@ -1,0 +1,10 @@
+{% for zone in zones %}
+<tr>
+    <td>{{ zone.name }}</td>
+    <td>{{ zone.description or '' }}</td>
+    <td><a href="/inventory/zones/{{ zone.id }}/edit" class="btn btn-sm btn-secondary">Edit</a></td>
+</tr>
+{% endfor %}
+{% if not zones %}
+<tr><td colspan="3" class="inventory-empty-cell">No zones for this site.</td></tr>
+{% endif %}

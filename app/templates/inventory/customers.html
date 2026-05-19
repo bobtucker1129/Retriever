@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Customers{% endblock %}
+{% block header_title %}Inventory &mdash; Customers{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">Customers</h2>
+            <div class="inventory-header-actions">
+                <input type="text" id="customer-search" name="search" placeholder="Search customers..."
+                       value="{{ search }}" class="text-input text-input-compact"
+                       hx-get="/inventory/partials/customer-list"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#customer-table-body"
+                       hx-include="#customer-search">
+                {% if is_manager %}
+                <a href="/inventory/customers/new" class="btn btn-confirm">Add Customer</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Parent</th>
+                        <th>Primary Contact</th>
+                        <th>Count Frequency</th>
+                        <th>MIS Account</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="customer-table-body">
+                    {% include "inventory/partials/customer_list.html" %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/">&larr; Back to Dashboard</a>
+    </div>
+</main>
+{% endblock %}

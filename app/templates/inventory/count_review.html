@@ -1,0 +1,131 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Review Count #{{ count.id }}{% endblock %}
+{% block header_title %}Inventory &mdash; Review Count #{{ count.id }}{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">
+                {{ count.scope_description or 'Physical Count' }} &mdash; Review
+                <span class="inventory-count-badge inventory-count-badge-{{ count.status }}">
+                    {{ count.status | replace('_', ' ') | title }}
+                </span>
+            </h2>
+            <div class="inventory-header-actions">
+                {% if count.status in ('in_progress', 'review') %}
+                <form method="post" action="/inventory/counts/{{ count.id }}/complete" class="inventory-inline-form">
+                    <button type="submit" class="btn btn-sm btn-confirm"
+                            onclick="return confirm('Complete this count and apply adjustments?')">Complete Count</button>
+                </form>
+                <form method="post" action="/inventory/counts/{{ count.id }}/cancel" class="inventory-inline-form">
+                    <button type="submit" class="btn btn-sm btn-reject"
+                            onclick="return confirm('Cancel this count? No adjustments will be applied.')">Cancel</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="inventory-detail-grid">
+            <div class="inventory-detail-item">
+                <span class="field-label">Total Items</span>
+                <span class="field-value">{{ count.total_items or 0 }}</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Counted</span>
+                <span class="field-value">{{ count.counted_items or 0 }}</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Flagged</span>
+                <span class="field-value">{{ count.flagged_items or 0 }}</span>
+            </div>
+            <div class="inventory-detail-item">
+                <span class="field-label">Threshold</span>
+                <span class="field-value">{{ count.discrepancy_threshold_pct }}%</span>
+            </div>
+        </div>
+    </section>
+
+    {% if flagged_items %}
+    <section class="card">
+        <h2 class="section-title">Flagged Items ({{ flagged_items | length }})</h2>
+        <p class="field-hint">These items have discrepancies exceeding the {{ count.discrepancy_threshold_pct }}% threshold. Approve each to include its adjustment, or leave unapproved to skip.</p>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Recorded</th>
+                        <th>Counted</th>
+                        <th>Discrepancy</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in flagged_items %}
+                    <tr id="review-item-{{ item.id }}" class="inventory-count-row-flagged">
+                        {% include "inventory/partials/count_review_item.html" %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        <h2 class="section-title">All Items Summary</h2>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Recorded</th>
+                        <th>Counted</th>
+                        <th>Discrepancy</th>
+                        <th>Flagged</th>
+                        <th>Approved</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in all_items %}
+                    <tr class="{{ 'inventory-count-row-flagged' if item.flagged else '' }}">
+                        <td>{{ item.customer_name }}</td>
+                        <td>{{ item.sku }}</td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.recorded_quantity }}</td>
+                        <td>{{ item.counted_quantity if item.counted_quantity is not none else '---' }}</td>
+                        <td>
+                            {% if item.discrepancy is not none %}
+                            <span class="{{ 'inventory-stock-red' if item.discrepancy != 0 else '' }}">
+                                {{ '%+d' | format(item.discrepancy) }}
+                            </span>
+                            {% else %}
+                            ---
+                            {% endif %}
+                        </td>
+                        <td>{{ 'Yes' if item.flagged else '' }}</td>
+                        <td>
+                            {% if item.flagged %}
+                            {{ 'Yes' if item.approved else 'No' }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/counts/{{ count.id }}">&larr; Back to Count Detail</a>
+        &nbsp;|&nbsp;
+        <a href="/inventory/counts">All Counts</a>
+    </div>
+</main>
+{% endblock %}

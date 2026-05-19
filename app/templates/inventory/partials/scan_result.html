@@ -1,0 +1,42 @@
+<section class="card">
+    {% if error %}
+    <div class="inventory-alert inventory-alert-error">{{ error }}</div>
+    {% elif results %}
+    <h2 class="section-title">Search Results for "{{ scan_value }}"</h2>
+    <table class="data-table inventory-scan-results-table">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Product</th>
+                <th>Customer</th>
+                <th>Site / Zone</th>
+                <th>Qty</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in results %}
+            <tr class="{% if r.status == 'retired' %}inventory-retired-row{% endif %}">
+                <td>{{ r.sku }}</td>
+                <td>{{ r.name }}</td>
+                <td>{{ r.customer_name }}</td>
+                <td>{{ r.site_name }} / {{ r.zone_name }}</td>
+                <td>{{ r.quantity }}</td>
+                <td>{% if r.status == 'retired' %}<span class="inventory-retired-badge">RETIRED</span>{% else %}Active{% endif %}</td>
+                <td>
+                    <button class="btn btn-sm btn-confirm"
+                            hx-get="/inventory/scan/{{ r.id }}"
+                            hx-target="#action-panel"
+                            hx-swap="innerHTML">Select</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No products found{% if scan_value %} for "{{ scan_value }}"{% endif %}. Check the barcode or try a different search term.</p>
+    </div>
+    {% endif %}
+</section>

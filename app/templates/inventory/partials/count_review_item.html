@@ -1,0 +1,26 @@
+<td>{{ item.customer_name }}</td>
+<td>{{ item.sku }}</td>
+<td>{{ item.product_name }}</td>
+<td>{{ item.recorded_quantity }}</td>
+<td>{{ item.counted_quantity if item.counted_quantity is not none else '---' }}</td>
+<td>
+    <span class="inventory-count-disc-warn">
+        {{ '%+d' | format(item.discrepancy) if item.discrepancy is not none else '---' }}
+    </span>
+</td>
+<td>
+    {% if item.approved is none %}
+    <form hx-post="/inventory/counts/{{ count.id }}/approve/{{ item.id }}"
+          hx-target="#review-item-{{ item.id }}"
+          hx-swap="innerHTML"
+          class="inventory-inline-form">
+        <input type="hidden" name="approved" value="true">
+        <button type="submit" class="btn btn-sm btn-confirm">Approve</button>
+    </form>
+    {% elif item.approved %}
+    <span class="inventory-count-badge inventory-count-badge-completed">Approved</span>
+    <span class="field-hint">by {{ item.approved_by }}</span>
+    {% else %}
+    <span class="inventory-count-badge inventory-count-badge-canceled">Rejected</span>
+    {% endif %}
+</td>

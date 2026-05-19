@@ -1,0 +1,42 @@
+<td>{{ item.customer_name }}</td>
+<td>{{ item.sku }}</td>
+<td>{{ item.product_name }}</td>
+<td>{{ item.recorded_quantity }}</td>
+<td>
+    {% if item.counted_quantity is not none %}
+    {{ item.counted_quantity }}
+    {% else %}
+    ---
+    {% endif %}
+</td>
+<td>
+    {% if item.discrepancy is not none %}
+    <span class="{{ 'inventory-count-disc-warn' if item.flagged else '' }}">
+        {{ '%+d' | format(item.discrepancy) }}
+    </span>
+    {% else %}
+    ---
+    {% endif %}
+</td>
+<td>
+    {% if item.flagged %}
+    <span class="inventory-count-badge inventory-count-badge-flagged">Flagged</span>
+    {% elif item.counted_quantity is not none %}
+    <span class="inventory-count-badge inventory-count-badge-counted">OK</span>
+    {% else %}
+    <span class="inventory-count-badge inventory-count-badge-pending">Pending</span>
+    {% endif %}
+</td>
+{% if count.status == 'in_progress' %}
+<td>
+    <form hx-post="/inventory/counts/{{ count.id }}/items/{{ item.id }}"
+          hx-target="#count-item-{{ item.id }}"
+          hx-swap="innerHTML"
+          class="inventory-count-entry-form">
+        <input type="number" name="counted_quantity" class="text-input inventory-count-qty-input"
+               value="{{ item.counted_quantity if item.counted_quantity is not none else '' }}"
+               min="0" required>
+        <button type="submit" class="btn btn-sm btn-confirm">Save</button>
+    </form>
+</td>
+{% endif %}

@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - Edit Zone{% endblock %}
+{% block header_title %}Inventory &mdash; Edit Zone{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card inventory-form-card">
+        <h2 class="section-title">Edit Zone: {{ zone.name }}</h2>
+
+        <form method="post" action="/inventory/zones/{{ zone.id }}">
+            <div class="form-field">
+                <label class="field-label">Site</label>
+                <input type="text" class="text-input" value="{{ zone.site_name }}" disabled>
+            </div>
+            <div class="form-field">
+                <label class="field-label" for="name">Zone Name *</label>
+                <input type="text" id="name" name="name" required maxlength="100"
+                       value="{{ zone.name }}" class="text-input">
+            </div>
+            <div class="form-field">
+                <label class="field-label" for="description">Description</label>
+                <textarea id="description" name="description" rows="2" class="text-input">{{ zone.description or '' }}</textarea>
+            </div>
+            <div class="inventory-form-actions">
+                <button type="submit" class="btn btn-confirm">Save Changes</button>
+                <a href="/inventory/sites" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </section>
+</main>
+{% endblock %}

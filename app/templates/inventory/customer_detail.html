@@ -1,0 +1,144 @@
+{% extends "layout.html" %}
+
+{% block title %}Retriever - Inventory - {{ customer.name }}{% endblock %}
+{% block header_title %}Inventory &mdash; {{ customer.name }}{% endblock %}
+
+{% block content %}
+<main class="main-content inventory-content">
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">{{ customer.name }}</h2>
+            {% if is_manager %}
+            <a href="/inventory/customers/{{ customer.id }}/edit" class="btn btn-sm btn-confirm">Edit Customer</a>
+            <form method="post" action="/inventory/tags/generate" class="inventory-inline-form">
+                <input type="hidden" name="scope" value="customer">
+                <input type="hidden" name="customer_id" value="{{ customer.id }}">
+                <button type="submit" class="btn btn-sm btn-secondary">Generate Tags</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <div class="inventory-detail-grid">
+            {% if customer.parent_name %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Parent</span>
+                <span class="field-value"><a href="/inventory/customers/{{ customer.parent_id }}">{{ customer.parent_name }}</a></span>
+            </div>
+            {% endif %}
+            {% if customer.primary_contact_username %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Primary Contact</span>
+                <span class="field-value">{{ customer.primary_contact_username }}</span>
+            </div>
+            {% endif %}
+            {% if customer.mis_account_id %}
+            <div class="inventory-detail-item">
+                <span class="field-label">MIS Account ID</span>
+                <span class="field-value">{{ customer.mis_account_id }}</span>
+            </div>
+            {% endif %}
+            {% if customer.contact_name %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Contact</span>
+                <span class="field-value">{{ customer.contact_name }}{% if customer.contact_email %} ({{ customer.contact_email }}){% endif %}</span>
+            </div>
+            {% endif %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Count Frequency</span>
+                <span class="field-value">{{ customer.count_frequency | replace('_', ' ') | title }}</span>
+            </div>
+            {% if customer.last_count_date %}
+            <div class="inventory-detail-item">
+                <span class="field-label">Last Count</span>
+                <span class="field-value">{{ customer.last_count_date }}</span>
+            </div>
+            {% endif %}
+            {% if customer.notes %}
+            <div class="inventory-detail-item inventory-detail-full">
+                <span class="field-label">Notes</span>
+                <span class="field-value">{{ customer.notes }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {% if children %}
+    <section class="card">
+        <h2 class="section-title">Sub-Programs</h2>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Primary Contact</th>
+                        <th>Count Frequency</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for child in children %}
+                    <tr>
+                        <td><a href="/inventory/customers/{{ child.id }}">{{ child.name }}</a></td>
+                        <td>{{ child.primary_contact_username or '' }}</td>
+                        <td>{{ child.count_frequency | replace('_', ' ') | title }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        <div class="section-header">
+            <h2 class="section-title">Products ({{ products | length }})</h2>
+            {% if is_manager %}
+            <a href="/inventory/products/new?customer_id={{ customer.id }}" class="btn btn-sm btn-confirm">Add Product</a>
+            {% endif %}
+        </div>
+        {% if products %}
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Zone</th>
+                        <th>Qty</th>
+                        <th>Threshold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr class="{{ 'inventory-retired-row' if p.status == 'retired' else '' }}">
+                        <td>
+                            {% if p.status == 'retired' %}
+                            <span class="inventory-retired-badge">RETIRED</span>
+                            {% elif p.quantity == 0 %}
+                            <span class="inventory-stock-red" title="Out of stock"></span>
+                            {% elif p.low_threshold and p.quantity <= p.low_threshold %}
+                            <span class="inventory-stock-amber" title="Low stock"></span>
+                            {% else %}
+                            <span class="inventory-stock-green" title="OK"></span>
+                            {% endif %}
+                        </td>
+                        <td><a href="/inventory/products/{{ p.id }}">{{ p.sku }}</a></td>
+                        <td>{{ p.name }}</td>
+                        <td>{{ p.zone_name }}</td>
+                        <td>{{ p.quantity }}</td>
+                        <td>{{ p.low_threshold if p.low_threshold else '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="inventory-empty-text">No products for this customer.</p>
+        {% endif %}
+    </section>
+
+    <div class="inventory-back-link">
+        <a href="/inventory/customers">&larr; Back to Customers</a>
+    </div>
+</main>
+{% endblock %}
