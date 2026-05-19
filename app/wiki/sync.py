@@ -69,7 +69,10 @@ class SweetProcessParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag.lower() != "a" or not self._active_href:
             return
-        label = clean_label(" ".join(self._active_text)) or self._label_from_url(self._active_href)
+        label = sweetprocess_display_label(
+            label=clean_label(" ".join(self._active_text)),
+            url=self._active_href,
+        )
         self.links.append(
             WikiLinkRecord(
                 label=label,
@@ -81,15 +84,24 @@ class SweetProcessParser(HTMLParser):
         self._active_href = ""
         self._active_text = []
 
-    @staticmethod
-    def _label_from_url(url: str) -> str:
-        slug = url.rstrip("/").split("/")[-1]
-        slug = re.sub(r"-[a-z]{2}$", "", slug)
-        return clean_label(slug.replace("-", " ")).title()
-
 
 def clean_label(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def sweetprocess_display_label(*, label: str, url: str) -> str:
+    cleaned = clean_label(label)
+    if not cleaned or cleaned.lower() in {"link", "click here", "view", "open"}:
+        return sweetprocess_label_from_url(url)
+    return cleaned
+
+
+def sweetprocess_label_from_url(url: str) -> str:
+    slug = url.rstrip("/").split("/")[-1]
+    slug = re.sub(r"-[a-z]{2}$", "", slug)
+    words = clean_label(slug.replace("-", " ")).split(" ")
+    acronyms = {"abi", "am", "dsf", "po", "sbcers", "st", "to", "umt", "ups", "xmpie"}
+    return " ".join(word.upper() if word.lower() in acronyms else word.title() for word in words)
 
 
 def parse_internal_wiki_links(html: str) -> list[WikiLinkRecord]:

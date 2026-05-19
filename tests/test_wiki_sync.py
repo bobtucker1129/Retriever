@@ -27,6 +27,17 @@ def test_parse_internal_wiki_links_dedupes_sweetprocess_links() -> None:
     assert links[0].visible_to == "employee"
 
 
+def test_parse_internal_wiki_links_uses_url_when_label_is_generic() -> None:
+    html = """
+    <a href="https://www.sweetprocess.com/procedures/132kYCJ9J0/processing-cal-poly-dsf-am/">LINK</a>
+    """
+
+    links = parse_internal_wiki_links(html)
+
+    assert len(links) == 1
+    assert links[0].label == "Processing Cal Poly DSF"
+
+
 def test_drive_item_to_document_hides_raw_source_from_employees() -> None:
     document = drive_item_to_document(
         DriveInventoryItem(

@@ -28,6 +28,7 @@ from app.wiki.sync import (
     DriveInventoryItem,
     fetch_internal_wiki_html,
     parse_datetime,
+    sweetprocess_display_label,
     sync_drive_inventory,
     sync_internal_wiki_links,
 )
@@ -433,7 +434,10 @@ def _sweetprocess_links_from_repo(settings: AppSettings) -> list[tuple[str, str,
         links = []
     if not links:
         return SWEETPROCESS_LINKS
-    return [(link.label, "", link.url) for link in links]
+    return [
+        (sweetprocess_display_label(label=link.label, url=link.url), "", link.url)
+        for link in links
+    ]
 
 
 def _source_statuses_from_repo(settings: AppSettings) -> list[WikiSourceStatusRecord]:
