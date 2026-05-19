@@ -12,6 +12,7 @@ from typing import Any, Optional
 from xml.etree import ElementTree
 
 from fastapi import UploadFile
+from PyPDF2 import PdfReader
 
 from app.config import AppSettings
 
@@ -120,6 +121,25 @@ def _xlsx_preview(data: bytes) -> str:
     return _trim_preview(out.getvalue())
 
 
+def _pdf_preview(data: bytes) -> str:
+    try:
+        reader = PdfReader(BytesIO(data))
+    except Exception:
+        return ""
+
+    pages: list[str] = []
+    for page in reader.pages[:10]:
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        if text.strip():
+            pages.append(text.strip())
+        if len("\n\n".join(pages)) >= MAX_FETCH_UPLOAD_PREVIEW_CHARS:
+            break
+    return _trim_preview("\n\n".join(pages))
+
+
 def _preview_for_upload(filename: str, data: bytes) -> tuple[str, Optional[str]]:
     ext = Path(filename).suffix.lower()
     if ext == ".csv":
@@ -131,7 +151,7 @@ def _preview_for_upload(filename: str, data: bytes) -> tuple[str, Optional[str]]
     if ext in _IMAGE_EXTENSIONS:
         return "", "image"
     if ext == ".pdf":
-        return "", "pdf"
+        return _pdf_preview(data), "pdf"
     return "", None
 
 

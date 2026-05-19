@@ -66,3 +66,27 @@ async def test_save_fetch_uploads_extracts_xlsx_preview(tmp_path) -> None:
     assert saved[0]["kind"] == "xlsx"
     assert "Customer,Orders" in saved[0]["textPreview"]
     assert "Boone,12" in saved[0]["textPreview"]
+
+
+async def test_save_fetch_uploads_extracts_pdf_preview(monkeypatch, tmp_path) -> None:
+    class FakePage:
+        def extract_text(self) -> str:
+            return "Boone PDF upload text"
+
+    class FakePdfReader:
+        def __init__(self, _stream: BytesIO) -> None:
+            self.pages = [FakePage()]
+
+    monkeypatch.setattr("app.fetch.uploads.PdfReader", FakePdfReader)
+    settings = AppSettings(fetch_uploads_enabled=True, retriever_upload_dir=tmp_path)
+    upload = UploadFile(filename="proof.pdf", file=BytesIO(b"%PDF-pretend"))
+
+    saved = await save_fetch_uploads(
+        settings,
+        user_id=7,
+        conversation_id="conv-1",
+        files=[upload],
+    )
+
+    assert saved[0]["kind"] == "pdf"
+    assert saved[0]["textPreview"] == "Boone PDF upload text"
