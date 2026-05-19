@@ -8,6 +8,7 @@ from app.fetch.answer_render import (
     fetch_assistant_body_display,
     fetch_thread_load_metadata_for_turn,
     human_model_label,
+    status_phrase_for_assistant,
 )
 
 
@@ -78,8 +79,8 @@ def test_build_assistant_status_line_booneops_shows_model_and_load() -> None:
     )
     line = build_assistant_status_line(m, s)
     assert "Claude Sonnet 4.6 (claude-sonnet-4-6)" in line
-    assert "Thread load: light" in line
-    assert "not a model context %" in line
+    assert "Thread: light" in line
+    assert "not a model context %" not in line
 
 
 def test_build_assistant_status_line_booneops_without_gateway_model() -> None:
@@ -200,7 +201,8 @@ def test_build_assistant_status_line_respects_context() -> None:
     )
     line = build_assistant_status_line(m, s)
     assert "Claude Stub" in line
-    assert "Context: 0% stub" in line
+    assert "Status: local fallback" in line
+    assert "Context:" not in line
 
     m_err = FetchMessageRecord(
         message_id="m2",
@@ -214,7 +216,26 @@ def test_build_assistant_status_line_respects_context() -> None:
         context_state="booneops_error",
         metadata=None,
     )
-    assert "Context: 0% error" in build_assistant_status_line(m_err, s)
+    err_line = build_assistant_status_line(m_err, s)
+    assert "Status: could not complete" in err_line
+    assert "Context:" not in err_line
+    assert "error" not in err_line.lower()
+
+
+def test_status_phrase_for_assistant_hides_internal_context_percent() -> None:
+    m = FetchMessageRecord(
+        message_id="m1",
+        conversation_id="c1",
+        user_id=1,
+        role="assistant",
+        content="x",
+        route_key="local",
+        model_label=None,
+        context_percent=87,
+        context_state="booneops_error",
+        metadata=None,
+    )
+    assert status_phrase_for_assistant(m) == "Status: could not complete"
 
 
 def test_fetch_assistant_body_display_strips_sources_when_cards_present() -> None:

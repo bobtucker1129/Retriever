@@ -894,7 +894,8 @@ def test_fetch_post_ask_stub_reply_persists_without_external_calls(monkeypatch) 
     assert page.status_code == 200
     assert "What is DSF?" in page.text
     assert "stub" in page.text.lower()
-    assert "Context: 0% stub" in page.text
+    assert "Status: local fallback" in page.text
+    assert "Context:" not in page.text
 
 
 def test_fetch_post_ask_legacy_slash_help_is_no_longer_local_guidance(monkeypatch) -> None:
@@ -1119,7 +1120,7 @@ def test_fetch_post_ask_printsmith_calls_broker_when_enabled(monkeypatch) -> Non
     page = client.get(response.headers["location"])
     assert page.status_code == 200
     assert "Model: not recorded" in page.text
-    assert "Thread load:" in page.text
+    assert "Thread:" in page.text
     assert "Anchored BooneOps reply text." in page.text
 
 

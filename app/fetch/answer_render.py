@@ -96,36 +96,30 @@ def _thread_load_phrase(m: FetchMessageRecord) -> str:
 
     if "fetch_thread_load_bucket" not in meta:
         if state == "booneops":
-            return "Thread load: not tracked on this older reply (not a model context %)."
+            return "Thread: not tracked"
         return ""
 
     bucket = str(meta.get("fetch_thread_load_bucket") or "unknown").strip()
     chars = meta.get("fetch_thread_char_estimate")
     suggest = bool(meta.get("fetch_new_chat_suggested"))
 
-    if isinstance(chars, int) and chars >= 0:
-        core = f"Thread load: {bucket} (~{chars} chars; not a model context %)"
-    else:
-        core = f"Thread load: {bucket} (not a model context %)"
+    core = f"Thread: {bucket}"
 
     if suggest:
-        return f"{core} Consider a new chat if answers drift or you keep growing this thread."
+        return f"{core} Consider starting a new chat if answers drift."
     return core
 
 
-def context_line_for_assistant(m: FetchMessageRecord) -> tuple[int, str]:
-    """Return (percent, state word) for legacy stub/error lines using the old percent slot."""
-    pct = m.context_percent
-    if pct is None:
-        pct = 0
+def status_phrase_for_assistant(m: FetchMessageRecord) -> str:
+    """Return a user-facing reply status without exposing internal context lane details."""
     state_raw = (m.context_state or "").strip().lower()
     if state_raw in ("booneops_error", "error"):
-        return pct, "error"
+        return "Status: could not complete"
     if state_raw in ("stub",):
-        return pct, "stub"
+        return "Status: local fallback"
     if state_raw in ("booneops", "ready", "") or not state_raw:
-        return pct, "ready"
-    return pct, state_raw.replace("_", " ")
+        return "Status: ready"
+    return f"Status: {state_raw.replace('_', ' ')}"
 
 
 def build_assistant_status_line(m: FetchMessageRecord, settings: AppSettings) -> str:
@@ -136,8 +130,7 @@ def build_assistant_status_line(m: FetchMessageRecord, settings: AppSettings) ->
     if state == "booneops" and load_fragment:
         return f"{model_fragment} | {load_fragment}"
 
-    pct, state_word = context_line_for_assistant(m)
-    return f"{model_fragment} | Context: {pct}% {state_word}"
+    return f"{model_fragment} | {status_phrase_for_assistant(m)}"
 
 
 # GFM-style pipe tables need the "tables" extension; nh3 then keeps structure via explicit allowlists.
