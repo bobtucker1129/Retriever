@@ -47,12 +47,22 @@ def _build_active_filter(database: str, table: str, alias: str = "") -> str:
 class MySQLClient:
     def get_connection(self, database: Optional[str] = None):
         settings = get_settings()
+        target_database = database or settings.mysql_database
+        host = settings.mysql_host
+        port = settings.mysql_port
+        user = settings.mysql_user
+        password = settings.mysql_password
+        if target_database == settings.inventory_mysql_database and settings.inventory_mysql_user:
+            host = settings.inventory_mysql_host or settings.mysql_host
+            port = settings.inventory_mysql_port or settings.mysql_port
+            user = settings.inventory_mysql_user
+            password = settings.inventory_mysql_password
         return mysql.connector.connect(
-            host=settings.mysql_host,
-            port=settings.mysql_port,
-            database=database or settings.mysql_database,
-            user=settings.mysql_user,
-            password=settings.mysql_password,
+            host=host,
+            port=port,
+            database=target_database,
+            user=user,
+            password=password,
             charset="utf8mb4",
             autocommit=True,
         )
@@ -90,4 +100,3 @@ class MySQLClient:
 @lru_cache(maxsize=1)
 def get_mysql_client() -> MySQLClient:
     return MySQLClient()
-

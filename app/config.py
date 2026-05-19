@@ -105,6 +105,12 @@ class AppSettings(BaseSettings):
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
 
+    inventory_mysql_database: str = "retriever_inventory"
+    inventory_mysql_host: Optional[str] = None
+    inventory_mysql_port: Optional[int] = None
+    inventory_mysql_user: Optional[str] = None
+    inventory_mysql_password: Optional[str] = None
+
     booneops_broker_enabled: bool = False
     booneops_broker_url: Optional[str] = None
     booneops_broker_bearer_token: Optional[str] = None

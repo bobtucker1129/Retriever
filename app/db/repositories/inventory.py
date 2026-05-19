@@ -15,11 +15,10 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.auth.permissions import CurrentUser
+from app.config import get_settings
 from app.database.mysql_client import get_mysql_client
 
 logger = logging.getLogger(__name__)
-
-INVENTORY_DB_NAME = "retriever_inventory"
 
 def is_manager(user: CurrentUser) -> bool:
     """Return True if user has manager-tier access (CRUD, counts, tags)."""
@@ -29,7 +28,7 @@ def is_manager(user: CurrentUser) -> bool:
 def _get_inventory_connection():
     """Get a MySQL connection to the retriever_inventory schema."""
     client = get_mysql_client()
-    return client.get_connection(INVENTORY_DB_NAME)
+    return client.get_connection(get_settings().inventory_mysql_database)
 
 
 def _fetch_all(
