@@ -11,6 +11,15 @@ from app.db.repositories.fetch import FetchMessageRecord
 
 
 _TABLE_ROW_START_RE = re.compile(r"^(?:\d{4,}|[A-Z]{2,}[-\s]?\d{3,})$", re.IGNORECASE)
+_POSITIVE_METRIC_HEADER_RE = re.compile(
+    r"\b(total|amount|revenue|sales|orders|count|qty|quantity|jobs|value|subtotal|price|cost)\b",
+    re.IGNORECASE,
+)
+_IDENTIFIER_HEADER_RE = re.compile(
+    r"\b(invoice|inv|id|#|number|num|ecom|order\s*(?:id|#|number|num)?|job|code|sku)\b",
+    re.IGNORECASE,
+)
+_GROUPABLE_HEADER_RE = re.compile(r"\b(due|date|status|stage|type|category)\b", re.IGNORECASE)
 
 
 class _TableTextParser(HTMLParser):
@@ -72,6 +81,94 @@ def _sanitize_header(value: str, fallback: str) -> str:
     return cleaned[:80] or fallback
 
 
+def _parse_numeric_cell(value: str) -> float | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    negative = raw.startswith("(") and raw.endswith(")")
+    cleaned = re.sub(r"[$,%*()\s]", "", raw).replace(",", "")
+    if not re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned):
+        return None
+    parsed = float(cleaned)
+    return -parsed if negative else parsed
+
+
+def _find_metric_column(headers: list[str], rows: list[list[str]]) -> int | None:
+    for idx in range(len(headers) - 1, 0, -1):
+        header = headers[idx]
+        values = [_parse_numeric_cell(row[idx] if idx < len(row) else "") for row in rows]
+        numeric_count = sum(value is not None for value in values)
+        if numeric_count == 0:
+            continue
+        if _POSITIVE_METRIC_HEADER_RE.search(header):
+            return idx
+        mostly_numeric = numeric_count >= max(2, len(rows) // 2 + 1)
+        if mostly_numeric and not _IDENTIFIER_HEADER_RE.search(header):
+            return idx
+    return None
+
+
+def _find_group_column(headers: list[str]) -> int | None:
+    for idx in range(len(headers) - 1, 0, -1):
+        if _GROUPABLE_HEADER_RE.search(headers[idx]):
+            return idx
+    return None
+
+
+def _context_from_table_rows(
+    *,
+    headers: list[str],
+    data_rows: list[list[str]],
+    conversation_id: str,
+    request_id: str,
+) -> dict[str, Any] | None:
+    if len(headers) < 2 or not data_rows:
+        return None
+
+    padded_rows = [row + [""] * max(0, len(headers) - len(row)) for row in data_rows]
+    export_rows = [
+        {f"col{i}": padded[i] if i < len(padded) else "" for i in range(len(headers))}
+        for padded in padded_rows
+    ]
+    if not export_rows:
+        return None
+
+    metric_index = _find_metric_column(headers, padded_rows)
+    data_label = "Count"
+    table_data: list[dict[str, Any]] = []
+    if metric_index is not None:
+        data_label = _sanitize_header(headers[metric_index], "Value")
+        for padded in padded_rows:
+            label = (padded[0] if padded else "").strip()
+            value = _parse_numeric_cell(padded[metric_index] if metric_index < len(padded) else "")
+            if label and value is not None:
+                table_data.append({"label": label, "value": value})
+    else:
+        group_index = _find_group_column(headers)
+        if group_index is not None:
+            counts: dict[str, int] = {}
+            for padded in padded_rows:
+                label = (padded[group_index] if group_index < len(padded) else "").strip()
+                label = label or "Unspecified"
+                counts[label] = counts.get(label, 0) + 1
+            table_data = [{"label": label, "value": value} for label, value in counts.items()]
+        else:
+            table_data = [{"label": "Rows", "value": len(export_rows)}]
+
+    export_columns = [
+        {"key": f"col{i}", "header": _sanitize_header(header, f"Column {i + 1}"), "kind": "string"}
+        for i, header in enumerate(headers)
+    ]
+    return _base_context(
+        conversation_id=conversation_id,
+        request_id=request_id,
+        data_label=data_label,
+        table_data=table_data,
+        export_columns=export_columns,
+        export_rows=export_rows,
+    )
+
+
 def _base_context(
     *,
     conversation_id: str,
@@ -130,37 +227,18 @@ def _markdown_table_context(
     if not re.match(r"^\|[\s:\-]+\|", table_lines[1]):
         return None
 
-    table_data: list[dict[str, Any]] = []
-    export_rows: list[dict[str, str]] = []
+    data_rows: list[list[str]] = []
     for row_line in table_lines[2:]:
         cells = [cell.strip() for cell in row_line.split("|") if cell.strip()]
         if len(cells) < 2:
             continue
-        label = cells[0].replace("**", "").strip()
-        raw_value = re.sub(r"[$,*]", "", cells[-1]).strip()
-        try:
-            value = float(raw_value)
-        except ValueError:
-            value = 1
-        if not label:
-            continue
-        table_data.append({"label": label, "value": value})
-        export_rows.append({f"col{i}": cells[i] if i < len(cells) else "" for i in range(len(headers))})
+        data_rows.append([cell.replace("**", "").strip() for cell in cells])
 
-    if not export_rows:
-        return None
-
-    export_columns = [
-        {"key": f"col{i}", "header": _sanitize_header(header, f"Column {i + 1}"), "kind": "string"}
-        for i, header in enumerate(headers)
-    ]
-    return _base_context(
+    return _context_from_table_rows(
+        headers=headers,
+        data_rows=data_rows,
         conversation_id=conversation_id,
         request_id=request_id,
-        data_label=_sanitize_header(headers[-1], "Value"),
-        table_data=table_data,
-        export_columns=export_columns,
-        export_rows=export_rows,
     )
 
 
@@ -184,38 +262,14 @@ def _html_table_context(
         if not data_rows:
             continue
 
-        export_rows: list[dict[str, str]] = []
-        table_data: list[dict[str, Any]] = []
-        for cells in data_rows:
-            padded = cells + [""] * max(0, len(headers) - len(cells))
-            export_rows.append({f"col{i}": padded[i] if i < len(padded) else "" for i in range(len(headers))})
-            label = (padded[0] if padded else "").strip()
-            if not label:
-                continue
-            raw_value = re.sub(r"[$,*]", "", (padded[-1] if padded else "")).strip()
-            try:
-                value = float(raw_value)
-            except ValueError:
-                value = 1
-            table_data.append({"label": label, "value": value})
-
-        if not export_rows:
-            continue
-        if not table_data:
-            table_data = [{"label": "Rows", "value": len(export_rows)}]
-
-        export_columns = [
-            {"key": f"col{i}", "header": header, "kind": "string"}
-            for i, header in enumerate(headers)
-        ]
-        return _base_context(
+        context = _context_from_table_rows(
+            headers=headers,
+            data_rows=data_rows,
             conversation_id=conversation_id,
             request_id=request_id,
-            data_label=_sanitize_header(headers[-1], "Value"),
-            table_data=table_data,
-            export_columns=export_columns,
-            export_rows=export_rows,
         )
+        if context is not None:
+            return context
     return None
 
 
