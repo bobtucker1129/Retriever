@@ -48,7 +48,7 @@ def _require_manager(user: CurrentUser) -> None:
 
 
 def _username(user: CurrentUser) -> str:
-    return user.email or user.display_name or "unknown"
+    return (user.email or user.display_name or "unknown")[:50]
 
 
 def _pull_warning_pct() -> int:
@@ -1044,6 +1044,7 @@ async def count_item_save(
 
     inv_queries.update_count_item(
         item_id=item_id,
+        count_id=count_id,
         counted_quantity=counted_quantity,
         counted_by=_username(user),
         threshold_pct=count["discrepancy_threshold_pct"],

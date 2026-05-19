@@ -6,6 +6,8 @@ from io import BytesIO
 from fastapi.testclient import TestClient
 
 import app.auth.sessions as session_module
+from app.auth.permissions import CurrentUser
+from app.db.repositories import inventory as inventory_repo
 import app.routes.inventory as inventory_routes
 from app.config import AppSettings
 from app.dependencies import settings_dependency
@@ -190,8 +192,8 @@ class FakeInventoryRepository:
     def get_count_item(self, item_id):
         return dict(self.count_item)
 
-    def update_count_item(self, item_id, counted_quantity, counted_by, threshold_pct):
-        self.calls.append(("update_count_item", item_id, counted_quantity, counted_by, threshold_pct))
+    def update_count_item(self, item_id, count_id, counted_quantity, counted_by, threshold_pct):
+        self.calls.append(("update_count_item", item_id, count_id, counted_quantity, counted_by, threshold_pct))
         self.count_item["counted_quantity"] = counted_quantity
         self.count_item["discrepancy"] = counted_quantity - self.count_item["recorded_quantity"]
         self.count_item["flagged"] = False
@@ -323,10 +325,40 @@ def test_count_item_entry_is_viewer_but_review_is_manager(monkeypatch) -> None:
     review_allowed = manager.post("/inventory/counts/5/review")
 
     assert save.status_code == 200
-    assert ("update_count_item", 9, 97, "viewer@boonegraphics.net", 20) in fake.calls
+    assert ("update_count_item", 9, 5, 97, "viewer@boonegraphics.net", 20) in fake.calls
     assert review_denied.status_code == 403
     assert review_allowed.status_code == 303
     assert review_allowed.headers["location"] == "/inventory/counts/5/review"
+
+
+def test_inventory_audit_username_fits_legacy_schema() -> None:
+    user = CurrentUser(
+        id=1,
+        email="very-long-inventory-user-address-that-exceeds-fifty-characters@boonegraphics.net",
+        display_name="Inventory User",
+    )
+
+    username = inventory_routes._username(user)
+
+    assert len(username) == 50
+    assert username == "very-long-inventory-user-address-that-exceeds-fift"
+
+
+def test_inventory_import_auto_sku_sequence_uses_active_cursor() -> None:
+    class Cursor:
+        def __init__(self):
+            self.executed: list[tuple] = []
+
+        def execute(self, query, params=()):
+            self.executed.append((query, params))
+
+        def fetchone(self):
+            return {"max_num": 42}
+
+    cursor = Cursor()
+
+    assert inventory_repo._next_auto_sku_number(cursor) == 43
+    assert cursor.executed
 
 
 def test_tags_route_generates_pdf_for_manager_only(monkeypatch) -> None:

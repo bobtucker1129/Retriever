@@ -312,6 +312,19 @@ def generate_next_sku() -> str:
     return f"INV-{next_num:04d}"
 
 
+def _next_auto_sku_number(cursor) -> int:
+    """Return the next INV sequence number using the caller's active transaction."""
+    cursor.execute(
+        "SELECT MAX(CAST(SUBSTRING(sku, 5) AS UNSIGNED)) AS max_num "
+        "FROM products WHERE sku LIKE 'INV-%%'"
+    )
+    row = cursor.fetchone()
+    if not row:
+        return 1
+    max_num = row["max_num"] if isinstance(row, dict) else row[0]
+    return (max_num or 0) + 1
+
+
 def get_products(
     customer_id: Optional[int] = None,
     site_id: Optional[int] = None,
@@ -519,9 +532,15 @@ def bulk_create_products(rows: List[Dict[str, Any]], username: str) -> int:
     conn.autocommit = False
     created = 0
     try:
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
+        next_auto_sku_number: Optional[int] = None
         for data in rows:
-            sku = data.get("sku") or generate_next_sku()
+            sku = data.get("sku")
+            if not sku:
+                if next_auto_sku_number is None:
+                    next_auto_sku_number = _next_auto_sku_number(cursor)
+                sku = f"INV-{next_auto_sku_number:04d}"
+                next_auto_sku_number += 1
             cursor.execute(
                 "INSERT INTO products "
                 "(customer_id, zone_id, sku, name, description, unit_type, "
@@ -1091,7 +1110,7 @@ def get_count_item(item_id: int) -> Optional[Dict[str, Any]]:
 
 
 def update_count_item(
-    item_id: int, counted_quantity: int, counted_by: str, threshold_pct: int,
+    item_id: int, count_id: int, counted_quantity: int, counted_by: str, threshold_pct: int,
 ) -> Dict[str, Any]:
     """Save a counted quantity, compute discrepancy, auto-flag if above threshold."""
     conn = _get_inventory_connection()
@@ -1102,8 +1121,8 @@ def update_count_item(
             "SELECT ci.*, ic.discrepancy_threshold_pct "
             "FROM count_items ci "
             "JOIN inventory_counts ic ON ic.id = ci.count_id "
-            "WHERE ci.id = %s FOR UPDATE",
-            (item_id,),
+            "WHERE ci.id = %s AND ci.count_id = %s FOR UPDATE",
+            (item_id, count_id),
         )
         item = cursor.fetchone()
         if not item:
