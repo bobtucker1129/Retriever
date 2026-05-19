@@ -405,6 +405,11 @@ def test_barcode_generation_uses_code39_without_checksum(monkeypatch) -> None:
     assert captured["options"]["write_text"] is False
 
 
+def test_barcode_value_falls_back_to_id_for_non_code39_sku() -> None:
+    assert tag_generator._barcode_value_for_product({"id": 42, "sku": "loop_abc#123"}) == "42"
+    assert tag_generator._barcode_value_for_product({"id": 42, "sku": "loop-abc-123"}) == "LOOP-ABC-123"
+
+
 def test_generated_tag_pdf_is_readable_and_mentions_sku() -> None:
     pdf = tag_generator.generate_tags_pdf(
         [
@@ -425,3 +430,17 @@ def test_generated_tag_pdf_is_readable_and_mentions_sku() -> None:
     text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf)).pages)
     assert "INV-0042" in text
     assert "Business Cards" in text
+
+
+def test_generated_tag_pdf_accepts_sku_without_id() -> None:
+    pdf = tag_generator.generate_tags_pdf(
+        [
+            {
+                "sku": "LOOP-ABC-123",
+                "name": "Loop Test Product",
+                "customer_name": "Loop Test Customer",
+            }
+        ]
+    )
+
+    assert pdf.startswith(b"%PDF-")

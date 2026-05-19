@@ -21,6 +21,8 @@ from fpdf import FPDF
 
 logger = logging.getLogger(__name__)
 
+_CODE39_CHARS = set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%")
+
 # ---------------------------------------------------------------------------
 # Avery 8371 layout constants (millimetres)
 # ---------------------------------------------------------------------------
@@ -51,6 +53,14 @@ def _generate_barcode_png(value: str) -> bytes:
         "quiet_zone": 2,
     })
     return buf.getvalue()
+
+
+def _barcode_value_for_product(product: Dict[str, Any]) -> str:
+    """Prefer SKU for Code 39, falling back to DB id when SKU cannot be encoded."""
+    sku = str(product.get("sku") or "").upper()
+    if sku and all(ch in _CODE39_CHARS for ch in sku):
+        return sku
+    return str(product.get("id") or sku)
 
 
 _UNICODE_REPLACEMENTS = {
@@ -169,7 +179,8 @@ def generate_tags_pdf(products: List[Dict[str, Any]]) -> bytes:
         pdf.cell(usable_w, 3.5, sku_line, align="L")
 
         try:
-            bc_png = _generate_barcode_png(product.get("sku", str(product["id"])))
+            barcode_value = _barcode_value_for_product(product)
+            bc_png = _generate_barcode_png(barcode_value)
             bc_stream = io.BytesIO(bc_png)
             bc_w = 50
             bc_h = 8
