@@ -60,6 +60,33 @@ jobs:
           Set-EnvLine -Path $envFile -Name 'WIKI_SYNC_ENABLED' -Value 'true'
           Set-EnvLine -Path $envFile -Name 'WIKI_SYNC_TOKEN' -Value $env:WIKI_SYNC_TOKEN_BOOTSTRAP
 
+          $cloudflaredConfig = 'C:\cloudflared\config.yml'
+          if (-not (Test-Path -LiteralPath $cloudflaredConfig)) {
+            Write-Error "Missing $cloudflaredConfig"
+            exit 1
+          }
+          $syncIngress = @(
+            '  - hostname: retriever-sync.boonegraphics.net',
+            '    path: /wiki/sync/*',
+            '    service: http://127.0.0.1:8810'
+          )
+          $configLines = Get-Content -LiteralPath $cloudflaredConfig
+          if (-not ($configLines -contains '  - hostname: retriever-sync.boonegraphics.net')) {
+            $next = New-Object System.Collections.Generic.List[string]
+            foreach ($line in $configLines) {
+              $next.Add($line)
+              if ($line -match '^ingress:\s*$') {
+                foreach ($entry in $syncIngress) {
+                  $next.Add($entry)
+                }
+              }
+            }
+            Copy-Item -LiteralPath $cloudflaredConfig -Destination "$cloudflaredConfig.wiki-sync.bak" -Force
+            Set-Content -LiteralPath $cloudflaredConfig -Value $next -Encoding UTF8
+            Restart-Service cloudflared -ErrorAction Stop
+            Start-Sleep -Seconds 5
+          }
+
           Restart-Service RetrieverRebuild -ErrorAction Stop
           Start-Sleep -Seconds 5
 
@@ -67,3 +94,6 @@ jobs:
           $headers = @{ Authorization = "Bearer $env:WIKI_SYNC_TOKEN_BOOTSTRAP" }
           $response = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8810/wiki/sync/source-inventory' -Headers $headers -ContentType 'application/json' -Body $body
           Write-Host ("Wiki sync local verification: status={0} internalScanned={1} driveScanned={2}" -f $response.status, $response.internalWiki.scanned, $response.drive.scanned)
+
+          $publicResponse = Invoke-RestMethod -Method Post -Uri 'https://retriever-sync.boonegraphics.net/wiki/sync/source-inventory' -Headers $headers -ContentType 'application/json' -Body $body
+          Write-Host ("Wiki sync public verification: status={0} internalScanned={1} driveScanned={2}" -f $publicResponse.status, $publicResponse.internalWiki.scanned, $publicResponse.drive.scanned)
