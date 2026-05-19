@@ -177,6 +177,7 @@
       class="fetch-composer"
       aria-label="Fetch composer"
       method="post"
+      enctype="multipart/form-data"
       action="{% if active_conversation_id %}/fetch/conversations/{{ active_conversation_id }}/ask{% else %}#{% endif %}"
       data-fetch-ask-form
     >
@@ -202,8 +203,22 @@
           <input id="fetch-save-uploads" name="save_uploads" type="checkbox" disabled>
           Save uploads to my private library
         </label>
+        <input
+          id="fetch-files"
+          name="files"
+          type="file"
+          multiple
+          hidden
+          {% if not fetch_can_use_composer %}disabled{% endif %}
+          accept=".csv,.txt,.tsv,.md,.json,.log,.xlsx,.pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff"
+        >
         <div class="fetch-composer-buttons">
-          <button type="button" class="secondary" disabled>Attach</button>
+          <button
+            type="button"
+            class="secondary"
+            data-fetch-attach-button
+            {% if not fetch_can_use_composer %}disabled{% endif %}
+          >Attach</button>
           <button
             type="submit"
             class="secondary"
@@ -213,6 +228,7 @@
           <button type="submit" {% if not fetch_can_use_composer %}disabled{% endif %}>Ask Fetch</button>
         </div>
       </div>
+      <div class="fetch-upload-summary" data-fetch-upload-summary hidden></div>
     </form>
 
     <p class="fetch-retention-note muted" role="note">
@@ -434,6 +450,33 @@
     var askForm = shell.querySelector("[data-fetch-ask-form]");
     var askWorking = document.getElementById("fetch-ask-working");
     var askError = document.getElementById("fetch-ask-error");
+    var attachButton = shell.querySelector("[data-fetch-attach-button]");
+    var fileInput = shell.querySelector("#fetch-files");
+    var uploadSummary = shell.querySelector("[data-fetch-upload-summary]");
+
+    function updateUploadSummary() {
+      if (!uploadSummary || !fileInput || !fileInput.files || !fileInput.files.length) {
+        if (uploadSummary) {
+          uploadSummary.hidden = true;
+          uploadSummary.textContent = "";
+        }
+        return;
+      }
+      var names = Array.prototype.slice.call(fileInput.files).map(function (file) {
+        return file.name;
+      });
+      uploadSummary.textContent = "Attached: " + names.join(", ");
+      uploadSummary.hidden = false;
+    }
+
+    if (attachButton && fileInput) {
+      attachButton.addEventListener("click", function () {
+        if (!attachButton.disabled) {
+          fileInput.click();
+        }
+      });
+      fileInput.addEventListener("change", updateUploadSummary);
+    }
     if (askForm && askWorking) {
       askForm.addEventListener("submit", function (e) {
         var action = askForm.getAttribute("action") || "";
@@ -520,14 +563,22 @@
           }
         }
 
+        var hasFiles = fileInput && fileInput.files && fileInput.files.length > 0;
+        var body = null;
+        var headers = { Accept: "text/html" };
+        if (hasFiles) {
+          body = new FormData(askForm);
+          body.set("question", text);
+        } else {
+          headers["Content-Type"] = "application/x-www-form-urlencoded";
+          body = new URLSearchParams({ question: text });
+        }
+
         fetch(action, {
           method: "POST",
           credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "text/html",
-          },
-          body: new URLSearchParams({ question: text }),
+          headers: headers,
+          body: body,
           redirect: "follow",
         })
           .then(function (res) {

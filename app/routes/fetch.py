@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -80,6 +80,12 @@ from app.fetch.local_routing import (
     build_fetch_stub_reply,
     classify_fetch_intent,
     should_delegate_ask_to_booneops_broker,
+)
+from app.fetch.uploads import (
+    FetchUploadError,
+    broker_upload_context,
+    save_fetch_uploads,
+    upload_metadata_for_message,
 )
 
 router = APIRouter(prefix="/fetch", tags=["fetch"])
@@ -597,6 +603,7 @@ async def ask_in_conversation(
     request: Request,
     settings: AppSettings = Depends(settings_dependency),
     question: str = Form(""),
+    files: Optional[list[UploadFile]] = File(None),
 ):
     identity = get_identity_from_request(request, settings)
     user = current_user_from_identity(identity, settings)
@@ -612,6 +619,31 @@ async def ask_in_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     cleaned = " ".join(question.split()).strip()
     if not cleaned:
+        return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
+    try:
+        saved_uploads = await save_fetch_uploads(
+            settings,
+            user_id=user.id,
+            conversation_id=conversation_id,
+            files=files,
+        )
+    except FetchUploadError as exc:
+        repo.append_message(
+            user.id,
+            conversation_id,
+            role="user",
+            content=cleaned,
+            route_key="upload_error",
+        )
+        repo.append_message(
+            user.id,
+            conversation_id,
+            role="assistant",
+            content=str(exc),
+            route_key="upload_error",
+            context_percent=0,
+            context_state="error",
+        )
         return RedirectResponse(url=f"/fetch?c={conversation_id}", status_code=303)
     base_route = classify_fetch_intent(cleaned)
     prior_records = repo.list_messages(user.id, conversation_id)
@@ -630,6 +662,7 @@ async def ask_in_conversation(
         role="user",
         content=cleaned,
         route_key=route,
+        metadata=upload_metadata_for_message(saved_uploads),
     )
 
     request_id = str(uuid.uuid4())
@@ -662,6 +695,11 @@ async def ask_in_conversation(
                 **session_metadata_extra,
                 "reportContext": prior_report_context,
             }
+    if saved_uploads:
+        session_metadata_extra = {
+            **session_metadata_extra,
+            "retrieverUploads": broker_upload_context(saved_uploads),
+        }
     use_broker = should_delegate_ask_to_booneops_broker(route, settings) and not (
         export_or_refinement_without_prior_context
     )

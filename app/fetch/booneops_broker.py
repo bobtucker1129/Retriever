@@ -251,6 +251,25 @@ def augment_fetch_broker_user_message_for_turn(
             "and the same underlying data—do not invent new rows or metrics.\n\n"
             f"User wording: {base}"
         )
+    uploads = extra.get("retrieverUploads")
+    if isinstance(uploads, list) and uploads:
+        lines = [
+            "[Retriever attachments]",
+            "The user attached file(s). Use any text previews below as context; for image/PDF files, "
+            "acknowledge the attachment metadata if no text preview is available.",
+        ]
+        for item in uploads[:4]:
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("filename") or "attachment").strip()
+            kind = str(item.get("kind") or "file").strip()
+            size = str(item.get("sizeBytes") or "").strip()
+            preview = str(item.get("textPreview") or "").strip()
+            lines.append(f"- {filename} ({kind}, {size} bytes)")
+            if preview:
+                lines.append("  Preview:")
+                lines.append(preview)
+        base = "\n".join(lines).strip() + "\n\nUser wording: " + base
     return augment_broker_user_message_for_route(base, route_label)
 
 

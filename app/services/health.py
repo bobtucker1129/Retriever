@@ -24,7 +24,7 @@ def readiness_checks(settings: AppSettings) -> dict[str, CheckState]:
         "audit": "ok" if settings.audit_log_mode in {"mysql", "file", "both"} else "degraded",
         "fetch": "ok" if settings.fetch_enabled else "disabled",
         "modelProvider": "ok" if settings.fetch_enabled else "disabled",
-        "uploads": "ok" if settings.fetch_uploads_enabled else "disabled",
+        "uploads": "ok" if settings.fetch_enabled and settings.retriever_upload_dir else "disabled",
         "delayedReports": "ok" if settings.fetch_delayed_reports_enabled else "disabled",
         "docsRoute": "ok" if settings.docs_route_enabled else "disabled",
         "printsmithRoute": "ok" if settings.printsmith_route_enabled else "disabled",

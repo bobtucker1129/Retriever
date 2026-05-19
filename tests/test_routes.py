@@ -1588,6 +1588,44 @@ def test_fetch_post_ask_trims_large_broker_reply_before_saving(monkeypatch) -> N
     assert "reportContext" not in metadata
 
 
+def test_fetch_post_ask_sends_upload_preview_to_broker(monkeypatch, tmp_path) -> None:
+    db = FakeDb()
+    db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
+    user_id = db.users["fetcher@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).add("fetch")
+    db.capabilities_by_user.setdefault(user_id, set()).add("fetch.ask_internal")
+    conv = FetchRepository(db.connection).create_conversation(user_id=user_id, title="Upload lane")
+
+    settings = make_fetch_broker_enabled_settings(email="fetcher@boonegraphics.net").model_copy(
+        update={"fetch_uploads_enabled": True, "retriever_upload_dir": tmp_path}
+    )
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    monkeypatch.setattr(fetch_routes, "create_connection", lambda _: db.connection())
+
+    def fake_broker(*_a: object, **_kw: object) -> BooneOpsBrokerTurnResult:
+        uploads = _kw["session_metadata_extra"]["retrieverUploads"]
+        assert uploads[0]["filename"] == "orders.csv"
+        assert "Mechanics Bank Online" in uploads[0]["textPreview"]
+        return BooneOpsBrokerTurnResult("I can see the uploaded CSV preview.", "booneops")
+
+    monkeypatch.setattr(fetch_routes, "call_booneops_broker", fake_broker)
+
+    client = make_client(settings)
+    response = client.post(
+        f"/fetch/conversations/{conv.conversation_id}/ask",
+        data={"question": "What does this file show?"},
+        files={"files": ("orders.csv", b"Customer,Orders\nMechanics Bank Online,82\n", "text/csv")},
+    )
+
+    assert response.status_code == 303
+    user_message = db.fetch_messages[0]
+    assert user_message["role"] == "user"
+    metadata = json.loads(user_message["metadata_json"])
+    assert metadata["artifacts"][0]["filename"] == "orders.csv"
+    assert metadata["uploads"][0]["kind"] == "csv"
+    assert "I can see" in db.fetch_messages[1]["content"]
+
+
 def test_fetch_cleanup_email_uses_dedicated_llm_and_copy_button(monkeypatch) -> None:
     db = FakeDb()
     db.add_user("fetcher@boonegraphics.net", "Fetcher User", "active")
