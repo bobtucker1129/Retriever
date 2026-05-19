@@ -21,6 +21,7 @@ All detailed architecture, trust, product, and local-dev prose is under **`plann
 | Area | Files (same folder) |
 |------|---------------------|
 | Fetch trust + routing | `FETCH_TRUST_PLAN.md`, `FETCH_UI_CONTINUITY.md` |
+| Help / Wiki orchestration | `planning/HELP_ORCHESTRATION.md` |
 | Product / layout | `PRODUCT.md`, `SHARED_LAYOUT_SHAPE.md` |
 | Auth + schema + secrets | `AUTH_REDESIGN.md`, `RETRIEVER_CORE_SCHEMA.md`, `WEBHOOK_AND_BROKER_AUTH.md`, `SECRETS_HANDLING.md`, `CONFIG_AND_HEALTH_CONTRACT.md`, `PRINTSMITH_TOKEN_AUTHORITY.md`, `AUDIT_LOG_DESIGN.md` |
 | Deploy / runtime narrative | `DEPLOYMENT_BRIDGE.md`, `RUNTIME_NOTES.md`, `VM_SETUP_PLAN.md`, `AUTH_SHELL_BUILD_PLAN.md` |

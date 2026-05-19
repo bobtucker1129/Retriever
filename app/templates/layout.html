@@ -96,6 +96,9 @@
             </div>
           </div>
           <div class="topbar-actions">
+          {% if user and user.status == 'active' %}
+            <a class="topbar-help-button{% if active_nav == 'help' %} active{% endif %}" href="/help/" title="Help" aria-label="Help">?</a>
+          {% endif %}
             <div class="theme-toggle" aria-label="Theme">
               <span class="theme-label">Theme:</span>
               <button type="button" class="theme-button" data-theme-choice="light" aria-label="Use light theme">Light</button>

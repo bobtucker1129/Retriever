@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Help{% endblock %}
+{% block title %}<span data-help-en="{{ topic.title.en }}" data-help-es="{{ topic.title.es }}">{{ topic.title.en }}</span>{% endblock %}
+
+{% block content %}
+<section class="help-content help-topic-page" data-help-root>
+  <div class="help-back-row">
+    <a class="help-back-link" href="/help/{{ module.slug }}" data-help-en="Back to section" data-help-es="Volver a la sección">Back to section</a>
+  </div>
+
+  <div class="help-header">
+    <div>
+      <p class="help-kicker" data-help-en="{{ module.title.en }}" data-help-es="{{ module.title.es }}">{{ module.title.en }}</p>
+      <h2 data-help-en="{{ topic.title.en }}" data-help-es="{{ topic.title.es }}">{{ topic.title.en }}</h2>
+      <p data-help-en="{{ topic.summary.en }}" data-help-es="{{ topic.summary.es }}">{{ topic.summary.en }}</p>
+    </div>
+    {% include "help/_help_lang.html" %}
+  </div>
+
+  <section class="help-panel" aria-labelledby="help-topic-steps">
+    <h3 id="help-topic-steps" data-help-en="Steps" data-help-es="Pasos">Steps</h3>
+    <ol class="help-step-list">
+      {% for step in topic.steps %}
+      <li data-help-en="{{ step.en }}" data-help-es="{{ step.es }}">{{ step.en }}</li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  {% if topic.notes %}
+  <section class="help-panel" aria-labelledby="help-topic-notes">
+    <h3 id="help-topic-notes" data-help-en="Notes" data-help-es="Notas">Notes</h3>
+    {% for note in topic.notes %}
+    <p data-help-en="{{ note.en }}" data-help-es="{{ note.es }}">{{ note.en }}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="help-panel" aria-labelledby="help-related-topics">
+    <h3 id="help-related-topics" data-help-en="Related topics" data-help-es="Temas relacionados">Related topics</h3>
+    <div class="help-related-list">
+      {% for related in topics %}
+      <a href="/help/{{ module.slug }}/{{ related.slug }}" {% if related.slug == topic.slug %}aria-current="page"{% endif %}>
+        <span data-help-en="{{ related.title.en }}" data-help-es="{{ related.title.es }}">{{ related.title.en }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% include "help/_help_scripts.html" %}
+{% endblock %}

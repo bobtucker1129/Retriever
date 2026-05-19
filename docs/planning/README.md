@@ -7,3 +7,5 @@ Long-form design and policy for **retriever-rebuild** lives here so the **repo r
 Links **between files in this folder** stay as same-directory names (for example `AUTH_REDESIGN.md`). Links **out** to runbooks, deploy scripts, or the archive use `../runbooks/`, `../deploy/`, `../archive/`.
 
 **Big picture (nested repo vs workspace):** see **[`../WORKSPACE_AND_REPOS.md`](../WORKSPACE_AND_REPOS.md)** — not repeated here on purpose.
+
+For the OpenClaw-to-Retriever Help freshness boundary, read **[`HELP_ORCHESTRATION.md`](HELP_ORCHESTRATION.md)**.

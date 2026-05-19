@@ -142,6 +142,7 @@ Completed:
 - `PRODUCT.md`: Impeccable product context for Retriever UI work.
 - `SHARED_LAYOUT_SHAPE.md`: confirmed Impeccable shape brief for the shared app shell.
 - `FETCH_UI_CONTINUITY.md`: current Fetch visual/layout continuity target for the first new Fetch skeleton.
+- `HELP_ORCHESTRATION.md`: OpenClaw report-only Help freshness audit plan, disabled-cron command, Retriever review ownership, and English/Spanish parity expectations.
 
 ## Active Decisions
 

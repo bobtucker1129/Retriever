@@ -1,0 +1,32 @@
+<script>
+  (function () {
+    var root = document.querySelector("[data-help-root]");
+    if (!root) return;
+    var storageKey = "retrieverHelpLanguage";
+    var buttons = root.querySelectorAll("[data-help-lang-choice]");
+    var translatable = document.querySelectorAll("[data-help-en][data-help-es]");
+
+    function setHelpLanguage(lang) {
+      var next = lang === "es" ? "es" : "en";
+      document.documentElement.lang = next;
+      document.documentElement.setAttribute("data-help-lang", next);
+      localStorage.setItem(storageKey, next);
+      translatable.forEach(function (node) {
+        node.textContent = node.getAttribute("data-help-" + next) || "";
+      });
+      buttons.forEach(function (button) {
+        var active = button.getAttribute("data-help-lang-choice") === next;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        setHelpLanguage(button.getAttribute("data-help-lang-choice"));
+      });
+    });
+
+    setHelpLanguage(localStorage.getItem(storageKey) || "en");
+  })();
+</script>

@@ -6,6 +6,33 @@ Exit summaries, newest at top. Use project-local wrap to keep this current.
 
 ---
 
+## 2026-05-18 — Codex: Help freshness cron scaffold
+
+**Goal:** Add a high-level, dry-run-safe OpenClaw scaffold for periodically auditing Retriever Help freshness without touching Worker A's app implementation work or enabling a real cron.
+
+**What changed:**
+
+- Added outer OpenClaw script `scripts/retriever-help-freshness.js`.
+- The script scans local Retriever docs, route files, templates, Wiki helpers, and future Help folders when present.
+- It writes report artifacts under `projects/retriever-rebuild/.help-freshness/`:
+  - `help-freshness-report.md`
+  - `help-freshness-report.json`
+  - `last-run.json`
+- Added `.help-freshness/` to Retriever `.gitignore` so recurring audit artifacts stay local.
+- Added `docs/planning/HELP_ORCHESTRATION.md` to document the ownership boundary: Retriever publishes Help, OpenClaw audits/drafts, human/admin review gates publication, English/Spanish parity gets checked, and biweekly cadence is the default.
+- Linked the Help orchestration doc from the docs map, planning README, and active artifact list.
+
+**Proof:**
+
+- `node --check /Users/whitakertate/Whitaker/workspace/scripts/retriever-help-freshness.js` passed.
+- `node /Users/whitakertate/Whitaker/workspace/scripts/retriever-help-freshness.js --dry-run` wrote the report artifact and found 86 help-relevant files, 94 route touchpoints, 50 flagged files, and no explicit English/Spanish pairs yet.
+
+**Cron status:** No real cron was registered or enabled. Recommended disabled-cron/manual command is:
+
+```bash
+cd /Users/whitakertate/Whitaker/workspace && node scripts/retriever-help-freshness.js --dry-run
+```
+
 ## 2026-05-18 — Codex: Wiki sync freshness visibility
 
 **Goal:** Add the next Wiki-ready surface while the OpenClaw sync waits on production/shared secrets.

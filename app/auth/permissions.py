@@ -37,6 +37,11 @@ class CurrentUser:
             return False
         return self.has_module("prepress") or self.has_capability("prepress.access")
 
+    def can_open_dsf(self) -> bool:
+        if self.status != "active":
+            return False
+        return self.has_module("dsf") or self.has_capability("dsf.access")
+
     def can_open_wiki(self) -> bool:
         """Internal Boone knowledge base; active employees can read by default."""
         return self.status == "active"

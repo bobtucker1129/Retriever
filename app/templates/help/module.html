@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Help{% endblock %}
+{% block title %}<span data-help-en="{{ module.title.en }}" data-help-es="{{ module.title.es }}">{{ module.title.en }}</span>{% endblock %}
+
+{% block content %}
+<section class="help-content" data-help-root>
+  <div class="help-back-row">
+    <a class="help-back-link" href="/help/" data-help-en="Back to Help" data-help-es="Volver a Ayuda">Back to Help</a>
+  </div>
+
+  <div class="help-header">
+    <div>
+      <p class="help-kicker" data-help-en="{{ module.kicker.en }}" data-help-es="{{ module.kicker.es }}">{{ module.kicker.en }}</p>
+      <h2 data-help-en="{{ module.title.en }}" data-help-es="{{ module.title.es }}">{{ module.title.en }}</h2>
+      <p data-help-en="{{ module.summary.en }}" data-help-es="{{ module.summary.es }}">{{ module.summary.en }}</p>
+    </div>
+    {% include "help/_help_lang.html" %}
+  </div>
+
+  <div class="help-topic-list" aria-label="Help topics">
+    {% for topic in topics %}
+    <details class="help-accordion">
+      <summary>
+        <span>
+          <strong data-help-en="{{ topic.title.en }}" data-help-es="{{ topic.title.es }}">{{ topic.title.en }}</strong>
+          <small data-help-en="{{ topic.summary.en }}" data-help-es="{{ topic.summary.es }}">{{ topic.summary.en }}</small>
+        </span>
+      </summary>
+      <div class="help-accordion-body">
+        <ol>
+          {% for step in topic.steps %}
+          <li data-help-en="{{ step.en }}" data-help-es="{{ step.es }}">{{ step.en }}</li>
+          {% endfor %}
+        </ol>
+        {% if topic.notes %}
+        <div class="help-note-list">
+          {% for note in topic.notes %}
+          <p data-help-en="{{ note.en }}" data-help-es="{{ note.es }}">{{ note.en }}</p>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <a class="help-topic-link" href="/help/{{ module.slug }}/{{ topic.slug }}" data-help-en="Open full topic" data-help-es="Abrir tema completo">Open full topic</a>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% include "help/_help_scripts.html" %}
+{% endblock %}

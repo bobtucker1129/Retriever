@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block eyebrow %}Help{% endblock %}
+{% block title %}<span data-help-en="Help Center" data-help-es="Centro de Ayuda">Help Center</span>{% endblock %}
+
+{% block content %}
+<section class="help-content" data-help-root>
+  <div class="help-header">
+    <div>
+      <p class="help-kicker" data-help-en="Bilingual reference" data-help-es="Referencia bilingüe">Bilingual reference</p>
+      <h2 data-help-en="How can we help?" data-help-es="¿Cómo podemos ayudar?">How can we help?</h2>
+      <p data-help-en="Pick the area you are working in. Each section has simple step-by-step help." data-help-es="Elija el área en la que está trabajando. Cada sección tiene ayuda paso a paso.">Pick the area you are working in. Each section has simple step-by-step help.</p>
+    </div>
+    {% include "help/_help_lang.html" %}
+  </div>
+
+  <div class="help-card-grid" aria-label="Help modules">
+    {% for module in modules %}
+    <a class="help-card" href="/help/{{ module.slug }}">
+      <span class="help-card-kicker" data-help-en="{{ module.kicker.en }}" data-help-es="{{ module.kicker.es }}">{{ module.kicker.en }}</span>
+      <h3 data-help-en="{{ module.title.en }}" data-help-es="{{ module.title.es }}">{{ module.title.en }}</h3>
+      <p data-help-en="{{ module.summary.en }}" data-help-es="{{ module.summary.es }}">{{ module.summary.en }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% include "help/_help_scripts.html" %}
+{% endblock %}

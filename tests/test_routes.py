@@ -272,6 +272,85 @@ def test_unknown_wiki_document_returns_404() -> None:
     assert response.status_code == 404
 
 
+def test_help_overview_renders_dynamic_module_cards() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/help/")
+
+    assert response.status_code == 200
+    assert "Help Center" in response.text
+    assert "Getting Access / Users" in response.text
+    assert "/help/fetch" in response.text
+    assert "/help/wiki" in response.text
+    assert "/help/prepress" in response.text
+    assert "/help/dsf" in response.text
+    assert "/help/inventory" in response.text
+    assert "data-help-root" in response.text
+    assert 'class="topbar-help-button active" href="/help/" title="Help"' in response.text
+    assert 'nav-label">Help</span>' not in response.text
+
+
+def test_help_module_page_renders_accordion_and_spanish_controls() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/help/inventory")
+
+    assert response.status_code == 200
+    assert "Scan and pull" in response.text
+    assert "Escanear y retirar" in response.text
+    assert "help-accordion" in response.text
+    assert 'data-help-lang-choice="es"' in response.text
+    assert "Español" in response.text
+    assert "retrieverHelpLanguage" in response.text
+    assert "document.documentElement.lang = next" in response.text
+
+
+def test_help_topic_page_renders_spanish_content_fields() -> None:
+    client = make_client(make_settings())
+
+    response = client.get("/help/fetch/ask-a-question")
+
+    assert response.status_code == 200
+    assert "Ask a question" in response.text
+    assert "Hacer una pregunta" in response.text
+    assert "Use plain language first" in response.text
+    assert "Use lenguaje normal primero" in response.text
+    assert 'aria-current="page"' in response.text
+
+
+def test_help_unknown_slugs_return_404() -> None:
+    client = make_client(make_settings())
+
+    missing_module = client.get("/help/not-real")
+    missing_topic = client.get("/help/fetch/not-real")
+
+    assert missing_module.status_code == 404
+    assert missing_topic.status_code == 404
+
+
+def test_help_hides_inaccessible_modules_and_admin_topics(monkeypatch) -> None:
+    db = FakeDb()
+    db.add_user("helper@boonegraphics.net", "Helper User", "active")
+    user_id = db.users["helper@boonegraphics.net"]["id"]
+    db.modules_by_user.setdefault(user_id, set()).update({"fetch"})
+
+    monkeypatch.setattr(session_module, "create_connection", lambda _: db.connection())
+    client = make_client(make_settings(email="helper@boonegraphics.net", with_db=True))
+
+    overview = client.get("/help/")
+    admin_topic = client.get("/help/getting-access-users/manage-users")
+
+    assert overview.status_code == 200
+    assert 'class="topbar-help-button active" href="/help/" title="Help"' in overview.text
+    assert 'nav-label">Help</span>' not in overview.text
+    assert "/help/fetch" in overview.text
+    assert "/help/prepress" not in overview.text
+    assert "/help/dsf" not in overview.text
+    assert "/help/inventory" not in overview.text
+    assert "Manage users" not in overview.text
+    assert admin_topic.status_code == 404
+
+
 def test_wiki_sync_endpoint_requires_enabled_token() -> None:
     client = make_client(make_settings())
 

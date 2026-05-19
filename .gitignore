@@ -2,6 +2,7 @@
 retriever.env
 .venv/
 .wiki-sync/
+.help-freshness/
 __pycache__/
 .pytest_cache/
 *.pyc
